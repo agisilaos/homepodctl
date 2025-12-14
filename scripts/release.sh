@@ -176,17 +176,17 @@ build_dist() {
 
   build_one() {
     local goarch="$1"
-    local pkgdir="homepodctl_${ver}_darwin_${goarch}"
-    local stage="dist/${pkgdir}"
-
+    local stage="dist/stage_${goarch}"
+    rm -rf "${stage}"
     mkdir -p "${stage}"
+
     GOOS=darwin GOARCH="${goarch}" CGO_ENABLED=0 \
       go build -trimpath \
         -ldflags "-s -w -X main.version=${ver} -X main.commit=${commit} -X main.date=${date_utc}" \
         -o "${stage}/homepodctl" \
         ./cmd/homepodctl
 
-    (cd dist && tar -czf "${pkgdir}.tar.gz" "${pkgdir}")
+    (cd "${stage}" && tar -czf "../homepodctl_${ver}_darwin_${goarch}.tar.gz" homepodctl)
     rm -rf "${stage}"
   }
 
