@@ -251,7 +251,7 @@ update_homebrew_formula() {
 
   local tmp
   tmp="$(mktemp -d)"
-  trap 'rm -rf "${tmp}"' EXIT
+  # Avoid zsh `set -u` issues with traps and local variables by cleaning up explicitly.
 
   git clone "${tap_remote}" "${tmp}/tap" >/dev/null 2>&1 || die "failed to clone tap repo: ${tap_remote}"
   mkdir -p "${tmp}/tap/Formula"
@@ -391,6 +391,7 @@ PY
   popd >/dev/null
 
   print -- "Updated Homebrew formula in ${tap_repo}"
+  rm -rf "${tmp}"
 }
 
 main() {
