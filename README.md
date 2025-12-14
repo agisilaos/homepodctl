@@ -1,7 +1,7 @@
 # homepodctl
 
 <p align="center">
-  <img src="assets/logo.png" width="160" alt="homepodctl logo">
+  <img src="assets/logo-lockup.png" width="520" alt="homepodctl logo">
 </p>
 
 <p align="center">
