@@ -283,39 +283,97 @@ class Homepodctl < Formula
 end
 RUBY
 
-  # Ensure tap README includes correct installation instructions for homepodctl.
-  python3 - <<'PY' "${tmp}/tap/README.md"
-import sys, pathlib, re
+  # Ensure tap README contains install instructions for available formulae (without removing other tools).
+  python3 - <<'PY' "${tmp}/tap"
+import pathlib, re, sys
 
-path = pathlib.Path(sys.argv[1])
-text = path.read_text(encoding="utf-8") if path.exists() else ""
+tap_dir = pathlib.Path(sys.argv[1])
+readme = tap_dir / "README.md"
+formula_dir = tap_dir / "Formula"
 
-want_block = "```bash\nbrew tap agisilaos/tap\nbrew install homepodctl\n```"
+formulae = sorted(p.stem for p in formula_dir.glob("*.rb") if p.is_file())
+if "homepodctl" not in formulae:
+    formulae.append("homepodctl")
+    formulae.sort()
 
-if "brew install homepodctl" in text:
-    # Nothing to do (already documented somewhere).
-    sys.exit(0)
+def read_text(p: pathlib.Path) -> str:
+    return p.read_text(encoding="utf-8") if p.exists() else ""
 
-lines = text.splitlines()
+def write_text(p: pathlib.Path, s: str) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(s.rstrip() + "\n", encoding="utf-8")
 
-def write(new_text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(new_text.rstrip() + "\n", encoding="utf-8")
-
+text = read_text(readme)
 if not text.strip():
-    write("# agisilaos/homebrew-tap\n\nHomebrew formulae for agisilaos.\n\n## Install\n\n" + want_block + "\n")
+    lines = [
+        "# agisilaos/homebrew-tap",
+        "",
+        "Homebrew formulae for agisilaos.",
+        "",
+        "## Install",
+        "",
+        "```bash",
+        "brew tap agisilaos/tap",
+    ]
+    for f in formulae:
+        lines.append(f"brew install {f}")
+    lines.append("```")
+    write_text(readme, "\n".join(lines))
     sys.exit(0)
 
-# Try to replace an existing install codeblock containing the tap command.
-joined = "\n".join(lines)
-m = re.search(r"(##\\s+Install\\b[\\s\\S]*?```bash\\n)([\\s\\S]*?)(\\n```)", joined, flags=re.M)
-if m and "brew tap agisilaos/tap" in m.group(2):
-    new = joined[: m.start(2)] + "brew tap agisilaos/tap\nbrew install homepodctl" + joined[m.end(2) :]
-    write(new)
+joined = text
+
+# Find a bash code block under an Install section (best effort).
+install_block = re.search(
+    r"(##\\s+Install\\b[\\s\\S]*?```bash\\n)([\\s\\S]*?)(\\n```)",
+    joined,
+    flags=re.M,
+)
+
+def normalize_cmds(body: str) -> list[str]:
+    cmds = [line.strip() for line in body.splitlines() if line.strip()]
+    # Keep order but remove duplicates.
+    seen = set()
+    out = []
+    for c in cmds:
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+def ensure_lines(cmds: list[str], want: list[str]) -> list[str]:
+    # Ensure tap line first, then keep existing, then add missing wanted.
+    tap = "brew tap agisilaos/tap"
+    installs = [c for c in cmds if c != tap]
+    out = [tap]
+    out.extend(installs)
+    for w in want:
+        if w not in out:
+            out.append(w)
+    return out
+
+want_installs = [f"brew install {f}" for f in formulae]
+
+if install_block:
+    head, body, tail = install_block.group(1), install_block.group(2), install_block.group(3)
+    cmds = normalize_cmds(body)
+    cmds = ensure_lines(cmds, want_installs)
+    new_body = "\n".join(cmds)
+    updated = joined[: install_block.start(2)] + new_body + joined[install_block.end(2) :]
+    write_text(readme, updated)
     sys.exit(0)
 
-# Otherwise, append a small Install section.
-write(joined + "\n\n## Install\n\n" + want_block + "\n")
+# If there is no Install section with a bash block, append one (do not remove existing docs).
+append_lines = [
+    "",
+    "## Install",
+    "",
+    "```bash",
+    "brew tap agisilaos/tap",
+]
+append_lines.extend(want_installs)
+append_lines.append("```")
+write_text(readme, joined + "\n" + "\n".join(append_lines))
 PY
 
   pushd "${tmp}/tap" >/dev/null
