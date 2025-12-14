@@ -283,11 +283,46 @@ class Homepodctl < Formula
 end
 RUBY
 
+  # Ensure tap README includes correct installation instructions for homepodctl.
+  python3 - <<'PY' "${tmp}/tap/README.md"
+import sys, pathlib, re
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8") if path.exists() else ""
+
+want_block = "```bash\nbrew tap agisilaos/tap\nbrew install homepodctl\n```"
+
+if "brew install homepodctl" in text:
+    # Nothing to do (already documented somewhere).
+    sys.exit(0)
+
+lines = text.splitlines()
+
+def write(new_text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(new_text.rstrip() + "\n", encoding="utf-8")
+
+if not text.strip():
+    write("# agisilaos/homebrew-tap\n\nHomebrew formulae for agisilaos.\n\n## Install\n\n" + want_block + "\n")
+    sys.exit(0)
+
+# Try to replace an existing install codeblock containing the tap command.
+joined = "\n".join(lines)
+m = re.search(r"(##\\s+Install\\b[\\s\\S]*?```bash\\n)([\\s\\S]*?)(\\n```)", joined, flags=re.M)
+if m and "brew tap agisilaos/tap" in m.group(2):
+    new = joined[: m.start(2)] + "brew tap agisilaos/tap\nbrew install homepodctl" + joined[m.end(2) :]
+    write(new)
+    sys.exit(0)
+
+# Otherwise, append a small Install section.
+write(joined + "\n\n## Install\n\n" + want_block + "\n")
+PY
+
   pushd "${tmp}/tap" >/dev/null
   if [[ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo)" != "main" ]]; then
     git checkout -B main >/dev/null 2>&1 || git checkout -b main
   fi
-  git add Formula/homepodctl.rb
+  git add Formula/homepodctl.rb README.md
   if git diff --cached --quiet; then
     print -- "Homebrew formula already up to date"
     popd >/dev/null
@@ -335,4 +370,3 @@ main() {
 }
 
 main
-
