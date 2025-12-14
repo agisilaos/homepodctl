@@ -6,6 +6,11 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ## [Unreleased]
 
+## [v0.1.1] - 2025-12-14
+
+- chore(release): normalize tap README install section (aab2e89)
+- fix(release): avoid zsh trap nounset error (a552b27)
+
 ## [v0.1.0] - 2025-12-14
 
 ### Added
