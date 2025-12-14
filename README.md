@@ -1,5 +1,17 @@
 # homepodctl
 
+<p align="center">
+  <img src="assets/logo.png" width="160" alt="homepodctl logo">
+</p>
+
+<p align="center">
+  <a href="https://github.com/agisilaos/homepodctl/releases">
+    <img src="https://img.shields.io/github/v/release/agisilaos/homepodctl?display_name=tag&sort=semver" alt="release">
+  </a>
+  <img src="https://img.shields.io/badge/platform-macOS-000000" alt="macOS">
+  <img src="https://img.shields.io/badge/arch-arm64%20%7C%20amd64-informational" alt="arm64 and amd64">
+</p>
+
 macOS CLI that controls Apple Music playback and routes audio to HomePods.
 
 ## Requirements
@@ -100,3 +112,7 @@ This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `s
 - **From source (recommended while iterating):** `make build`
 - **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.
 - **`go install` (after publishing):** `go install github.com/agisilaos/homepodctl/cmd/homepodctl@latest`
+
+## Disclaimer
+
+This project is not affiliated with Apple.
