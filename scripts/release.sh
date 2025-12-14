@@ -1,17 +1,20 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env zsh
+
+set -e
+set -u
+setopt pipefail
 
 cd "$(dirname "$0")/.."
 
-die() { echo "error: $*" >&2; exit 1; }
+die() { print -u2 -- "error: $*"; exit 1; }
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   die "release.sh must be run on macOS (Darwin)"
 fi
 
-if ! command -v go >/dev/null 2>&1; then
-  die "go is required"
-fi
+command -v go >/dev/null 2>&1 || die "go is required"
+command -v python3 >/dev/null 2>&1 || die "python3 is required"
+command -v git >/dev/null 2>&1 || die "git is required"
 
 version="${1:-}"
 if [[ -z "${version}" ]]; then
@@ -25,6 +28,8 @@ repo_owner="agisilaos"
 repo_name="homepodctl"
 origin_url_default="git@github.com:${repo_owner}/${repo_name}.git"
 origin_url="${ORIGIN_URL:-$origin_url_default}"
+
+# Homebrew tap repo name convention: homebrew-<tap> => brew tap <owner>/<tap>
 tap_repo="${HOMEBREW_TAP_REPO:-${repo_owner}/homebrew-tap}"
 tap_remote_default="git@github.com:${tap_repo}.git"
 tap_remote="${HOMEBREW_TAP_ORIGIN_URL:-$tap_remote_default}"
@@ -33,57 +38,62 @@ ensure_git_repo() {
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
   fi
-
-  echo "Initializing git repo..."
+  print -- "Initializing git repo..."
   git init -b main
   git add .
   git commit -m "chore: initial import"
-}
-
-ensure_github_repo() {
-  if ! command -v gh >/dev/null 2>&1; then
-    echo "gh not found; skipping GitHub repo creation check"
-    return 0
-  fi
-  if gh repo view "${repo_owner}/${repo_name}" >/dev/null 2>&1; then
-    return 0
-  fi
-  echo "Creating GitHub repo ${repo_owner}/${repo_name} (public)..."
-  gh repo create "${repo_owner}/${repo_name}" --public --confirm >/dev/null
 }
 
 ensure_origin_remote() {
   if git remote get-url origin >/dev/null 2>&1; then
     return 0
   fi
-  echo "Adding origin remote: ${origin_url}"
+  print -- "Adding origin remote: ${origin_url}"
   git remote add origin "${origin_url}"
 }
 
+ensure_github_repo() {
+  if ! command -v gh >/dev/null 2>&1; then
+    print -- "gh not found; skipping GitHub repo creation"
+    return 0
+  fi
+  if gh repo view "${repo_owner}/${repo_name}" >/dev/null 2>&1; then
+    return 0
+  fi
+  print -- "Creating GitHub repo ${repo_owner}/${repo_name} (public)..."
+  gh repo create "${repo_owner}/${repo_name}" --public --confirm >/dev/null
+}
+
 require_clean_tree() {
-  if ! git diff --quiet; then
-    die "working tree has unstaged changes"
-  fi
-  if ! git diff --cached --quiet; then
-    die "index has staged changes"
-  fi
+  git diff --quiet || die "working tree has unstaged changes"
+  git diff --cached --quiet || die "index has staged changes"
 }
 
 last_tag() {
   git describe --tags --abbrev=0 2>/dev/null || true
 }
 
-generate_changelog_section() {
-  local prev_tag="$1"
-  local range=""
-  if [[ -n "${prev_tag}" ]]; then
-    range="${prev_tag}..HEAD"
-  fi
+extract_unreleased_notes() {
+  python3 - <<'PY'
+txt=open("CHANGELOG.md","r",encoding="utf-8").read().splitlines()
+out=[]
+in_un=False
+for line in txt:
+    if line.strip() == "## [Unreleased]":
+        in_un=True
+        continue
+    if in_un and line.startswith("## ["):
+        break
+    if in_un:
+        out.append(line)
+print("\n".join(out).strip())
+PY
+}
 
-  # Keep it simple: list commit subjects.
-  # Exclude merge commits by default to reduce noise.
-  if [[ -n "${range}" ]]; then
-    git log --no-merges --pretty=format:'- %s (%h)' "${range}"
+generate_fallback_notes() {
+  local prev_tag="$1"
+  if [[ -n "${prev_tag}" ]]; then
+    git log --no-merges --pretty=format:'- %s (%h)' "${prev_tag}..HEAD"
   else
     git log --no-merges --pretty=format:'- %s (%h)'
   fi
@@ -94,40 +104,61 @@ update_changelog() {
   local prev_tag="$2"
   local date_utc
   date_utc="$(date -u +%Y-%m-%d)"
+
+  [[ -f CHANGELOG.md ]] || die "CHANGELOG.md not found"
+
   local notes
-  notes="$(generate_changelog_section "${prev_tag}")"
+  notes="$(extract_unreleased_notes)"
+  if [[ -z "${notes}" ]]; then
+    notes="$(generate_fallback_notes "${prev_tag}")"
+  fi
   if [[ -z "${notes}" ]]; then
     notes="- No changes recorded."
-  fi
-
-  if [[ ! -f CHANGELOG.md ]]; then
-    die "CHANGELOG.md not found"
   fi
 
   python3 - "$ver" "$date_utc" "$notes" <<'PY'
 import sys
 
-version = sys.argv[1]
-date = sys.argv[2]
-notes = sys.argv[3]
+version=sys.argv[1]
+date=sys.argv[2]
+notes=sys.argv[3]
 
-path = "CHANGELOG.md"
-text = open(path, "r", encoding="utf-8").read()
+path="CHANGELOG.md"
+lines=open(path,"r",encoding="utf-8").read().splitlines()
 
-unreleased = "## [Unreleased]"
-idx = text.find(unreleased)
-if idx == -1:
-    raise SystemExit("error: CHANGELOG.md missing '## [Unreleased]' header")
-
-insert_at = idx + len(unreleased)
-section = f"\n\n## [{version}] - {date}\n\n{notes}\n"
-
-# If this version already exists, bail.
-if f"## [{version}]" in text:
+target_header=f"## [{version}]"
+if any(line.startswith(target_header) for line in lines):
     raise SystemExit(f"error: {version} already exists in CHANGELOG.md")
 
-new_text = text[:insert_at] + section + text[insert_at:]
-open(path, "w", encoding="utf-8").write(new_text)
+out=[]
+in_unreleased=False
+inserted=False
+
+for line in lines:
+    if line.strip() == "## [Unreleased]":
+        out.append(line)
+        out.append("")
+        out.append(f"## [{version}] - {date}")
+        out.append("")
+        out.extend(notes.splitlines() if notes.strip() else ["- No changes recorded."])
+        out.append("")
+        inserted=True
+        in_unreleased=True
+        continue
+
+    if in_unreleased:
+        if line.startswith("## ["):
+            in_unreleased=False
+            out.append(line)
+        else:
+            continue
+    else:
+        out.append(line)
+
+if not inserted:
+    raise SystemExit("error: CHANGELOG.md missing '## [Unreleased]' header")
+
+open(path,"w",encoding="utf-8").write("\n".join(out).rstrip() + "\n")
 PY
 
   git add CHANGELOG.md
@@ -165,15 +196,45 @@ build_dist() {
   (cd dist && shasum -a 256 *.tar.gz > SHA256SUMS.txt)
 }
 
+create_github_release() {
+  local ver="$1"
+  if ! command -v gh >/dev/null 2>&1; then
+    print -- "gh not found; skipping GitHub release creation"
+    return 0
+  fi
+
+  local notes_file
+  notes_file="$(mktemp)"
+  python3 - "$ver" >"${notes_file}" <<'PY'
+import sys
+ver=sys.argv[1]
+txt=open("CHANGELOG.md","r",encoding="utf-8").read().splitlines()
+out=[]
+in_sec=False
+for line in txt:
+    if line.startswith("## [") and line.startswith(f"## [{ver}]"):
+        in_sec=True
+        continue
+    if in_sec and line.startswith("## ["):
+        break
+    if in_sec:
+        out.append(line)
+print("\n".join(out).strip() or f"Release {ver}")
+PY
+
+  gh release create "${ver}" dist/*.tar.gz dist/SHA256SUMS.txt --notes-file "${notes_file}" --latest
+  rm -f "${notes_file}"
+}
+
 ensure_homebrew_tap_repo() {
   if ! command -v gh >/dev/null 2>&1; then
-    echo "gh not found; skipping Homebrew tap automation"
+    print -- "gh not found; skipping Homebrew tap automation"
     return 1
   fi
   if gh repo view "${tap_repo}" >/dev/null 2>&1; then
     return 0
   fi
-  echo "Creating Homebrew tap repo ${tap_repo} (public)..."
+  print -- "Creating Homebrew tap repo ${tap_repo} (public)..."
   gh repo create "${tap_repo}" --public --confirm >/dev/null
   return 0
 }
@@ -181,25 +242,20 @@ ensure_homebrew_tap_repo() {
 update_homebrew_formula() {
   local ver="$1"
   local ver_nov="${ver#v}"
-
-  if ! ensure_homebrew_tap_repo; then
-    return 0
-  fi
+  ensure_homebrew_tap_repo || return 0
 
   local sha_arm sha_amd
-  sha_arm="$(awk -v f=\"homepodctl_${ver}_darwin_arm64.tar.gz\" '$2==f{print $1}' dist/SHA256SUMS.txt | head -n 1 || true)"
-  sha_amd="$(awk -v f=\"homepodctl_${ver}_darwin_amd64.tar.gz\" '$2==f{print $1}' dist/SHA256SUMS.txt | head -n 1 || true)"
-  if [[ -z "${sha_arm}" || -z "${sha_amd}" ]]; then
-    die "failed to parse SHA256SUMS.txt for ${ver}"
-  fi
+  sha_arm="$(awk -v f="homepodctl_${ver}_darwin_arm64.tar.gz" '$2==f{print $1}' dist/SHA256SUMS.txt | head -n 1 || true)"
+  sha_amd="$(awk -v f="homepodctl_${ver}_darwin_amd64.tar.gz" '$2==f{print $1}' dist/SHA256SUMS.txt | head -n 1 || true)"
+  [[ -n "${sha_arm}" && -n "${sha_amd}" ]] || die "failed to parse SHA256SUMS.txt for ${ver}"
 
   local tmp
   tmp="$(mktemp -d)"
   trap 'rm -rf "${tmp}"' EXIT
 
   git clone "${tap_remote}" "${tmp}/tap" >/dev/null 2>&1 || die "failed to clone tap repo: ${tap_remote}"
-
   mkdir -p "${tmp}/tap/Formula"
+
   cat >"${tmp}/tap/Formula/homepodctl.rb" <<RUBY
 class Homepodctl < Formula
   desc "macOS CLI for Apple Music + HomePod control"
@@ -233,7 +289,7 @@ RUBY
   fi
   git add Formula/homepodctl.rb
   if git diff --cached --quiet; then
-    echo "Homebrew formula already up to date"
+    print -- "Homebrew formula already up to date"
     popd >/dev/null
     return 0
   fi
@@ -241,107 +297,7 @@ RUBY
   git push origin HEAD:main
   popd >/dev/null
 
-  echo "Updated Homebrew formula in ${tap_repo}"
-}
-
-create_github_release() {
-  local ver="$1"
-
-  if command -v gh >/dev/null 2>&1; then
-    # Best-effort: extract just the notes for this version.
-    local notes_file
-    notes_file="$(mktemp)"
-    python3 - "$ver" >"${notes_file}" <<'PY'
-import sys
-ver=sys.argv[1]
-txt=open("CHANGELOG.md","r",encoding="utf-8").read().splitlines()
-out=[]
-in_sec=False
-for line in txt:
-    if line.startswith("## [") and line.startswith(f"## [{ver}]"):
-        in_sec=True
-        continue
-    if in_sec and line.startswith("## ["):
-        break
-    if in_sec:
-        out.append(line)
-print("\n".join(out).strip() or f"Release {ver}")
-PY
-    gh release create "${ver}" dist/*.tar.gz dist/SHA256SUMS.txt --notes-file "${notes_file}" --latest
-    rm -f "${notes_file}"
-    return 0
-  fi
-
-  if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-    echo "Skipping GitHub release creation (install gh or set GITHUB_TOKEN)."
-    echo "Artifacts are ready in ./dist"
-    return 0
-  fi
-
-  # Minimal GitHub API release creation + upload.
-  local api="https://api.github.com"
-  local release_json
-
-  # Extract notes for this version from CHANGELOG.md (best-effort).
-  local notes
-  notes="$(python3 - "$ver" <<'PY'
-import sys, re
-ver=sys.argv[1]
-txt=open("CHANGELOG.md","r",encoding="utf-8").read().splitlines()
-out=[]
-in_sec=False
-for line in txt:
-    if line.startswith("## [") and line.startswith(f"## [{ver}]"):
-        in_sec=True
-        continue
-    if in_sec and line.startswith("## ["):
-        break
-    if in_sec:
-        out.append(line)
-print("\n".join(out).strip())
-PY
-)"
-  if [[ -z "${notes}" ]]; then
-    notes="Release ${ver}"
-  fi
-
-  release_json="$(curl -sS -X POST \
-    -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-    -H "Accept: application/vnd.github+json" \
-    "${api}/repos/${repo_owner}/${repo_name}/releases" \
-    -d "$(python3 - <<PY
-import json
-print(json.dumps({
-  "tag_name": "${ver}",
-  "name": "${ver}",
-  "body": """${notes}""",
-  "draft": False,
-  "prerelease": False
-}))
-PY
-    )")"
-
-  local upload_url
-  upload_url="$(python3 - <<'PY'
-import json,sys
-data=json.loads(sys.stdin.read())
-print(data.get("upload_url","").split("{",1)[0])
-PY
-  <<<"${release_json}")"
-  if [[ -z "${upload_url}" ]]; then
-    die "failed to create GitHub release: ${release_json}"
-  fi
-
-  for f in dist/*.tar.gz dist/SHA256SUMS.txt; do
-    local name
-    name="$(basename "$f")"
-    curl -sS -X POST \
-      -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-      -H "Accept: application/vnd.github+json" \
-      -H "Content-Type: application/octet-stream" \
-      --data-binary @"$f" \
-      "${upload_url}?name=${name}" >/dev/null
-  done
+  print -- "Updated Homebrew formula in ${tap_repo}"
 }
 
 main() {
@@ -354,27 +310,29 @@ main() {
     die "tag already exists: ${version}"
   fi
 
+  local prev
   prev="$(last_tag)"
-  update_changelog "${version}" "${prev}"
 
+  update_changelog "${version}" "${prev}"
   git commit -m "chore(release): ${version}"
+
   git tag "${version}"
 
-  echo "Pushing main + tags..."
+  print -- "Pushing main + tags..."
   git push origin main
   git push origin "${version}"
 
-  echo "Building dist artifacts..."
+  print -- "Building dist artifacts..."
   build_dist "${version}"
 
-  echo "Creating GitHub release (optional)..."
+  print -- "Creating GitHub release..."
   create_github_release "${version}"
 
-  echo "Updating Homebrew tap (optional)..."
+  print -- "Updating Homebrew tap..."
   update_homebrew_formula "${version}"
 
-  echo "Done."
-  echo "Artifacts: dist/"
+  print -- "Done. Artifacts: dist/"
 }
 
 main
+

@@ -5,3 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on *Keep a Changelog*, and this project adheres to *Semantic Versioning*.
 
 ## [Unreleased]
+
+### Added
+
+- Initial `homepodctl` CLI.
+- AirPlay backend via Music.app AppleScript (output selection, playlist playback, volume).
+- Native backend via Shortcuts (`shortcuts run`) using config mappings.
+- `status` output (track/album/playlist + outputs) and `--watch` polling.
+- Config defaults and aliases (`aliases`, `run`), plus interactive playlist selection (`--choose`).
