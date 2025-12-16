@@ -40,8 +40,8 @@ func usage() {
 
 Usage:
   homepodctl version
-  homepodctl devices [--json]
-  homepodctl out list [--json]
+  homepodctl devices [--json] [--plain] [--include-network]
+  homepodctl out list [--json] [--plain] [--include-network]
   homepodctl out set [<room> ...] [--backend airplay]
   homepodctl playlists [--query <substr>] [--limit N] [--json]
   homepodctl status [--json] [--watch <duration>]
