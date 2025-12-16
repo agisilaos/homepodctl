@@ -105,11 +105,11 @@ func InitConfig() (string, error) {
 		return path, nil
 	}
 
-	defaultVolume := 35
+	defaultVolume := 50
 	cfg := Config{
 		Defaults: DefaultsConfig{
 			Backend: "airplay",
-			Rooms:   []string{"Bedroom"},
+			Rooms:   []string{"Living Room"},
 			Shuffle: false,
 			Volume:  &defaultVolume,
 		},

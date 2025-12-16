@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -254,25 +255,63 @@ func SearchUserPlaylists(ctx context.Context, query string) ([]UserPlaylist, err
 	target := canonicalizeName(query)
 	targetLower := strings.ToLower(target)
 
-	var exact, prefix, contains []UserPlaylist
+	type scored struct {
+		p     UserPlaylist
+		score int
+		len   int
+	}
+
+	var scoredMatches []scored
 	for _, p := range all {
 		c := canonicalizeName(p.Name)
 		cl := strings.ToLower(c)
-		switch {
-		case cl == targetLower:
-			exact = append(exact, p)
-		case strings.HasPrefix(cl, targetLower):
-			prefix = append(prefix, p)
-		case strings.Contains(cl, targetLower):
-			contains = append(contains, p)
+
+		score := scoreMatch(targetLower, cl)
+		if score <= 0 {
+			continue
 		}
+		scoredMatches = append(scoredMatches, scored{p: p, score: score, len: len([]rune(c))})
 	}
 
-	out := make([]UserPlaylist, 0, len(exact)+len(prefix)+len(contains))
-	out = append(out, exact...)
-	out = append(out, prefix...)
-	out = append(out, contains...)
+	sort.SliceStable(scoredMatches, func(i, j int) bool {
+		if scoredMatches[i].score != scoredMatches[j].score {
+			return scoredMatches[i].score > scoredMatches[j].score
+		}
+		if scoredMatches[i].len != scoredMatches[j].len {
+			return scoredMatches[i].len < scoredMatches[j].len
+		}
+		return strings.ToLower(scoredMatches[i].p.Name) < strings.ToLower(scoredMatches[j].p.Name)
+	})
+
+	out := make([]UserPlaylist, 0, len(scoredMatches))
+	for _, s := range scoredMatches {
+		out = append(out, s.p)
+	}
 	return out, nil
+}
+
+func PickBestPlaylist(query string, matches []UserPlaylist) (UserPlaylist, bool) {
+	if len(matches) == 0 {
+		return UserPlaylist{}, false
+	}
+	if len(matches) == 1 {
+		return matches[0], true
+	}
+	target := strings.ToLower(canonicalizeName(query))
+	best := matches[0]
+	bestScore := scoreMatch(target, strings.ToLower(canonicalizeName(best.Name)))
+	bestLen := len([]rune(canonicalizeName(best.Name)))
+
+	for _, p := range matches[1:] {
+		score := scoreMatch(target, strings.ToLower(canonicalizeName(p.Name)))
+		l := len([]rune(canonicalizeName(p.Name)))
+		if score > bestScore || (score == bestScore && l < bestLen) || (score == bestScore && l == bestLen && strings.ToLower(p.Name) < strings.ToLower(best.Name)) {
+			best = p
+			bestScore = score
+			bestLen = l
+		}
+	}
+	return best, true
 }
 
 func Pause(ctx context.Context) error {
@@ -485,4 +524,51 @@ func canonicalizeName(s string) string {
 	}
 	// Collapse whitespace runs.
 	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+func scoreMatch(queryLower, candidateLower string) int {
+	if queryLower == "" || candidateLower == "" {
+		return 0
+	}
+	queryLen := len([]rune(queryLower))
+	if candidateLower == queryLower {
+		return 3000 + queryLen
+	}
+	if strings.HasPrefix(candidateLower, queryLower) {
+		return 2000 + queryLen
+	}
+	if strings.Contains(candidateLower, queryLower) {
+		// Prefer earlier occurrences slightly.
+		idx := strings.Index(candidateLower, queryLower)
+		return 1200 + queryLen - min(idx, 50)
+	}
+	if isSubsequence(queryLower, candidateLower) {
+		return 800 + queryLen
+	}
+	return 0
+}
+
+func isSubsequence(needle, haystack string) bool {
+	n := []rune(needle)
+	h := []rune(haystack)
+	if len(n) == 0 {
+		return true
+	}
+	i := 0
+	for _, r := range h {
+		if r == n[i] {
+			i++
+			if i == len(n) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

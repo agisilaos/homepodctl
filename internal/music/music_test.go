@@ -46,3 +46,38 @@ func TestParseBool(t *testing.T) {
 		t.Fatalf("expected falsy values to parse false")
 	}
 }
+
+func TestPickBestPlaylist(t *testing.T) {
+	t.Parallel()
+
+	matches := []UserPlaylist{
+		{PersistentID: "1", Name: "Chill"},
+		{PersistentID: "2", Name: "Chill Vibes"},
+		{PersistentID: "3", Name: "Super Chill Mix"},
+		{PersistentID: "4", Name: "CHILL"}, // canonical exact match should still win
+	}
+
+	best, ok := PickBestPlaylist("chill", matches)
+	if !ok {
+		t.Fatalf("expected ok=true")
+	}
+	if best.Name != "Chill" && best.Name != "CHILL" {
+		t.Fatalf("best = %q, want exact canonical match", best.Name)
+	}
+
+	best, ok = PickBestPlaylist("chill v", matches)
+	if !ok {
+		t.Fatalf("expected ok=true")
+	}
+	if best.Name != "Chill Vibes" {
+		t.Fatalf("best = %q, want %q", best.Name, "Chill Vibes")
+	}
+
+	best, ok = PickBestPlaylist("spr chll", matches) // subsequence should match Super Chill Mix
+	if !ok {
+		t.Fatalf("expected ok=true")
+	}
+	if best.Name != "Super Chill Mix" {
+		t.Fatalf("best = %q, want %q", best.Name, "Super Chill Mix")
+	}
+}

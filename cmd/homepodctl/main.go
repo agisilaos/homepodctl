@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/agisilaos/homepodctl/internal/music"
@@ -38,23 +41,28 @@ func usage() {
 Usage:
   homepodctl version
   homepodctl devices [--json]
+  homepodctl out list [--json]
+  homepodctl out set [<room> ...] [--backend airplay]
   homepodctl playlists [--query <substr>] [--limit N] [--json]
   homepodctl status [--json] [--watch <duration>]
+  homepodctl now [--json] [--watch <duration>]
   homepodctl aliases
   homepodctl run <alias>
   homepodctl pause
   homepodctl stop
   homepodctl next
   homepodctl prev
-  homepodctl play --backend airplay --room <name> [--room <name> ...] (--playlist <name> | --playlist-id <id>) [--shuffle] [--volume 0-100]
-  homepodctl play --backend native  --room <name> [--room <name> ...] --playlist <name>
-  homepodctl volume --backend airplay --room <name> [--room <name> ...] --value 0-100
+  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose]
+  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose]
+  homepodctl volume <0-100> [<room> ...] [--backend airplay|native]
+  homepodctl vol <0-100> [<room> ...] [--backend airplay|native]
   homepodctl native-run --shortcut <name>
   homepodctl config-init
 
 Notes:
   - backend=airplay uses Music.app AirPlay selection (Mac is the sender).
   - backend=native runs a Shortcut you map in the config file (HomePod plays natively if your Shortcut/Scene is set up that way).
+  - defaults come from config.json (run homepodctl config-init); commands use defaults when flags/args are omitted.
 `)
 }
 
@@ -86,6 +94,8 @@ func main() {
 		fs := flag.NewFlagSet("devices", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
 		jsonOut := fs.Bool("json", false, "output JSON")
+		includeNetwork := fs.Bool("include-network", false, "include network address (MAC) in JSON output")
+		plain := fs.Bool("plain", false, "plain (no header) output")
 		if err := fs.Parse(args); err != nil {
 			os.Exit(2)
 		}
@@ -95,12 +105,15 @@ func main() {
 			die(err)
 		}
 		if *jsonOut {
+			if !*includeNetwork {
+				for i := range devs {
+					devs[i].NetworkAddress = ""
+				}
+			}
 			writeJSON(devs)
 			return
 		}
-		for _, d := range devs {
-			fmt.Printf("%s\tkind=%s\tavailable=%t\tselected=%t\tvolume=%d\tmac=%s\n", d.Name, d.Kind, d.Available, d.Selected, d.Volume, d.NetworkAddress)
-		}
+		printDevicesTable(os.Stdout, devs, *plain)
 	case "playlists":
 		fs := flag.NewFlagSet("playlists", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -123,39 +136,11 @@ func main() {
 			fmt.Printf("%s\t%s\n", p.PersistentID, p.Name)
 		}
 	case "status":
-		fs := flag.NewFlagSet("status", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		jsonOut := fs.Bool("json", false, "output JSON")
-		watch := fs.Duration("watch", 0, "poll interval (e.g. 1s); 0 prints once")
-		if err := fs.Parse(args); err != nil {
-			os.Exit(2)
-		}
-		printOnce := func() error {
-			np, err := music.GetNowPlaying(ctx)
-			if err != nil {
-				return err
-			}
-			if *jsonOut {
-				writeJSON(np)
-				return nil
-			}
-			printNowPlaying(np)
-			return nil
-		}
-		if *watch <= 0 {
-			if err := printOnce(); err != nil {
-				die(err)
-			}
-			return
-		}
-		ticker := time.NewTicker(*watch)
-		defer ticker.Stop()
-		for {
-			if err := printOnce(); err != nil {
-				die(err)
-			}
-			<-ticker.C
-		}
+		cmdStatus(ctx, args)
+	case "now":
+		cmdStatus(ctx, args)
+	case "out":
+		cmdOut(ctx, cfg, args)
 	case "aliases":
 		if len(cfg.Aliases) == 0 {
 			path, _ := native.ConfigPath()
@@ -314,168 +299,11 @@ func main() {
 			printNowPlaying(np)
 		}
 	case "play":
-		fs := flag.NewFlagSet("play", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		backend := fs.String("backend", "", "airplay|native")
-		var rooms stringSliceFlag
-		fs.Var(&rooms, "room", "room/AirPlay device name (repeatable)")
-		playlistName := fs.String("playlist", "", "user playlist name")
-		playlistID := fs.String("playlist-id", "", "user playlist persistent ID")
-		shuffle := fs.Bool("shuffle", false, "enable shuffle (airplay only)")
-		volume := fs.Int("volume", -1, "set volume (0-100) for selected room(s)")
-		choose := fs.Bool("choose", false, "interactively choose playlist when multiple match (airplay only)")
-		if err := fs.Parse(args); err != nil {
-			os.Exit(2)
-		}
-
-		b := strings.TrimSpace(*backend)
-		if b == "" {
-			b = cfg.Defaults.Backend
-		}
-		if len(rooms) == 0 {
-			rooms = append(rooms, cfg.Defaults.Rooms...)
-		}
-		if *volume < 0 && cfg.Defaults.Volume != nil {
-			*volume = *cfg.Defaults.Volume
-		}
-
-		switch b {
-		case "airplay":
-			if len(rooms) == 0 {
-				die(fmt.Errorf("--room is required for backend=airplay"))
-			}
-			id := strings.TrimSpace(*playlistID)
-			if id == "" {
-				if strings.TrimSpace(*playlistName) == "" {
-					die(fmt.Errorf("either --playlist or --playlist-id is required"))
-				}
-				if *choose {
-					matches, err := music.SearchUserPlaylists(ctx, *playlistName)
-					if err != nil {
-						die(err)
-					}
-					if len(matches) == 0 {
-						die(fmt.Errorf("no playlists match %q", *playlistName))
-					}
-					selected, err := choosePlaylist(matches)
-					if err != nil {
-						die(err)
-					}
-					id = selected.PersistentID
-				} else {
-					var err error
-					id, err = music.FindUserPlaylistPersistentIDByName(ctx, *playlistName)
-					if err != nil {
-						die(err)
-					}
-				}
-			}
-
-			if err := music.SetCurrentAirPlayDevices(ctx, rooms); err != nil {
-				die(err)
-			}
-			if *volume >= 0 {
-				for _, room := range rooms {
-					if err := music.SetAirPlayDeviceVolume(ctx, room, *volume); err != nil {
-						die(err)
-					}
-				}
-			}
-			if err := music.SetShuffleEnabled(ctx, *shuffle); err != nil {
-				die(err)
-			}
-			if err := music.PlayUserPlaylistByPersistentID(ctx, id); err != nil {
-				die(err)
-			}
-			np, err := music.GetNowPlaying(ctx)
-			if err == nil {
-				printNowPlaying(np)
-			}
-		case "native":
-			if len(rooms) == 0 {
-				die(fmt.Errorf("--room is required for backend=native"))
-			}
-			if strings.TrimSpace(*playlistName) == "" && strings.TrimSpace(*playlistID) == "" {
-				die(fmt.Errorf("--playlist is required for backend=native (names are used for config mapping)"))
-			}
-
-			name := strings.TrimSpace(*playlistName)
-			if name == "" {
-				var err error
-				name, err = music.FindUserPlaylistNameByPersistentID(ctx, *playlistID)
-				if err != nil {
-					die(err)
-				}
-			}
-
-			for _, room := range rooms {
-				shortcutName, ok := cfg.Native.Playlists[room][name]
-				if !ok || strings.TrimSpace(shortcutName) == "" {
-					die(fmt.Errorf("no native mapping for room=%q playlist=%q (edit config-init output)", room, name))
-				}
-				if err := native.RunShortcut(ctx, shortcutName); err != nil {
-					die(err)
-				}
-			}
-		default:
-			die(fmt.Errorf("unknown backend: %q", b))
-		}
+		cmdPlay(ctx, cfg, args)
 	case "volume":
-		fs := flag.NewFlagSet("volume", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		backend := fs.String("backend", "", "airplay|native")
-		var rooms stringSliceFlag
-		fs.Var(&rooms, "room", "room/AirPlay device name (repeatable)")
-		value := fs.Int("value", -1, "volume (0-100)")
-		if err := fs.Parse(args); err != nil {
-			os.Exit(2)
-		}
-
-		if *value < 0 || *value > 100 {
-			die(fmt.Errorf("--value must be 0-100"))
-		}
-
-		b := strings.TrimSpace(*backend)
-		if b == "" {
-			b = cfg.Defaults.Backend
-		}
-		if len(rooms) == 0 {
-			rooms = append(rooms, cfg.Defaults.Rooms...)
-		}
-
-		switch b {
-		case "airplay":
-			if len(rooms) == 0 {
-				die(fmt.Errorf("--room is required for backend=airplay"))
-			}
-			for _, room := range rooms {
-				if err := music.SetAirPlayDeviceVolume(ctx, room, *value); err != nil {
-					die(err)
-				}
-			}
-			if np, err := music.GetNowPlaying(ctx); err == nil {
-				printNowPlaying(np)
-			}
-		case "native":
-			for _, room := range rooms {
-				m := cfg.Native.VolumeShortcuts[room]
-				shortcutName := ""
-				if m != nil {
-					shortcutName = m[fmt.Sprint(*value)]
-				}
-				if strings.TrimSpace(shortcutName) == "" {
-					die(fmt.Errorf("no native volume mapping for room=%q value=%d (config-native volume is discrete)", room, *value))
-				}
-				if err := native.RunShortcut(ctx, shortcutName); err != nil {
-					die(err)
-				}
-			}
-			if np, err := music.GetNowPlaying(ctx); err == nil {
-				printNowPlaying(np)
-			}
-		default:
-			die(fmt.Errorf("unknown backend: %q", b))
-		}
+		cmdVolume(ctx, cfg, "volume", args)
+	case "vol":
+		cmdVolume(ctx, cfg, "vol", args)
 	case "native-run":
 		fs := flag.NewFlagSet("native-run", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -570,4 +398,482 @@ func choosePlaylist(matches []music.UserPlaylist) (music.UserPlaylist, error) {
 		return music.UserPlaylist{}, fmt.Errorf("invalid selection %d", n)
 	}
 	return matches[n-1], nil
+}
+
+func printDevicesTable(w io.Writer, devs []music.AirPlayDevice, plain bool) {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if !plain {
+		fmt.Fprintln(tw, "NAME\tKIND\tAVAILABLE\tSELECTED\tVOLUME")
+	}
+	for _, d := range devs {
+		kind := d.Kind
+		if kind == "" {
+			kind = "unknown"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%t\t%t\t%d\n", d.Name, kind, d.Available, d.Selected, d.Volume)
+	}
+	_ = tw.Flush()
+}
+
+func cmdStatus(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("status", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	jsonOut := fs.Bool("json", false, "output JSON")
+	watch := fs.Duration("watch", 0, "poll interval (e.g. 1s); 0 prints once")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(2)
+	}
+	printOnce := func() error {
+		np, err := music.GetNowPlaying(ctx)
+		if err != nil {
+			return err
+		}
+		if *jsonOut {
+			writeJSON(np)
+			return nil
+		}
+		printNowPlaying(np)
+		return nil
+	}
+	if *watch <= 0 {
+		if err := printOnce(); err != nil {
+			die(err)
+		}
+		return
+	}
+	ticker := time.NewTicker(*watch)
+	defer ticker.Stop()
+	for {
+		if err := printOnce(); err != nil {
+			die(err)
+		}
+		<-ticker.C
+	}
+}
+
+func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
+	if len(args) < 1 {
+		die(fmt.Errorf("usage: homepodctl out <list|set> [args]"))
+	}
+	switch args[0] {
+	case "list":
+		fs := flag.NewFlagSet("out list", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		jsonOut := fs.Bool("json", false, "output JSON")
+		includeNetwork := fs.Bool("include-network", false, "include network address (MAC) in JSON output")
+		plain := fs.Bool("plain", false, "plain (no header) output")
+		if err := fs.Parse(args[1:]); err != nil {
+			os.Exit(2)
+		}
+		devs, err := music.ListAirPlayDevices(ctx)
+		if err != nil {
+			die(err)
+		}
+		if *jsonOut {
+			if !*includeNetwork {
+				for i := range devs {
+					devs[i].NetworkAddress = ""
+				}
+			}
+			writeJSON(devs)
+			return
+		}
+		printDevicesTable(os.Stdout, devs, *plain)
+	case "set":
+		flags, positionals, err := parseArgs(args[1:])
+		if err != nil {
+			die(err)
+		}
+		backend := strings.TrimSpace(flags.string("backend"))
+		if backend == "" {
+			backend = cfg.Defaults.Backend
+		}
+		if backend != "airplay" {
+			die(fmt.Errorf("out set only supports backend=airplay (got %q)", backend))
+		}
+		rooms := positionals
+		if len(rooms) == 0 {
+			rooms = append(rooms, cfg.Defaults.Rooms...)
+		}
+		if len(rooms) == 0 {
+			die(fmt.Errorf("no rooms provided and defaults.rooms is empty"))
+		}
+		if err := music.SetCurrentAirPlayDevices(ctx, rooms); err != nil {
+			die(err)
+		}
+		if np, err := music.GetNowPlaying(ctx); err == nil {
+			printNowPlaying(np)
+		}
+	default:
+		die(fmt.Errorf("usage: homepodctl out <list|set> [args]"))
+	}
+}
+
+func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []string) {
+	flags, positionals, err := parseArgs(args)
+	if err != nil {
+		die(err)
+	}
+	backend := strings.TrimSpace(flags.string("backend"))
+	if backend == "" {
+		backend = cfg.Defaults.Backend
+	}
+
+	value := -1
+	if v, ok, err := flags.intStrict("value"); err != nil {
+		die(err)
+	} else if ok {
+		value = v
+	} else if v, ok, err := flags.intStrict("volume"); err != nil {
+		die(err)
+	} else if ok {
+		value = v
+	}
+	if value < 0 && len(positionals) > 0 {
+		v, err := strconv.Atoi(positionals[0])
+		if err != nil {
+			die(fmt.Errorf("usage: homepodctl %s <0-100> [<room> ...] [--backend airplay|native]", name))
+		}
+		value = v
+		positionals = positionals[1:]
+	}
+	if value < 0 || value > 100 {
+		die(fmt.Errorf("volume must be 0-100"))
+	}
+
+	rooms := append([]string(nil), flags.strings("room")...)
+	if len(rooms) == 0 && len(positionals) > 0 {
+		rooms = append(rooms, positionals...)
+	}
+	if len(rooms) == 0 {
+		rooms = append(rooms, cfg.Defaults.Rooms...)
+	}
+
+	switch backend {
+	case "airplay":
+		if len(rooms) == 0 {
+			die(fmt.Errorf("no rooms provided and defaults.rooms is empty"))
+		}
+		for _, room := range rooms {
+			if err := music.SetAirPlayDeviceVolume(ctx, room, value); err != nil {
+				die(err)
+			}
+		}
+		if np, err := music.GetNowPlaying(ctx); err == nil {
+			printNowPlaying(np)
+		}
+	case "native":
+		for _, room := range rooms {
+			m := cfg.Native.VolumeShortcuts[room]
+			shortcutName := ""
+			if m != nil {
+				shortcutName = m[fmt.Sprint(value)]
+			}
+			if strings.TrimSpace(shortcutName) == "" {
+				die(fmt.Errorf("no native volume mapping for room=%q value=%d (config-native volume is discrete)", room, value))
+			}
+			if err := native.RunShortcut(ctx, shortcutName); err != nil {
+				die(err)
+			}
+		}
+		if np, err := music.GetNowPlaying(ctx); err == nil {
+			printNowPlaying(np)
+		}
+	default:
+		die(fmt.Errorf("unknown backend: %q", backend))
+	}
+}
+
+func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
+	flags, positionals, err := parseArgs(args)
+	if err != nil {
+		die(err)
+	}
+
+	backend := strings.TrimSpace(flags.string("backend"))
+	if backend == "" {
+		backend = cfg.Defaults.Backend
+	}
+	rooms := append([]string(nil), flags.strings("room")...)
+	if len(rooms) == 0 {
+		rooms = append(rooms, cfg.Defaults.Rooms...)
+	}
+
+	volume := -1
+	if v, ok, err := flags.intStrict("volume"); err != nil {
+		die(err)
+	} else if ok {
+		volume = v
+	}
+	if volume < 0 && cfg.Defaults.Volume != nil {
+		volume = *cfg.Defaults.Volume
+	}
+	shuffle, shuffleSet, err := flags.boolStrict("shuffle")
+	if err != nil {
+		die(err)
+	}
+	if !shuffleSet {
+		shuffle = cfg.Defaults.Shuffle
+	}
+	choose, _, err := flags.boolStrict("choose")
+	if err != nil {
+		die(err)
+	}
+
+	playlistID := strings.TrimSpace(flags.string("playlist-id"))
+	playlistName := strings.TrimSpace(flags.string("playlist"))
+	query := playlistName
+	if query == "" && playlistID == "" && len(positionals) > 0 {
+		query = strings.Join(positionals, " ")
+	}
+
+	switch backend {
+	case "airplay":
+		if len(rooms) == 0 {
+			die(fmt.Errorf("no rooms provided and defaults.rooms is empty"))
+		}
+
+		id := playlistID
+		if id == "" {
+			if strings.TrimSpace(query) == "" {
+				die(fmt.Errorf("playlist is required (pass <playlist-query>, --playlist, or --playlist-id)"))
+			}
+			matches, err := music.SearchUserPlaylists(ctx, query)
+			if err != nil {
+				die(err)
+			}
+			if len(matches) == 0 {
+				die(fmt.Errorf("no playlists match %q (tip: run `homepodctl playlists --query %q`)", query, query))
+			}
+			if choose {
+				selected, err := choosePlaylist(matches)
+				if err != nil {
+					die(err)
+				}
+				id = selected.PersistentID
+				if len(matches) > 1 {
+					fmt.Fprintf(os.Stderr, "picked %q (%s)\n", selected.Name, selected.PersistentID)
+				}
+			} else {
+				best, ok := music.PickBestPlaylist(query, matches)
+				if !ok {
+					die(fmt.Errorf("no playlists match %q", query))
+				}
+				id = best.PersistentID
+				if len(matches) > 1 {
+					fmt.Fprintf(os.Stderr, "picked %q (%s) (use --choose to select)\n", best.Name, best.PersistentID)
+				}
+			}
+		}
+
+		if err := music.SetCurrentAirPlayDevices(ctx, rooms); err != nil {
+			die(err)
+		}
+		if volume >= 0 {
+			for _, room := range rooms {
+				if err := music.SetAirPlayDeviceVolume(ctx, room, volume); err != nil {
+					die(err)
+				}
+			}
+		}
+		if err := music.SetShuffleEnabled(ctx, shuffle); err != nil {
+			die(err)
+		}
+		if err := music.PlayUserPlaylistByPersistentID(ctx, id); err != nil {
+			die(err)
+		}
+		if np, err := music.GetNowPlaying(ctx); err == nil {
+			printNowPlaying(np)
+		}
+	case "native":
+		if len(rooms) == 0 {
+			die(fmt.Errorf("no rooms provided and defaults.rooms is empty"))
+		}
+		if strings.TrimSpace(query) == "" && playlistID == "" {
+			die(fmt.Errorf("playlist is required (pass <playlist-query>, --playlist, or --playlist-id)"))
+		}
+		name := strings.TrimSpace(query)
+		if name == "" {
+			var err error
+			name, err = music.FindUserPlaylistNameByPersistentID(ctx, playlistID)
+			if err != nil {
+				die(err)
+			}
+		}
+		for _, room := range rooms {
+			shortcutName, ok := cfg.Native.Playlists[room][name]
+			if !ok || strings.TrimSpace(shortcutName) == "" {
+				die(fmt.Errorf("no native mapping for room=%q playlist=%q (edit config)", room, name))
+			}
+			if err := native.RunShortcut(ctx, shortcutName); err != nil {
+				die(err)
+			}
+		}
+	default:
+		die(fmt.Errorf("unknown backend: %q", backend))
+	}
+}
+
+type parsedArgs struct {
+	kv map[string][]string
+}
+
+func (p parsedArgs) has(key string) bool {
+	v := p.strings(key)
+	return len(v) > 0
+}
+
+func (p parsedArgs) strings(key string) []string {
+	if p.kv == nil {
+		return nil
+	}
+	return p.kv[key]
+}
+
+func (p parsedArgs) string(key string) string {
+	v := p.strings(key)
+	if len(v) == 0 {
+		return ""
+	}
+	return v[len(v)-1]
+}
+
+func (p parsedArgs) int(key string, def int) int {
+	s := strings.TrimSpace(p.string(key))
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+func (p parsedArgs) intStrict(key string) (int, bool, error) {
+	if !p.has(key) {
+		return 0, false, nil
+	}
+	s := strings.TrimSpace(p.string(key))
+	if s == "" {
+		return 0, true, fmt.Errorf("--%s requires a value", key)
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, true, fmt.Errorf("invalid --%s %q", key, s)
+	}
+	return n, true, nil
+}
+
+func (p parsedArgs) bool(key string) (bool, bool) {
+	v := p.strings(key)
+	if len(v) == 0 {
+		return false, false
+	}
+	s := strings.TrimSpace(v[len(v)-1])
+	if s == "" {
+		return true, true
+	}
+	switch strings.ToLower(s) {
+	case "true", "1", "yes", "y", "on":
+		return true, true
+	case "false", "0", "no", "n", "off":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func (p parsedArgs) boolStrict(key string) (bool, bool, error) {
+	if !p.has(key) {
+		return false, false, nil
+	}
+	b, ok := p.bool(key)
+	if ok {
+		return b, true, nil
+	}
+	return false, true, fmt.Errorf("invalid --%s %q (expected true/false)", key, p.string(key))
+}
+
+func (p parsedArgs) boolDefault(key string, def bool) bool {
+	b, ok := p.bool(key)
+	if !ok {
+		return def
+	}
+	return b
+}
+
+func parseArgs(args []string) (parsedArgs, []string, error) {
+	out := parsedArgs{kv: map[string][]string{}}
+	var positionals []string
+
+	push := func(k, v string) {
+		out.kv[k] = append(out.kv[k], v)
+	}
+
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			positionals = append(positionals, args[i+1:]...)
+			break
+		}
+		if a == "-h" || a == "--help" {
+			usage()
+			os.Exit(0)
+		}
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			positionals = append(positionals, a)
+			continue
+		}
+
+		if strings.HasPrefix(a, "--") {
+			key := strings.TrimPrefix(a, "--")
+			val := ""
+			if eq := strings.IndexByte(key, '='); eq >= 0 {
+				val = key[eq+1:]
+				key = key[:eq]
+			}
+
+			switch key {
+			case "backend", "playlist", "playlist-id", "volume", "value", "room", "json":
+				if key == "json" {
+					if val == "" {
+						val = "true"
+					}
+					push(key, val)
+					continue
+				}
+				if key == "room" {
+					if val == "" {
+						if i+1 >= len(args) {
+							return parsedArgs{}, nil, fmt.Errorf("--room requires a value")
+						}
+						i++
+						val = args[i]
+					}
+					push("room", val)
+					continue
+				}
+				if val == "" {
+					if i+1 >= len(args) {
+						return parsedArgs{}, nil, fmt.Errorf("--%s requires a value", key)
+					}
+					i++
+					val = args[i]
+				}
+				push(key, val)
+			case "shuffle", "choose":
+				if val == "" {
+					val = "true"
+				}
+				push(key, val)
+			default:
+				return parsedArgs{}, nil, fmt.Errorf("unknown flag: %s", a)
+			}
+			continue
+		}
+
+		return parsedArgs{}, nil, fmt.Errorf("unknown flag: %s", a)
+	}
+	return out, positionals, nil
 }
