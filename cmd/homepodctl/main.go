@@ -23,18 +23,6 @@ var (
 	date    = "unknown"
 )
 
-type stringSliceFlag []string
-
-func (s *stringSliceFlag) String() string { return strings.Join(*s, ",") }
-func (s *stringSliceFlag) Set(val string) error {
-	val = strings.TrimSpace(val)
-	if val == "" {
-		return nil
-	}
-	*s = append(*s, val)
-	return nil
-}
-
 func usage() {
 	fmt.Fprintf(os.Stderr, `homepodctl - control Apple Music + HomePods (macOS)
 
@@ -229,10 +217,17 @@ func main() {
 			if a.PlaylistID != "" || a.Playlist != "" {
 				id := a.PlaylistID
 				if id == "" {
-					var err error
-					id, err = music.FindUserPlaylistPersistentIDByName(ctx, a.Playlist)
+					matches, err := music.SearchUserPlaylists(ctx, a.Playlist)
 					if err != nil {
 						die(err)
+					}
+					if len(matches) == 0 {
+						die(fmt.Errorf("alias %q playlist %q not found (tip: set playlistId to pin an exact playlist)", aliasName, a.Playlist))
+					}
+					best, _ := music.PickBestPlaylist(a.Playlist, matches)
+					id = best.PersistentID
+					if len(matches) > 1 {
+						fmt.Fprintf(os.Stderr, "picked %q (%s) for alias %q (set playlistId to pin)\n", best.Name, best.PersistentID, aliasName)
 					}
 				}
 				if err := music.PlayUserPlaylistByPersistentID(ctx, id); err != nil {
