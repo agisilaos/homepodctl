@@ -35,10 +35,29 @@ On first use, macOS may prompt you to allow your terminal (or the built binary) 
 
 ## Quick start
 
+Initialize config (sets defaults like backend/rooms/volume):
+
+```sh
+homepodctl config-init
+```
+
 List available HomePods (AirPlay devices):
 
 ```sh
 homepodctl devices
+```
+
+List outputs (alias of devices):
+
+```sh
+homepodctl out list
+```
+
+Select output(s) (uses `defaults.rooms` when omitted):
+
+```sh
+homepodctl out set "Living Room"
+homepodctl out set Bedroom "Living Room"
 ```
 
 Search playlists:
@@ -53,22 +72,28 @@ See what’s playing (track/album/playlist + outputs):
 homepodctl status
 ```
 
+Shortcut for `status`:
+
+```sh
+homepodctl now
+```
+
 Watch changes:
 
 ```sh
 homepodctl status --watch 1s
 ```
 
-Play a playlist to a specific HomePod (AirPlay from Mac):
+Play a playlist (uses defaults from `config.json` when flags are omitted):
 
 ```sh
-homepodctl play --backend airplay --room "Bedroom" --playlist "Example Playlist" --volume 35
+homepodctl play chill
 ```
 
-If multiple playlists match, pick interactively:
+If multiple playlists match, auto-pick the best match (prints what it picked). To pick interactively:
 
 ```sh
-homepodctl play --backend airplay --room "Bedroom" --playlist "Autumn" --choose
+homepodctl play autumn --choose
 ```
 
 If a playlist name is ambiguous or tricky to match (emoji/whitespace), use IDs:
@@ -78,13 +103,14 @@ homepodctl playlists --query autumn
 homepodctl play --backend airplay --room "Bedroom" --playlist-id <PERSISTENT_ID>
 ```
 
-Initialize config for native mode:
+Set volume (uses `defaults.rooms` when omitted):
 
 ```sh
-homepodctl config-init
+homepodctl vol 50
+homepodctl volume 35 "Living Room"
 ```
 
-Then edit the file printed by `config-init` and map `room -> playlist -> shortcut name`, and run:
+Native backend (optional): edit the file printed by `config-init`, map `room -> playlist -> shortcut name`, and run:
 
 ```sh
 homepodctl play --backend native --room "Bedroom" --playlist "Example Playlist"
