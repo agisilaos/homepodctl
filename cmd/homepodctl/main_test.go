@@ -10,8 +10,8 @@ func TestParseArgs(t *testing.T) {
 		"--backend", "airplay",
 		"--room", "Living Room",
 		"--room=Bedroom",
-		"--shuffle=false",
-		"--choose",
+		"--shuffle", "false",
+		"--choose=true",
 		"--playlist-id", "ABC123",
 	})
 	if err != nil {

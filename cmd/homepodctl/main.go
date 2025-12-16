@@ -811,6 +811,15 @@ func parseArgs(args []string) (parsedArgs, []string, error) {
 		out.kv[k] = append(out.kv[k], v)
 	}
 
+	isBoolWord := func(s string) bool {
+		switch strings.ToLower(strings.TrimSpace(s)) {
+		case "true", "false", "1", "0", "yes", "no", "y", "n", "on", "off":
+			return true
+		default:
+			return false
+		}
+	}
+
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
@@ -835,14 +844,7 @@ func parseArgs(args []string) (parsedArgs, []string, error) {
 			}
 
 			switch key {
-			case "backend", "playlist", "playlist-id", "volume", "value", "room", "json":
-				if key == "json" {
-					if val == "" {
-						val = "true"
-					}
-					push(key, val)
-					continue
-				}
+			case "backend", "playlist", "playlist-id", "volume", "value", "room":
 				if key == "room" {
 					if val == "" {
 						if i+1 >= len(args) {
@@ -863,6 +865,10 @@ func parseArgs(args []string) (parsedArgs, []string, error) {
 				}
 				push(key, val)
 			case "shuffle", "choose":
+				if val == "" && i+1 < len(args) && isBoolWord(args[i+1]) {
+					i++
+					val = args[i]
+				}
 				if val == "" {
 					val = "true"
 				}
