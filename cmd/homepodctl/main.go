@@ -27,6 +27,8 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `homepodctl - control Apple Music + HomePods (macOS)
 
 Usage:
+  homepodctl --help
+  homepodctl help [<command>]
   homepodctl version
   homepodctl devices [--json] [--plain] [--include-network]
   homepodctl out list [--json] [--plain] [--include-network]
@@ -51,6 +53,7 @@ Notes:
   - backend=airplay uses Music.app AirPlay selection (Mac is the sender).
   - backend=native runs a Shortcut you map in the config file (HomePod plays natively if your Shortcut/Scene is set up that way).
   - defaults come from config.json (run homepodctl config-init); commands use defaults when flags/args are omitted.
+  - if no rooms are provided and defaults.rooms is empty, airplay commands fall back to Music.app’s currently selected AirPlay outputs (when possible).
 `)
 }
 
@@ -75,7 +78,14 @@ func main() {
 	cmd := os.Args[1]
 	args := os.Args[2:]
 
+	if cmd == "-h" || cmd == "--help" {
+		usage()
+		return
+	}
+
 	switch cmd {
+	case "help":
+		cmdHelp(args)
 	case "version":
 		fmt.Printf("homepodctl %s (%s) %s\n", version, commit, date)
 	case "devices":
@@ -330,6 +340,75 @@ func die(err error) {
 	os.Exit(1)
 }
 
+func cmdHelp(args []string) {
+	if len(args) == 0 {
+		usage()
+		return
+	}
+	switch args[0] {
+	case "play":
+		fmt.Fprint(os.Stdout, `homepodctl play - play an Apple Music playlist
+
+Usage:
+  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose]
+  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose]
+
+Notes:
+  - <playlist-query> is a fuzzy search against your Music.app user playlists.
+  - If --room is omitted, homepodctl uses defaults.rooms from config.json; if that is empty it falls back to Music.app’s currently selected AirPlay outputs (airplay backend).
+
+Examples:
+  homepodctl play chill
+  homepodctl play \"Songs I've been obsessed recently pt. 2\"
+  homepodctl play autumn --choose
+  homepodctl play --room \"Bedroom\" --playlist-id <PERSISTENT_ID>
+`)
+	case "out":
+		fmt.Fprint(os.Stdout, `homepodctl out - list/set Music.app AirPlay outputs
+
+Usage:
+  homepodctl out list [--json] [--plain] [--include-network]
+  homepodctl out set [<room> ...] [--backend airplay]
+
+Notes:
+  - Room names must match the AirPlay device names shown by: homepodctl devices
+  - out set changes Music.app’s current outputs; it does not modify config.json.
+
+Examples:
+  homepodctl out list
+  homepodctl out set \"Bedroom\"
+  homepodctl out set \"Bedroom\" \"Living Room\"
+`)
+	case "volume", "vol":
+		fmt.Fprint(os.Stdout, `homepodctl volume - set output volume
+
+Usage:
+  homepodctl volume <0-100> [<room> ...] [--backend airplay|native]
+  homepodctl vol <0-100> [<room> ...] [--backend airplay|native]
+
+Notes:
+  - If no rooms are provided, homepodctl uses defaults.rooms; if empty it uses Music.app’s currently selected outputs (airplay).
+
+Examples:
+  homepodctl volume 35
+  homepodctl volume 35 \"Living Room\"
+`)
+	case "config-init":
+		path, _ := native.ConfigPath()
+		fmt.Fprintf(os.Stdout, `homepodctl config-init - create a starter config file
+
+Writes a starter config to:
+  %s
+
+Notes:
+  - If the file already exists, this command is a no-op.
+  - Edit defaults.rooms to your AirPlay device names (homepodctl devices).
+`, path)
+	default:
+		usage()
+	}
+}
+
 func writeJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -491,7 +570,7 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 			rooms = append(rooms, cfg.Defaults.Rooms...)
 		}
 		if len(rooms) == 0 {
-			die(fmt.Errorf("no rooms provided and defaults.rooms is empty"))
+			die(fmt.Errorf("no rooms provided (usage: homepodctl out set <room> ...; tip: run `homepodctl devices` to list names)"))
 		}
 		if err := music.SetCurrentAirPlayDevices(ctx, rooms); err != nil {
 			die(err)
@@ -547,7 +626,10 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 	switch backend {
 	case "airplay":
 		if len(rooms) == 0 {
-			die(fmt.Errorf("no rooms provided and defaults.rooms is empty"))
+			rooms = inferSelectedOutputs(ctx)
+		}
+		if len(rooms) == 0 {
+			die(fmt.Errorf("no rooms provided (pass room names, set defaults.rooms via `homepodctl config-init`, or select outputs in Music.app / `homepodctl out set`)"))
 		}
 		for _, room := range rooms {
 			if err := music.SetAirPlayDeviceVolume(ctx, room, value); err != nil {
@@ -595,10 +677,12 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	}
 
 	volume := -1
+	volumeExplicit := false
 	if v, ok, err := flags.intStrict("volume"); err != nil {
 		die(err)
 	} else if ok {
 		volume = v
+		volumeExplicit = true
 	}
 	if volume < 0 && cfg.Defaults.Volume != nil {
 		volume = *cfg.Defaults.Volume
@@ -625,7 +709,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	switch backend {
 	case "airplay":
 		if len(rooms) == 0 {
-			die(fmt.Errorf("no rooms provided and defaults.rooms is empty"))
+			rooms = inferSelectedOutputs(ctx)
 		}
 
 		id := playlistID
@@ -661,10 +745,16 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 			}
 		}
 
-		if err := music.SetCurrentAirPlayDevices(ctx, rooms); err != nil {
-			die(err)
+		// If we have rooms, select outputs first. If we don't, keep Music.app's current outputs.
+		if len(rooms) > 0 {
+			if err := music.SetCurrentAirPlayDevices(ctx, rooms); err != nil {
+				die(err)
+			}
 		}
-		if volume >= 0 {
+		if volumeExplicit && volume >= 0 && len(rooms) == 0 {
+			die(fmt.Errorf("cannot set volume without rooms (pass --room <name> or select outputs first via `homepodctl out set`)"))
+		}
+		if volume >= 0 && len(rooms) > 0 {
 			for _, room := range rooms {
 				if err := music.SetAirPlayDeviceVolume(ctx, room, volume); err != nil {
 					die(err)
@@ -682,7 +772,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 		}
 	case "native":
 		if len(rooms) == 0 {
-			die(fmt.Errorf("no rooms provided and defaults.rooms is empty"))
+			die(fmt.Errorf("no rooms provided (pass --room <name> ... or set defaults.rooms via `homepodctl config-init`)"))
 		}
 		if strings.TrimSpace(query) == "" && playlistID == "" {
 			die(fmt.Errorf("playlist is required (pass <playlist-query>, --playlist, or --playlist-id)"))
@@ -707,6 +797,24 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	default:
 		die(fmt.Errorf("unknown backend: %q", backend))
 	}
+}
+
+func inferSelectedOutputs(ctx context.Context) []string {
+	np, err := music.GetNowPlaying(ctx)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var rooms []string
+	for _, o := range np.Outputs {
+		name := strings.TrimSpace(o.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		rooms = append(rooms, name)
+	}
+	return rooms
 }
 
 type parsedArgs struct {
@@ -869,12 +977,12 @@ func parseArgs(args []string) (parsedArgs, []string, error) {
 				}
 				push(key, val)
 			default:
-				return parsedArgs{}, nil, fmt.Errorf("unknown flag: %s", a)
+				return parsedArgs{}, nil, fmt.Errorf("unknown flag: %s (tip: rooms use --room <name>; run `homepodctl help`)", a)
 			}
 			continue
 		}
 
-		return parsedArgs{}, nil, fmt.Errorf("unknown flag: %s", a)
+		return parsedArgs{}, nil, fmt.Errorf("unknown flag: %s (tip: run `homepodctl help`)", a)
 	}
 	return out, positionals, nil
 }

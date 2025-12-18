@@ -19,7 +19,7 @@ macOS CLI that controls Apple Music playback and routes audio to HomePods.
 - macOS with the Music app
 - `osascript` (built-in)
 - `shortcuts` (built-in, optional for the `native` backend)
-- Go toolchain to build
+- Go toolchain to build (if building from source)
 
 ## Permissions
 
@@ -33,37 +33,43 @@ On first use, macOS may prompt you to allow your terminal (or the built binary) 
 - `--backend airplay`: selects Music.app AirPlay output device(s) and plays a playlist (the Mac is the sender).
 - `--backend native`: runs a Shortcuts automation you map in `config.json` (can be set up so HomePod plays natively).
 
-## Quick start
+## Mental model (important)
 
-Initialize config (sets defaults like backend/rooms/volume):
+- **“Rooms” = AirPlay device names** as seen by Music.app (HomePods, Apple TVs, speakers, etc).
+- `out set` changes **Music.app’s current AirPlay outputs** (it does not edit your config).
+- `play` plays a **Music.app user playlist** (by fuzzy search or by ID).
+- `config.json` is only for **defaults and aliases** (so you don’t have to type `--room` every time).
 
-```sh
-homepodctl config-init
-```
+## Quick start (AirPlay)
 
-List available HomePods (AirPlay devices):
+List available AirPlay outputs (these names are what you pass as “rooms”):
 
 ```sh
 homepodctl devices
 ```
 
-List outputs (alias of devices):
+Pick outputs to play through (sets Music.app’s current outputs):
 
 ```sh
-homepodctl out list
+homepodctl out set "Bedroom"
 ```
 
-Select output(s) (uses `defaults.rooms` when omitted):
+Play a playlist by fuzzy query:
 
 ```sh
-homepodctl out set "Living Room"
-homepodctl out set Bedroom "Living Room"
+homepodctl play chill
 ```
 
-Search playlists:
+If the playlist name has spaces, quote it:
 
 ```sh
-homepodctl playlists --query chill
+homepodctl play "Songs I've been obsessed recently pt. 2"
+```
+
+If multiple playlists match, auto-picks the best match; to pick interactively:
+
+```sh
+homepodctl play autumn --choose
 ```
 
 See what’s playing (track/album/playlist + outputs):
@@ -84,36 +90,51 @@ Watch changes:
 homepodctl status --watch 1s
 ```
 
-Play a playlist (uses defaults from `config.json` when flags are omitted):
+Search playlists (for IDs / debugging):
 
 ```sh
-homepodctl play chill
-```
-
-If multiple playlists match, auto-pick the best match (prints what it picked). To pick interactively:
-
-```sh
-homepodctl play autumn --choose
+homepodctl playlists --query chill
 ```
 
 If a playlist name is ambiguous or tricky to match (emoji/whitespace), use IDs:
 
 ```sh
 homepodctl playlists --query autumn
-homepodctl play --backend airplay --room "Bedroom" --playlist-id <PERSISTENT_ID>
+homepodctl play --playlist-id <PERSISTENT_ID>
 ```
 
-Set volume (uses `defaults.rooms` when omitted):
+Set volume (if rooms are omitted, uses `defaults.rooms`; if that’s empty, uses the currently selected outputs in Music.app):
 
 ```sh
 homepodctl vol 50
 homepodctl volume 35 "Living Room"
 ```
 
-Native backend (optional): edit the file printed by `config-init`, map `room -> playlist -> shortcut name`, and run:
+## Config (defaults + aliases)
+
+Create a starter config:
 
 ```sh
-homepodctl play --backend native --room "Bedroom" --playlist "Example Playlist"
+homepodctl config-init
+```
+
+This writes `config.json` under your macOS user config dir (typically `~/Library/Application Support/homepodctl/config.json`).
+
+Defaults are used when flags are omitted. For example, if you set:
+
+- `defaults.backend = "airplay"`
+- `defaults.rooms = ["Bedroom"]`
+
+…then you can just run:
+
+```sh
+homepodctl play chill
+```
+
+List configured aliases:
+
+```sh
+homepodctl aliases
 ```
 
 Run an alias from your config:
@@ -122,11 +143,42 @@ Run an alias from your config:
 homepodctl run bed-example
 ```
 
-List aliases:
+## Native backend (optional)
+
+Edit `config.json`, map `room -> playlist -> shortcut name`, and run:
 
 ```sh
-homepodctl aliases
+homepodctl play --backend native --room "Bedroom" --playlist "Example Playlist"
 ```
+
+## Help
+
+CLI help:
+
+```sh
+homepodctl --help
+homepodctl help play
+```
+
+## Command cheat sheet
+
+- `homepodctl devices` / `homepodctl out list`: list AirPlay devices
+- `homepodctl out set <room> ...`: select Music.app outputs
+- `homepodctl play <query>` / `homepodctl play --playlist-id <id>`: play a playlist
+- `homepodctl playlists --query <text>`: search playlists
+- `homepodctl status` / `homepodctl now` / `homepodctl status --watch 1s`: now playing
+- `homepodctl pause|stop|next|prev`: transport controls
+- `homepodctl volume <0-100> [room ...]` / `homepodctl vol ...`: output volume
+- `homepodctl aliases` / `homepodctl run <alias>`: config shortcuts
+- `homepodctl native-run --shortcut <name>`: run a Shortcut directly
+- `homepodctl config-init`: create starter config
+- `homepodctl version`: version info
+
+## Common gotchas
+
+- **You built it but it still behaves “old”:** if you run `make build`, the binary is `./homepodctl`. Running `homepodctl ...` might be a different binary on your PATH.
+- **Rooms are not flags:** use `--room "Bedroom"` (repeatable), not `--bedroom` / `--Bedroom`.
+- **`out set` doesn’t edit config:** it only changes Music.app’s current outputs. Use `config-init` + edit `defaults.rooms` if you want persistent defaults.
 
 ## Distribution
 
