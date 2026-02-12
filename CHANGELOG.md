@@ -6,6 +6,8 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ## [Unreleased]
 
+## [v0.1.2] - 2026-02-12
+
 ### Changed
 
 - docs/cli: expanded in-tool help via `homepodctl help <command>` and refreshed README quick-start/mental-model sections.
