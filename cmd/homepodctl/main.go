@@ -249,11 +249,7 @@ func main() {
 		if len(positionals) != 1 {
 			die(usageErrf("usage: homepodctl run <alias>"))
 		}
-		jsonOut, plainOut, err := parseOutputFlags(flags)
-		if err != nil {
-			die(err)
-		}
-		dryRun, _, err := flags.boolStrict("dry-run")
+		opts, err := parseOutputOptions(flags)
 		if err != nil {
 			die(err)
 		}
@@ -277,12 +273,13 @@ func main() {
 			rooms = cfg.Defaults.Rooms
 		}
 		if a.Shortcut != "" {
-			if !dryRun {
+			if !opts.DryRun {
 				if err := native.RunShortcut(ctx, a.Shortcut); err != nil {
 					die(err)
 				}
 			}
-			writeActionOutput("run", jsonOut, plainOut, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+				DryRun:   opts.DryRun,
 				Backend:  backend,
 				Rooms:    rooms,
 				Shortcut: a.Shortcut,
@@ -294,8 +291,8 @@ func main() {
 			if len(rooms) == 0 {
 				die(fmt.Errorf("alias %q requires rooms (set defaults.rooms or alias.rooms)", aliasName))
 			}
-			if dryRun {
-				writeActionOutput("run", jsonOut, plainOut, actionOutput{
+			if opts.DryRun {
+				writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
 					DryRun:     true,
 					Backend:    backend,
 					Rooms:      rooms,
@@ -347,14 +344,14 @@ func main() {
 			}
 			np, err := music.GetNowPlaying(ctx)
 			if err == nil {
-				writeActionOutput("run", jsonOut, plainOut, actionOutput{
+				writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
 					Backend:    backend,
 					Rooms:      rooms,
 					PlaylistID: a.PlaylistID,
 					NowPlaying: &np,
 				})
 			} else {
-				writeActionOutput("run", jsonOut, plainOut, actionOutput{
+				writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
 					Backend:    backend,
 					Rooms:      rooms,
 					PlaylistID: a.PlaylistID,
@@ -368,11 +365,11 @@ func main() {
 				die(fmt.Errorf("alias %q requires playlist (native mapping is per room+playlist)", aliasName))
 			}
 			name := a.Playlist
-			if dryRun {
+			if opts.DryRun {
 				if name == "" {
 					name = a.PlaylistID
 				}
-				writeActionOutput("run", jsonOut, plainOut, actionOutput{
+				writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
 					DryRun:   true,
 					Backend:  backend,
 					Rooms:    rooms,
@@ -396,7 +393,8 @@ func main() {
 					die(err)
 				}
 			}
-			writeActionOutput("run", jsonOut, plainOut, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+				DryRun:   opts.DryRun,
 				Backend:  backend,
 				Rooms:    rooms,
 				Playlist: name,
@@ -657,6 +655,12 @@ type actionOutput struct {
 	NowPlaying *music.NowPlaying
 }
 
+type outputOptions struct {
+	JSON   bool
+	Plain  bool
+	DryRun bool
+}
+
 func parseOutputFlags(flags parsedArgs) (bool, bool, error) {
 	jsonOut, _, err := flags.boolStrict("json")
 	if err != nil {
@@ -667,6 +671,22 @@ func parseOutputFlags(flags parsedArgs) (bool, bool, error) {
 		return false, false, err
 	}
 	return jsonOut, plainOut, nil
+}
+
+func parseOutputOptions(flags parsedArgs) (outputOptions, error) {
+	jsonOut, plainOut, err := parseOutputFlags(flags)
+	if err != nil {
+		return outputOptions{}, err
+	}
+	dryRun, _, err := flags.boolStrict("dry-run")
+	if err != nil {
+		return outputOptions{}, err
+	}
+	return outputOptions{
+		JSON:   jsonOut,
+		Plain:  plainOut,
+		DryRun: dryRun,
+	}, nil
 }
 
 func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOutput) {

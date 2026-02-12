@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -264,6 +265,54 @@ func TestWriteActionOutput_DryRunText(t *testing.T) {
 	if !strings.Contains(out, "dry-run action=volume") {
 		t.Fatalf("dry-run text missing: %q", out)
 	}
+}
+
+func TestCLIDryRunCommands(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	if code, out := run("config-init"); code != 0 {
+		t.Fatalf("config-init exit=%d out=%s", code, out)
+	}
+
+	assertDryRun := func(args ...string) {
+		t.Helper()
+		code, out := run(args...)
+		if code != 0 {
+			t.Fatalf("%v exit=%d out=%s", args, code, out)
+		}
+		if !strings.Contains(out, `"dryRun": true`) {
+			t.Fatalf("%v output missing dryRun=true: %s", args, out)
+		}
+	}
+
+	assertDryRun("out", "set", "Bedroom", "--dry-run", "--json")
+	assertDryRun("volume", "30", "--dry-run", "--json")
+	assertDryRun("play", "chill", "--dry-run", "--json")
+	assertDryRun("run", "bed", "--dry-run", "--json")
+	assertDryRun("native-run", "--shortcut", "Example", "--dry-run", "--json")
 }
 
 func TestCmdHelp_PlayExamplesUseQuotes(t *testing.T) {
