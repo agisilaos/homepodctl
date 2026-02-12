@@ -315,6 +315,77 @@ func TestCLIDryRunCommands(t *testing.T) {
 	assertDryRun("native-run", "--shortcut", "Example", "--dry-run", "--json")
 }
 
+func TestCLIAutomationCommands(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	code, out := run("automation", "init", "--preset", "morning")
+	if code != 0 {
+		t.Fatalf("automation init exit=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, `version: "1"`) || !strings.Contains(out, "name: morning") {
+		t.Fatalf("automation init output unexpected: %s", out)
+	}
+
+	routinePath := filepath.Join(t.TempDir(), "morning.yaml")
+	if err := os.WriteFile(routinePath, []byte(out), 0o644); err != nil {
+		t.Fatalf("write routine: %v", err)
+	}
+
+	code, out = run("automation", "validate", "-f", routinePath, "--json")
+	if code != 0 {
+		t.Fatalf("automation validate exit=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, `"mode": "validate"`) || !strings.Contains(out, `"ok": true`) {
+		t.Fatalf("automation validate json unexpected: %s", out)
+	}
+
+	code, out = run("automation", "plan", "-f", routinePath)
+	if code != 0 {
+		t.Fatalf("automation plan exit=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, `mode=plan`) || !strings.Contains(out, `1/4 out.set ok=true`) {
+		t.Fatalf("automation plan output unexpected: %s", out)
+	}
+
+	code, out = run("automation", "run", "-f", routinePath, "--dry-run", "--json")
+	if code != 0 {
+		t.Fatalf("automation run --dry-run exit=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, `"mode": "dry-run"`) || !strings.Contains(out, `"steps"`) {
+		t.Fatalf("automation dry-run json unexpected: %s", out)
+	}
+
+	code, out = run("automation", "run", "-f", routinePath)
+	if code != exitUsage {
+		t.Fatalf("automation run without --dry-run exit=%d, want %d out=%s", code, exitUsage, out)
+	}
+	if !strings.Contains(out, "not implemented yet") {
+		t.Fatalf("automation run without --dry-run message unexpected: %s", out)
+	}
+}
 func TestCmdHelp_PlayExamplesUseQuotes(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdHelp([]string{"play"})
