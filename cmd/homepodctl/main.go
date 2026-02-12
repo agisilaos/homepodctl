@@ -18,9 +18,10 @@ import (
 )
 
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version       = "dev"
+	commit        = "none"
+	date          = "unknown"
+	getNowPlaying = music.GetNowPlaying
 )
 
 func usage() {
@@ -359,9 +360,9 @@ Notes:
 
 Examples:
   homepodctl play chill
-  homepodctl play \"Songs I've been obsessed recently pt. 2\"
+  homepodctl play "Songs I've been obsessed recently pt. 2"
   homepodctl play autumn --choose
-  homepodctl play --room \"Bedroom\" --playlist-id <PERSISTENT_ID>
+  homepodctl play --room "Bedroom" --playlist-id <PERSISTENT_ID>
 `)
 	case "out":
 		fmt.Fprint(os.Stdout, `homepodctl out - list/set Music.app AirPlay outputs
@@ -376,8 +377,8 @@ Notes:
 
 Examples:
   homepodctl out list
-  homepodctl out set \"Bedroom\"
-  homepodctl out set \"Bedroom\" \"Living Room\"
+  homepodctl out set "Bedroom"
+  homepodctl out set "Bedroom" "Living Room"
 `)
 	case "volume", "vol":
 		fmt.Fprint(os.Stdout, `homepodctl volume - set output volume
@@ -391,7 +392,7 @@ Notes:
 
 Examples:
   homepodctl volume 35
-  homepodctl volume 35 \"Living Room\"
+  homepodctl volume 35 "Living Room"
 `)
 	case "config-init":
 		path, _ := native.ConfigPath()
@@ -751,8 +752,8 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 				die(err)
 			}
 		}
-		if volumeExplicit && volume >= 0 && len(rooms) == 0 {
-			die(fmt.Errorf("cannot set volume without rooms (pass --room <name> or select outputs first via `homepodctl out set`)"))
+		if err := validateAirplayVolumeSelection(volumeExplicit, volume, rooms); err != nil {
+			die(err)
 		}
 		if volume >= 0 && len(rooms) > 0 {
 			for _, room := range rooms {
@@ -799,8 +800,15 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	}
 }
 
+func validateAirplayVolumeSelection(volumeExplicit bool, volume int, rooms []string) error {
+	if volumeExplicit && volume >= 0 && len(rooms) == 0 {
+		return fmt.Errorf("cannot set volume without rooms (pass --room <name> or select outputs first via `homepodctl out set`)")
+	}
+	return nil
+}
+
 func inferSelectedOutputs(ctx context.Context) []string {
-	np, err := music.GetNowPlaying(ctx)
+	np, err := getNowPlaying(ctx)
 	if err != nil {
 		return nil
 	}

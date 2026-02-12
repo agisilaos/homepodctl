@@ -1,6 +1,15 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"io"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/agisilaos/homepodctl/internal/music"
+)
 
 func TestParseArgs(t *testing.T) {
 	t.Parallel()
@@ -57,4 +66,97 @@ func TestParsedArgs_IntStrict(t *testing.T) {
 	if err != nil || !ok || v != 50 {
 		t.Fatalf("volume=%v ok=%v err=%v, want 50 true nil", v, ok, err)
 	}
+}
+
+func TestCmdHelp_PlayExamplesUseQuotes(t *testing.T) {
+	out := captureStdout(t, func() {
+		cmdHelp([]string{"play"})
+	})
+	if !strings.Contains(out, `homepodctl play "Songs I've been obsessed recently pt. 2"`) {
+		t.Fatalf("help output missing quoted example: %q", out)
+	}
+	if strings.Contains(out, `\"`) {
+		t.Fatalf("help output should not contain escaped quotes: %q", out)
+	}
+}
+
+func TestInferSelectedOutputs(t *testing.T) {
+	t.Run("dedupes and trims output names", func(t *testing.T) {
+		orig := getNowPlaying
+		t.Cleanup(func() { getNowPlaying = orig })
+		getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+			return music.NowPlaying{Outputs: []music.AirPlayDevice{
+				{Name: " Bedroom "},
+				{Name: ""},
+				{Name: "Bedroom"},
+				{Name: "Living Room"},
+			}}, nil
+		}
+
+		got := inferSelectedOutputs(context.Background())
+		if len(got) != 2 || got[0] != "Bedroom" || got[1] != "Living Room" {
+			t.Fatalf("inferSelectedOutputs=%v, want [Bedroom Living Room]", got)
+		}
+	})
+
+	t.Run("returns nil on now-playing error", func(t *testing.T) {
+		orig := getNowPlaying
+		t.Cleanup(func() { getNowPlaying = orig })
+		getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+			return music.NowPlaying{}, errors.New("boom")
+		}
+
+		if got := inferSelectedOutputs(context.Background()); got != nil {
+			t.Fatalf("inferSelectedOutputs=%v, want nil", got)
+		}
+	})
+}
+
+func TestValidateAirplayVolumeSelection(t *testing.T) {
+	tests := []struct {
+		name           string
+		volumeExplicit bool
+		volume         int
+		rooms          []string
+		wantErr        bool
+	}{
+		{name: "explicit volume with no rooms errors", volumeExplicit: true, volume: 30, rooms: nil, wantErr: true},
+		{name: "explicit volume with rooms passes", volumeExplicit: true, volume: 30, rooms: []string{"Bedroom"}, wantErr: false},
+		{name: "implicit default volume with no rooms passes", volumeExplicit: false, volume: 30, rooms: nil, wantErr: false},
+		{name: "negative volume bypasses check", volumeExplicit: true, volume: -1, rooms: nil, wantErr: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAirplayVolumeSelection(tc.volumeExplicit, tc.volume, tc.rooms)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validateAirplayVolumeSelection() err=%v, wantErr=%t", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("close write pipe: %v", err)
+	}
+	b, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read captured output: %v", err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatalf("close read pipe: %v", err)
+	}
+	return string(b)
 }

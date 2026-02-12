@@ -69,6 +69,13 @@ require_clean_tree() {
   git diff --cached --quiet || die "index has staged changes"
 }
 
+run_preflight_checks() {
+  print -- "Running preflight checks (go test, go vet, go build)..."
+  go test ./...
+  go vet ./...
+  go build ./cmd/homepodctl
+}
+
 last_tag() {
   git describe --tags --abbrev=0 2>/dev/null || true
 }
@@ -222,7 +229,7 @@ for line in txt:
 print("\n".join(out).strip() or f"Release {ver}")
 PY
 
-  gh release create "${ver}" dist/*.tar.gz dist/SHA256SUMS.txt --notes-file "${notes_file}" --latest
+  gh release create "${ver}" dist/*.tar.gz dist/SHA256SUMS.txt --notes-file "${notes_file}" --latest --target "$(git rev-parse HEAD)"
   rm -f "${notes_file}"
 }
 
@@ -376,20 +383,26 @@ main() {
   local prev
   prev="$(last_tag)"
 
+  run_preflight_checks
+
   update_changelog "${version}" "${prev}"
   git commit -m "chore(release): ${version}"
-
-  git tag "${version}"
-
-  print -- "Pushing main + tags..."
-  git push origin main
-  git push origin "${version}"
 
   print -- "Building dist artifacts..."
   build_dist "${version}"
 
+  print -- "Pushing main commit..."
+  git push origin main
+
   print -- "Creating GitHub release..."
   create_github_release "${version}"
+
+  if ! git rev-parse "${version}" >/dev/null 2>&1; then
+    git tag "${version}"
+  fi
+
+  print -- "Pushing release tag..."
+  git push origin "${version}"
 
   print -- "Updating Homebrew tap..."
   update_homebrew_formula "${version}"

@@ -6,6 +6,16 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ## [Unreleased]
 
+### Changed
+
+- docs/cli: expanded in-tool help via `homepodctl help <command>` and refreshed README quick-start/mental-model sections.
+- airplay UX: when rooms are omitted and `defaults.rooms` is empty, `play`/`volume` now fall back to currently selected Music.app outputs where possible.
+- errors: improved unknown-flag and missing-room guidance to point users to `homepodctl help`, `homepodctl devices`, and `config-init`.
+
+### Fixed
+
+- help examples now render quotes correctly (no escaped `\"` sequences in `homepodctl help` output).
+
 ## [v0.1.1] - 2025-12-14
 
 - chore(release): normalize tap README install section (aab2e89)
