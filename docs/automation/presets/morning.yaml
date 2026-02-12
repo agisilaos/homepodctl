@@ -1,0 +1,17 @@
+version: "1"
+name: morning
+defaults:
+  backend: airplay
+  rooms: ["Bedroom"]
+  volume: 30
+  shuffle: false
+steps:
+  - type: out.set
+    rooms: ["Bedroom"]
+  - type: play
+    query: "Morning Mix"
+  - type: volume.set
+    value: 30
+  - type: wait
+    state: playing
+    timeout: 20s

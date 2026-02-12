@@ -1,0 +1,17 @@
+version: "1"
+name: focus
+defaults:
+  backend: airplay
+  rooms: ["Office"]
+  volume: 25
+  shuffle: false
+steps:
+  - type: out.set
+    rooms: ["Office"]
+  - type: play
+    query: "Deep Focus"
+  - type: volume.set
+    value: 25
+  - type: wait
+    state: playing
+    timeout: 20s

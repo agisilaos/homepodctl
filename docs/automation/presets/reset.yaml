@@ -1,0 +1,13 @@
+version: "1"
+name: reset
+defaults:
+  backend: airplay
+  rooms: ["Bedroom"]
+  volume: 25
+steps:
+  - type: transport
+    action: stop
+  - type: out.set
+    rooms: ["Bedroom"]
+  - type: volume.set
+    value: 25

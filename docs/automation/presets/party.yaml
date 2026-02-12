@@ -1,0 +1,17 @@
+version: "1"
+name: party
+defaults:
+  backend: airplay
+  rooms: ["Living Room", "Kitchen"]
+  volume: 55
+  shuffle: true
+steps:
+  - type: out.set
+    rooms: ["Living Room", "Kitchen"]
+  - type: play
+    query: "Party Mix"
+  - type: volume.set
+    value: 55
+  - type: wait
+    state: playing
+    timeout: 30s

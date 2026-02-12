@@ -1,0 +1,17 @@
+version: "1"
+name: winddown
+defaults:
+  backend: airplay
+  rooms: ["Bedroom"]
+  volume: 20
+  shuffle: false
+steps:
+  - type: out.set
+    rooms: ["Bedroom"]
+  - type: play
+    query: "Evening Ambient"
+  - type: volume.set
+    value: 20
+  - type: wait
+    state: playing
+    timeout: 20s
