@@ -6,6 +6,25 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ## [Unreleased]
 
+### Added
+
+- diagnostics: global `--verbose` flag (or `HOMEPODCTL_VERBOSE=1`) to print command/backend resolution details to stderr.
+- CLI: `homepodctl aliases --json` for machine-readable alias listings.
+- CLI: `homepodctl doctor` command with `--json`/`--plain` output for environment/config/backend diagnostics.
+- CLI: `homepodctl completion <bash|zsh|fish>` to generate shell completion scripts.
+
+### Changed
+
+- errors/exit-codes: standardized process exit codes:
+  - `2` usage/flag validation issues
+  - `3` config read/parse/write failures
+  - `4` backend execution failures (`osascript`/`shortcuts`)
+  - `1` generic runtime failures
+- output: added `--json` support to `run`, `play`, `volume`, `out set`, transport commands, and `native-run`.
+- output: added `--plain` support across status/aliases/playlists and action commands for stable script-friendly text mode.
+- safety: added `--dry-run` to mutating commands (`run`, `play`, `volume/vol`, `out set`, `native-run`) with structured action previews.
+- errors: common AppleScript backend failures now map to concise user-friendly messages in non-verbose mode.
+
 ## [v0.1.2] - 2026-02-12
 
 ### Changed

@@ -54,6 +54,17 @@ type NowPlayingTrack struct {
 	PersistentID string  `json:"persistentID,omitempty"`
 }
 
+type ScriptError struct {
+	Err    error
+	Output string
+}
+
+func (e *ScriptError) Error() string {
+	return fmt.Sprintf("osascript failed: %v: %s", e.Err, e.Output)
+}
+
+func (e *ScriptError) Unwrap() error { return e.Err }
+
 func ListAirPlayDevices(ctx context.Context) ([]AirPlayDevice, error) {
 	out, err := runAppleScript(ctx, `
 tell application "Music"
@@ -447,7 +458,10 @@ func runAppleScript(ctx context.Context, script string) (string, error) {
 	cmd.Stdin = strings.NewReader(script)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("osascript failed: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", &ScriptError{
+			Err:    err,
+			Output: strings.TrimSpace(string(out)),
+		}
 	}
 	return string(out), nil
 }

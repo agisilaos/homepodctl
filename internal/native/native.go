@@ -37,6 +37,33 @@ type NativeConfig struct {
 	VolumeShortcuts map[string]map[string]string `json:"volumeShortcuts"` // room -> "0".."100" -> shortcut name (discrete)
 }
 
+type ConfigError struct {
+	Op   string
+	Path string
+	Err  error
+}
+
+func (e *ConfigError) Error() string {
+	if e.Path == "" {
+		return fmt.Sprintf("%s config: %v", e.Op, e.Err)
+	}
+	return fmt.Sprintf("%s config %s: %v", e.Op, e.Path, e.Err)
+}
+
+func (e *ConfigError) Unwrap() error { return e.Err }
+
+type ShortcutError struct {
+	Name   string
+	Err    error
+	Output string
+}
+
+func (e *ShortcutError) Error() string {
+	return fmt.Sprintf("shortcuts run %q failed: %v: %s", e.Name, e.Err, e.Output)
+}
+
+func (e *ShortcutError) Unwrap() error { return e.Err }
+
 func ConfigPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -48,15 +75,15 @@ func ConfigPath() (string, error) {
 func LoadConfig() (*Config, error) {
 	path, err := ConfigPath()
 	if err != nil {
-		return nil, err
+		return nil, &ConfigError{Op: "resolve", Err: err}
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read config: %w (run `homepodctl config-init`)", err)
+		return nil, &ConfigError{Op: "read", Path: path, Err: fmt.Errorf("%w (run `homepodctl config-init`)", err)}
 	}
 	var cfg Config
 	if err := json.Unmarshal(b, &cfg); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
+		return nil, &ConfigError{Op: "parse", Path: path, Err: err}
 	}
 	normalizeConfig(&cfg)
 	if cfg.Native.Playlists == nil {
@@ -74,7 +101,7 @@ func LoadConfig() (*Config, error) {
 func LoadConfigOptional() (*Config, error) {
 	path, err := ConfigPath()
 	if err != nil {
-		return nil, err
+		return nil, &ConfigError{Op: "resolve", Err: err}
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -83,11 +110,11 @@ func LoadConfigOptional() (*Config, error) {
 			normalizeConfig(cfg)
 			return cfg, nil
 		}
-		return nil, fmt.Errorf("read config: %w", err)
+		return nil, &ConfigError{Op: "read", Path: path, Err: err}
 	}
 	var cfg Config
 	if err := json.Unmarshal(b, &cfg); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
+		return nil, &ConfigError{Op: "parse", Path: path, Err: err}
 	}
 	normalizeConfig(&cfg)
 	return &cfg, nil
@@ -96,10 +123,10 @@ func LoadConfigOptional() (*Config, error) {
 func InitConfig() (string, error) {
 	path, err := ConfigPath()
 	if err != nil {
-		return "", err
+		return "", &ConfigError{Op: "resolve", Err: err}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", err
+		return "", &ConfigError{Op: "mkdir", Path: filepath.Dir(path), Err: err}
 	}
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
@@ -151,10 +178,10 @@ func InitConfig() (string, error) {
 
 	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return "", err
+		return "", &ConfigError{Op: "encode", Path: path, Err: err}
 	}
 	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return "", err
+		return "", &ConfigError{Op: "write", Path: path, Err: err}
 	}
 	return path, nil
 }
@@ -178,7 +205,11 @@ func RunShortcut(ctx context.Context, name string) error {
 	cmd := exec.CommandContext(ctx, "shortcuts", "run", name)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("shortcuts run failed: %w: %s", err, string(out))
+		return &ShortcutError{
+			Name:   name,
+			Err:    err,
+			Output: string(out),
+		}
 	}
 	return nil
 }

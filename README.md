@@ -157,21 +157,49 @@ CLI help:
 
 ```sh
 homepodctl --help
+homepodctl --verbose status
 homepodctl help play
 ```
+
+Verbose diagnostics can also be enabled via `HOMEPODCTL_VERBOSE=1`.
+
+Run built-in diagnostics:
+
+```sh
+homepodctl doctor
+homepodctl doctor --json
+```
+
+Generate shell completions:
+
+```sh
+homepodctl completion zsh
+homepodctl completion bash
+homepodctl completion fish
+```
+
+## Exit codes
+
+- `0`: success
+- `2`: usage/flag/validation error
+- `3`: config read/parse/write error
+- `4`: backend command error (`osascript` / `shortcuts`)
+- `1`: other runtime failures
 
 ## Command cheat sheet
 
 - `homepodctl devices` / `homepodctl out list`: list AirPlay devices
-- `homepodctl out set <room> ...`: select Music.app outputs
-- `homepodctl play <query>` / `homepodctl play --playlist-id <id>`: play a playlist
-- `homepodctl playlists --query <text>`: search playlists
-- `homepodctl status` / `homepodctl now` / `homepodctl status --watch 1s`: now playing
-- `homepodctl pause|stop|next|prev`: transport controls
-- `homepodctl volume <0-100> [room ...]` / `homepodctl vol ...`: output volume
-- `homepodctl aliases` / `homepodctl run <alias>`: config shortcuts
-- `homepodctl native-run --shortcut <name>`: run a Shortcut directly
+- `homepodctl out set <room> ... [--json|--plain|--dry-run]`: select Music.app outputs
+- `homepodctl play <query> [--json|--plain|--dry-run]` / `homepodctl play --playlist-id <id>`: play a playlist
+- `homepodctl playlists --query <text> [--json|--plain]`: search playlists
+- `homepodctl status [--json|--plain]` / `homepodctl now` / `homepodctl status --watch 1s`: now playing
+- `homepodctl pause|stop|next|prev [--json|--plain]`: transport controls
+- `homepodctl volume <0-100> [room ...] [--json|--plain|--dry-run]` / `homepodctl vol ...`: output volume
+- `homepodctl aliases [--json|--plain]` / `homepodctl run <alias> [--json|--plain|--dry-run]`: config shortcuts
+- `homepodctl native-run --shortcut <name> [--json|--dry-run]`: run a Shortcut directly
 - `homepodctl config-init`: create starter config
+- `homepodctl doctor`: diagnostics checklist
+- `homepodctl completion <bash|zsh|fish>`: generate completion script
 - `homepodctl version`: version info
 
 ## Common gotchas
@@ -179,6 +207,25 @@ homepodctl help play
 - **You built it but it still behaves “old”:** if you run `make build`, the binary is `./homepodctl`. Running `homepodctl ...` might be a different binary on your PATH.
 - **Rooms are not flags:** use `--room "Bedroom"` (repeatable), not `--bedroom` / `--Bedroom`.
 - **`out set` doesn’t edit config:** it only changes Music.app’s current outputs. Use `config-init` + edit `defaults.rooms` if you want persistent defaults.
+
+## Automation (v1 design)
+
+Automation commands are being designed for routine playback flows and agent usage.
+
+Design docs:
+
+- CLI spec: `docs/automation-v1-cli-spec.md`
+- User quickstart: `docs/automation/quickstart-user.md`
+- Agent quickstart: `docs/automation/quickstart-agent.md`
+- Preset templates: `docs/automation/presets/`
+
+Canonical presets included:
+
+- `docs/automation/presets/morning.yaml`
+- `docs/automation/presets/focus.yaml`
+- `docs/automation/presets/winddown.yaml`
+- `docs/automation/presets/party.yaml`
+- `docs/automation/presets/reset.yaml`
 
 ## Distribution
 
