@@ -398,6 +398,24 @@ func TestCmdHelp_PlayExamplesUseQuotes(t *testing.T) {
 	}
 }
 
+func TestCmdHelp_RunMentionsDryRun(t *testing.T) {
+	out := captureStdout(t, func() {
+		cmdHelp([]string{"run"})
+	})
+	if !strings.Contains(out, "--dry-run") {
+		t.Fatalf("run help missing --dry-run: %q", out)
+	}
+}
+
+func TestCmdHelp_Doctor(t *testing.T) {
+	out := captureStdout(t, func() {
+		cmdHelp([]string{"doctor"})
+	})
+	if !strings.Contains(out, "homepodctl doctor") {
+		t.Fatalf("doctor help missing usage: %q", out)
+	}
+}
+
 func TestInferSelectedOutputs(t *testing.T) {
 	t.Run("dedupes and trims output names", func(t *testing.T) {
 		orig := getNowPlaying

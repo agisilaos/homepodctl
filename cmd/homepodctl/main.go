@@ -598,6 +598,37 @@ Examples:
   homepodctl volume 35
   homepodctl volume 35 "Living Room"
 `)
+	case "run":
+		fmt.Fprint(os.Stdout, `homepodctl run - execute a configured alias
+
+Usage:
+  homepodctl run <alias> [--json] [--plain] [--dry-run]
+
+Notes:
+  - Aliases come from config.json (see homepodctl aliases).
+  - --dry-run resolves backend/rooms/targets without executing backend calls.
+`)
+	case "native-run":
+		fmt.Fprint(os.Stdout, `homepodctl native-run - execute a Shortcut by name
+
+Usage:
+  homepodctl native-run --shortcut <name> [--json] [--dry-run]
+
+Notes:
+  - --dry-run validates arguments and prints the planned action only.
+`)
+	case "doctor":
+		fmt.Fprint(os.Stdout, `homepodctl doctor - run environment and config diagnostics
+
+Usage:
+  homepodctl doctor [--json] [--plain]
+`)
+	case "completion":
+		fmt.Fprint(os.Stdout, `homepodctl completion - generate shell completion scripts
+
+Usage:
+  homepodctl completion <bash|zsh|fish>
+`)
 	case "config-init":
 		path, _ := native.ConfigPath()
 		fmt.Fprintf(os.Stdout, `homepodctl config-init - create a starter config file
@@ -1612,11 +1643,7 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 		if err != nil {
 			die(err)
 		}
-		jsonOut, plainOut, err := parseOutputFlags(flags)
-		if err != nil {
-			die(err)
-		}
-		dryRun, _, err := flags.boolStrict("dry-run")
+		opts, err := parseOutputOptions(flags)
 		if err != nil {
 			die(err)
 		}
@@ -1635,8 +1662,8 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 			die(usageErrf("no rooms provided (usage: homepodctl out set <room> ...; tip: run `homepodctl devices` to list names)"))
 		}
 		debugf("out set: backend=%s rooms=%v", backend, rooms)
-		if dryRun {
-			writeActionOutput("out.set", jsonOut, plainOut, actionOutput{
+		if opts.DryRun {
+			writeActionOutput("out.set", opts.JSON, opts.Plain, actionOutput{
 				DryRun:  true,
 				Backend: backend,
 				Rooms:   rooms,
@@ -1647,13 +1674,13 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 			die(err)
 		}
 		if np, err := music.GetNowPlaying(ctx); err == nil {
-			writeActionOutput("out.set", jsonOut, plainOut, actionOutput{
+			writeActionOutput("out.set", opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput("out.set", jsonOut, plainOut, actionOutput{
+			writeActionOutput("out.set", opts.JSON, opts.Plain, actionOutput{
 				Backend: backend,
 				Rooms:   rooms,
 			})
@@ -1668,11 +1695,7 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 	if err != nil {
 		die(err)
 	}
-	jsonOut, plainOut, err := parseOutputFlags(flags)
-	if err != nil {
-		die(err)
-	}
-	dryRun, _, err := flags.boolStrict("dry-run")
+	opts, err := parseOutputOptions(flags)
 	if err != nil {
 		die(err)
 	}
@@ -1720,8 +1743,8 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			die(usageErrf("no rooms provided (pass room names, set defaults.rooms via `homepodctl config-init`, or select outputs in Music.app / `homepodctl out set`)"))
 		}
 		debugf("%s: backend=airplay value=%d rooms=%v", name, value, rooms)
-		if dryRun {
-			writeActionOutput(name, jsonOut, plainOut, actionOutput{
+		if opts.DryRun {
+			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				DryRun:  true,
 				Backend: backend,
 				Rooms:   rooms,
@@ -1734,21 +1757,21 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			}
 		}
 		if np, err := music.GetNowPlaying(ctx); err == nil {
-			writeActionOutput(name, jsonOut, plainOut, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput(name, jsonOut, plainOut, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend: backend,
 				Rooms:   rooms,
 			})
 		}
 	case "native":
 		debugf("%s: backend=native value=%d rooms=%v", name, value, rooms)
-		if dryRun {
-			writeActionOutput(name, jsonOut, plainOut, actionOutput{
+		if opts.DryRun {
+			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				DryRun:  true,
 				Backend: backend,
 				Rooms:   rooms,
@@ -1769,13 +1792,13 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			}
 		}
 		if np, err := music.GetNowPlaying(ctx); err == nil {
-			writeActionOutput(name, jsonOut, plainOut, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput(name, jsonOut, plainOut, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend: backend,
 				Rooms:   rooms,
 			})
@@ -1790,11 +1813,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
-	jsonOut, plainOut, err := parseOutputFlags(flags)
-	if err != nil {
-		die(err)
-	}
-	dryRun, _, err := flags.boolStrict("dry-run")
+	opts, err := parseOutputOptions(flags)
 	if err != nil {
 		die(err)
 	}
@@ -1843,11 +1862,11 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 		if len(rooms) == 0 {
 			rooms = inferSelectedOutputs(ctx)
 		}
-		if dryRun {
+		if opts.DryRun {
 			if strings.TrimSpace(query) == "" && strings.TrimSpace(playlistID) == "" {
 				die(usageErrf("playlist is required (pass <playlist-query>, --playlist, or --playlist-id)"))
 			}
-			writeActionOutput("play", jsonOut, plainOut, actionOutput{
+			writeActionOutput("play", opts.JSON, opts.Plain, actionOutput{
 				DryRun:     true,
 				Backend:    backend,
 				Rooms:      rooms,
@@ -1914,7 +1933,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 			die(err)
 		}
 		if np, err := music.GetNowPlaying(ctx); err == nil {
-			writeActionOutput("play", jsonOut, plainOut, actionOutput{
+			writeActionOutput("play", opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
 				Playlist:   query,
@@ -1922,7 +1941,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput("play", jsonOut, plainOut, actionOutput{
+			writeActionOutput("play", opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
 				Playlist:   query,
@@ -1936,12 +1955,12 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 		if strings.TrimSpace(query) == "" && playlistID == "" {
 			die(usageErrf("playlist is required (pass <playlist-query>, --playlist, or --playlist-id)"))
 		}
-		if dryRun {
+		if opts.DryRun {
 			name := strings.TrimSpace(query)
 			if name == "" {
 				name = playlistID
 			}
-			writeActionOutput("play", jsonOut, plainOut, actionOutput{
+			writeActionOutput("play", opts.JSON, opts.Plain, actionOutput{
 				DryRun:   true,
 				Backend:  backend,
 				Rooms:    rooms,
@@ -1967,7 +1986,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 				die(err)
 			}
 		}
-		writeActionOutput("play", jsonOut, plainOut, actionOutput{
+		writeActionOutput("play", opts.JSON, opts.Plain, actionOutput{
 			Backend:  backend,
 			Rooms:    rooms,
 			Playlist: name,
