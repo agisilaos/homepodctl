@@ -463,6 +463,83 @@ func TestCLIAutomationCommands(t *testing.T) {
 	}
 }
 
+func TestCLIAutomationErrorPaths(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	assertUsage := func(args []string, contains string) {
+		t.Helper()
+		code, out := run(args...)
+		if code != exitUsage {
+			t.Fatalf("%v exit=%d want=%d out=%s", args, code, exitUsage, out)
+		}
+		if !strings.Contains(strings.ToLower(out), strings.ToLower(contains)) {
+			t.Fatalf("%v output missing %q: %s", args, contains, out)
+		}
+	}
+
+	code, out := run("automation", "validate", "-f", "/tmp/does-not-exist.yaml")
+	if code != exitGeneric {
+		t.Fatalf("missing file exit=%d want=%d out=%s", code, exitGeneric, out)
+	}
+	if !strings.Contains(strings.ToLower(out), "read automation file") {
+		t.Fatalf("missing file output unexpected: %s", out)
+	}
+	assertUsage([]string{"automation", "validate", "-f", ""}, "--file is required")
+	assertUsage([]string{"automation", "run", "-f", "-", "--dry-run"}, "automation file is empty")
+
+	badYAML := filepath.Join(t.TempDir(), "bad.yaml")
+	if err := os.WriteFile(badYAML, []byte("version: [\n"), 0o644); err != nil {
+		t.Fatalf("write bad yaml: %v", err)
+	}
+	assertUsage([]string{"automation", "validate", "-f", badYAML}, "invalid automation yaml")
+
+	badSchema := filepath.Join(t.TempDir(), "bad-schema.yaml")
+	if err := os.WriteFile(badSchema, []byte(`version: "2"
+name: bad
+steps:
+  - type: wait
+    state: playing
+    timeout: 20s
+`), 0o644); err != nil {
+		t.Fatalf("write bad schema: %v", err)
+	}
+	assertUsage([]string{"automation", "validate", "-f", badSchema}, `version: expected "1"`)
+
+	badStep := filepath.Join(t.TempDir(), "bad-step.yaml")
+	if err := os.WriteFile(badStep, []byte(`version: "1"
+name: bad-step
+steps:
+  - type: wait
+    state: running
+    timeout: 20s
+`), 0o644); err != nil {
+		t.Fatalf("write bad step: %v", err)
+	}
+	assertUsage([]string{"automation", "plan", "-f", badStep}, "expected playing|paused|stopped")
+}
 func TestCLIConfigCommands(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", ".."))
 	bin := filepath.Join(t.TempDir(), "homepodctl")
