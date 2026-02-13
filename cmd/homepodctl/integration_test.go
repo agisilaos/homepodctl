@@ -444,6 +444,52 @@ func TestCLIPlanCommand(t *testing.T) {
 		t.Fatalf("plan dryRun=%v", payload.Plan["dryRun"])
 	}
 
+	routinePath := filepath.Join(t.TempDir(), "plan-routine.yaml")
+	routine := `version: "1"
+name: plan-routine
+steps:
+  - type: out.set
+    rooms: ["Bedroom"]
+  - type: play
+    query: "Focus"
+  - type: wait
+    state: playing
+    timeout: 5s
+`
+	if err := os.WriteFile(routinePath, []byte(routine), 0o644); err != nil {
+		t.Fatalf("write routine: %v", err)
+	}
+
+	code, out = run("plan", "automation", "run", "-f", routinePath, "--json")
+	if code != 0 {
+		t.Fatalf("plan automation run exit=%d out=%s", code, out)
+	}
+	var auto struct {
+		OK      bool           `json:"ok"`
+		Command string         `json:"command"`
+		Plan    map[string]any `json:"plan"`
+	}
+	if err := json.Unmarshal([]byte(out), &auto); err != nil {
+		t.Fatalf("parse automation plan json: %v: %s", err, out)
+	}
+	if !auto.OK || auto.Command != "automation" {
+		t.Fatalf("unexpected automation plan envelope: %+v", auto)
+	}
+	if auto.Plan["mode"] != "dry-run" {
+		t.Fatalf("automation plan mode=%v", auto.Plan["mode"])
+	}
+	if _, ok := auto.Plan["steps"]; !ok {
+		t.Fatalf("automation plan missing steps: %+v", auto.Plan)
+	}
+
+	code, out = run("plan", "automation", "validate", "-f", routinePath)
+	if code != exitUsage {
+		t.Fatalf("plan automation validate exit=%d want=%d out=%s", code, exitUsage, out)
+	}
+	if !strings.Contains(strings.ToLower(out), "automation run") {
+		t.Fatalf("unexpected automation non-run output: %s", out)
+	}
+
 	code, out = run("plan", "pause")
 	if code != exitUsage {
 		t.Fatalf("plan unsupported exit=%d want=%d out=%s", code, exitUsage, out)

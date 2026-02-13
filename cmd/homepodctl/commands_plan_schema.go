@@ -78,7 +78,7 @@ func cmdPlan(args []string) {
 		die(err)
 	}
 	if len(pos) < 1 {
-		die(usageErrf("usage: homepodctl plan <run|play|volume|vol|native-run|out set> [args] [--json]"))
+		die(usageErrf("usage: homepodctl plan <run|play|volume|vol|native-run|out set|automation run> [args] [--json]"))
 	}
 
 	targetCmd, targetArgs, err := normalizePlanTarget(pos[0], pos[1:])
@@ -108,7 +108,7 @@ func parsePlanArgs(args []string) (bool, []string, error) {
 			break
 		}
 		if a == "-h" || a == "--help" {
-			return false, nil, usageErrf("usage: homepodctl plan <run|play|volume|vol|native-run|out set> [args] [--json]")
+			return false, nil, usageErrf("usage: homepodctl plan <run|play|volume|vol|native-run|out set|automation run> [args] [--json]")
 		}
 		if a == "--json" {
 			jsonOut = true
@@ -153,8 +153,15 @@ func normalizePlanTarget(cmd string, args []string) (string, []string, error) {
 		addDryRun()
 		addJSON()
 		return cmd, targetArgs, nil
+	case "automation":
+		if len(targetArgs) == 0 || strings.TrimSpace(targetArgs[0]) != "run" {
+			return "", nil, usageErrf("plan only supports `automation run` (usage: homepodctl plan automation run -f <file>)")
+		}
+		addDryRun()
+		addJSON()
+		return cmd, targetArgs, nil
 	default:
-		return "", nil, usageErrf("plan only supports run, play, volume, vol, native-run, and out set")
+		return "", nil, usageErrf("plan only supports run, play, volume, vol, native-run, out set, and automation run")
 	}
 }
 
@@ -201,6 +208,14 @@ func runPlanTarget(cmd string, args []string) (map[string]any, error) {
 }
 
 func printPlanResponse(resp planResponse) {
+	if resp.Command == "automation" {
+		name, _ := resp.Plan["name"].(string)
+		mode, _ := resp.Plan["mode"].(string)
+		ok, _ := resp.Plan["ok"].(bool)
+		steps := anyObjects(resp.Plan["steps"])
+		fmt.Printf("plan command=automation name=%q mode=%s ok=%t steps=%d\n", name, mode, ok, len(steps))
+		return
+	}
 	action, _ := resp.Plan["action"].(string)
 	backend, _ := resp.Plan["backend"].(string)
 	playlist, _ := resp.Plan["playlist"].(string)
@@ -216,6 +231,21 @@ func printPlanResponse(resp planResponse) {
 		playlistID,
 		shortcut,
 	)
+}
+
+func anyObjects(v any) []map[string]any {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(arr))
+	for _, item := range arr {
+		m, ok := item.(map[string]any)
+		if ok {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func anyStrings(v any) []string {

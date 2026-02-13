@@ -74,7 +74,7 @@ Usage:
   homepodctl version
   homepodctl config <validate|get|set> [args]
   homepodctl automation <run|validate|plan|init> [args]
-  homepodctl plan <run|play|volume|vol|native-run|out set> [args]
+  homepodctl plan <run|play|volume|vol|native-run|out set|automation run> [args]
   homepodctl schema [<name>] [--json]
   homepodctl completion <bash|zsh|fish>
   homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
@@ -772,10 +772,11 @@ Notes:
 		fmt.Fprint(os.Stdout, `homepodctl plan - preview resolved command execution
 
 Usage:
-  homepodctl plan <run|play|volume|vol|native-run|out set> [args] [--json]
+  homepodctl plan <run|play|volume|vol|native-run|out set|automation run> [args] [--json]
 
 Notes:
   - plan executes the target command in dry-run JSON mode.
+  - automation planning supports only automation run in this mode.
   - use --json for a machine-friendly envelope containing the planned action.
 `)
 	case "schema":
