@@ -34,6 +34,9 @@ var (
 	findPlaylistNameByID = music.FindUserPlaylistNameByPersistentID
 	runNativeShortcut    = native.RunShortcut
 	stopPlayback         = music.Stop
+	lookPath             = exec.LookPath
+	configPath           = native.ConfigPath
+	loadConfigOptional   = native.LoadConfigOptional
 	sleepFn              = time.Sleep
 	verbose              bool
 	jsonErrorOut         bool
@@ -1056,23 +1059,23 @@ func runDoctorChecks(ctx context.Context) doctorReport {
 		report.Checks = append(report.Checks, c)
 	}
 
-	if _, err := exec.LookPath("osascript"); err != nil {
+	if _, err := lookPath("osascript"); err != nil {
 		add(doctorCheck{Name: "osascript", Status: "fail", Message: "osascript not found", Tip: "Install/restore macOS command-line tools."})
 	} else {
 		add(doctorCheck{Name: "osascript", Status: "pass", Message: "osascript available"})
 	}
-	if _, err := exec.LookPath("shortcuts"); err != nil {
+	if _, err := lookPath("shortcuts"); err != nil {
 		add(doctorCheck{Name: "shortcuts", Status: "warn", Message: "shortcuts command not found", Tip: "Native backend requires the Shortcuts CLI."})
 	} else {
 		add(doctorCheck{Name: "shortcuts", Status: "pass", Message: "shortcuts available"})
 	}
 
-	path, err := native.ConfigPath()
+	path, err := configPath()
 	if err != nil {
 		add(doctorCheck{Name: "config-path", Status: "fail", Message: fmt.Sprintf("cannot resolve config path: %v", err)})
 	} else {
 		add(doctorCheck{Name: "config-path", Status: "pass", Message: path})
-		cfg, cfgErr := native.LoadConfigOptional()
+		cfg, cfgErr := loadConfigOptional()
 		if cfgErr != nil {
 			add(doctorCheck{Name: "config", Status: "fail", Message: cfgErr.Error(), Tip: "Fix JSON syntax or re-run `homepodctl config-init`."})
 		} else if len(cfg.Aliases) == 0 {
@@ -1084,7 +1087,7 @@ func runDoctorChecks(ctx context.Context) doctorReport {
 
 	backendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if _, err := music.GetNowPlaying(backendCtx); err != nil {
+	if _, err := getNowPlaying(backendCtx); err != nil {
 		add(doctorCheck{
 			Name:    "music-backend",
 			Status:  "warn",
@@ -1667,12 +1670,10 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			})
 			return
 		}
-		for _, room := range rooms {
-			if err := music.SetAirPlayDeviceVolume(ctx, room, value); err != nil {
-				die(err)
-			}
+		if err := setVolumeForRooms(ctx, rooms, value); err != nil {
+			die(err)
 		}
-		if np, err := music.GetNowPlaying(ctx); err == nil {
+		if np, err := getNowPlaying(ctx); err == nil {
 			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
@@ -1694,20 +1695,10 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			})
 			return
 		}
-		for _, room := range rooms {
-			m := cfg.Native.VolumeShortcuts[room]
-			shortcutName := ""
-			if m != nil {
-				shortcutName = m[fmt.Sprint(value)]
-			}
-			if strings.TrimSpace(shortcutName) == "" {
-				die(fmt.Errorf("no native volume mapping for room=%q value=%d (config-native volume is discrete)", room, value))
-			}
-			if err := native.RunShortcut(ctx, shortcutName); err != nil {
-				die(err)
-			}
+		if err := runNativeVolumeShortcuts(ctx, cfg, rooms, value); err != nil {
+			die(fmt.Errorf("%w (config-native volume is discrete)", err))
 		}
-		if np, err := music.GetNowPlaying(ctx); err == nil {
+		if np, err := getNowPlaying(ctx); err == nil {
 			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
@@ -1797,7 +1788,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 			if strings.TrimSpace(query) == "" {
 				die(usageErrf("playlist is required (pass <playlist-query>, --playlist, or --playlist-id)"))
 			}
-			matches, err := music.SearchUserPlaylists(ctx, query)
+			matches, err := searchPlaylists(ctx, query)
 			if err != nil {
 				die(err)
 			}
@@ -1828,7 +1819,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 
 		// If we have rooms, select outputs first. If we don't, keep Music.app's current outputs.
 		if len(rooms) > 0 {
-			if err := music.SetCurrentAirPlayDevices(ctx, rooms); err != nil {
+			if err := setCurrentOutputs(ctx, rooms); err != nil {
 				die(err)
 			}
 		}
@@ -1836,19 +1827,17 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 			die(err)
 		}
 		if volume >= 0 && len(rooms) > 0 {
-			for _, room := range rooms {
-				if err := music.SetAirPlayDeviceVolume(ctx, room, volume); err != nil {
-					die(err)
-				}
+			if err := setVolumeForRooms(ctx, rooms, volume); err != nil {
+				die(err)
 			}
 		}
-		if err := music.SetShuffleEnabled(ctx, shuffle); err != nil {
+		if err := setShuffle(ctx, shuffle); err != nil {
 			die(err)
 		}
-		if err := music.PlayUserPlaylistByPersistentID(ctx, id); err != nil {
+		if err := playPlaylistByID(ctx, id); err != nil {
 			die(err)
 		}
-		if np, err := music.GetNowPlaying(ctx); err == nil {
+		if np, err := getNowPlaying(ctx); err == nil {
 			writeActionOutput("play", opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
@@ -1887,20 +1876,14 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 		name := strings.TrimSpace(query)
 		if name == "" {
 			var err error
-			name, err = music.FindUserPlaylistNameByPersistentID(ctx, playlistID)
+			name, err = findPlaylistNameByID(ctx, playlistID)
 			if err != nil {
 				die(err)
 			}
 		}
 		debugf("play: backend=native rooms=%v playlist=%q playlist_id=%q", rooms, name, playlistID)
-		for _, room := range rooms {
-			shortcutName, ok := cfg.Native.Playlists[room][name]
-			if !ok || strings.TrimSpace(shortcutName) == "" {
-				die(fmt.Errorf("no native mapping for room=%q playlist=%q (edit config)", room, name))
-			}
-			if err := native.RunShortcut(ctx, shortcutName); err != nil {
-				die(err)
-			}
+		if err := runNativePlaylistShortcuts(ctx, cfg, rooms, name); err != nil {
+			die(fmt.Errorf("%w (edit config)", err))
 		}
 		writeActionOutput("play", opts.JSON, opts.Plain, actionOutput{
 			Backend:  backend,
@@ -1910,6 +1893,77 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	default:
 		die(usageErrf("unknown backend: %q", backend))
 	}
+}
+
+func setVolumeForRooms(ctx context.Context, rooms []string, value int) error {
+	for _, room := range rooms {
+		if err := setDeviceVolume(ctx, room, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resolveNativePlaylistShortcut(cfg *native.Config, room, playlist string) (string, error) {
+	if cfg == nil {
+		return "", fmt.Errorf("native backend requires config")
+	}
+	if cfg.Native.Playlists == nil {
+		return "", fmt.Errorf("no native mapping for room=%q playlist=%q", room, playlist)
+	}
+	m := cfg.Native.Playlists[room]
+	shortcut := ""
+	if m != nil {
+		shortcut = m[playlist]
+	}
+	if strings.TrimSpace(shortcut) == "" {
+		return "", fmt.Errorf("no native mapping for room=%q playlist=%q", room, playlist)
+	}
+	return shortcut, nil
+}
+
+func resolveNativeVolumeShortcut(cfg *native.Config, room string, value int) (string, error) {
+	if cfg == nil {
+		return "", fmt.Errorf("native backend requires config")
+	}
+	if cfg.Native.VolumeShortcuts == nil {
+		return "", fmt.Errorf("no native volume mapping for room=%q value=%d", room, value)
+	}
+	m := cfg.Native.VolumeShortcuts[room]
+	shortcut := ""
+	if m != nil {
+		shortcut = m[fmt.Sprint(value)]
+	}
+	if strings.TrimSpace(shortcut) == "" {
+		return "", fmt.Errorf("no native volume mapping for room=%q value=%d", room, value)
+	}
+	return shortcut, nil
+}
+
+func runNativePlaylistShortcuts(ctx context.Context, cfg *native.Config, rooms []string, playlist string) error {
+	for _, room := range rooms {
+		shortcut, err := resolveNativePlaylistShortcut(cfg, room, playlist)
+		if err != nil {
+			return err
+		}
+		if err := runNativeShortcut(ctx, shortcut); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runNativeVolumeShortcuts(ctx context.Context, cfg *native.Config, rooms []string, value int) error {
+	for _, room := range rooms {
+		shortcut, err := resolveNativeVolumeShortcut(cfg, room, value)
+		if err != nil {
+			return err
+		}
+		if err := runNativeShortcut(ctx, shortcut); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateAirplayVolumeSelection(volumeExplicit bool, volume int, rooms []string) error {

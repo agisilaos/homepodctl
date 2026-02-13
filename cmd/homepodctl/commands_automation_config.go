@@ -237,11 +237,11 @@ func cmdConfigValidate(args []string) {
 	if err := fs.Parse(args); err != nil {
 		die(usageErrf("usage: homepodctl config validate [--json]"))
 	}
-	cfg, err := native.LoadConfigOptional()
+	cfg, err := loadConfigOptional()
 	if err != nil {
 		die(err)
 	}
-	path, _ := native.ConfigPath()
+	path, _ := configPath()
 	issues := validateConfigValues(cfg)
 	res := configValidateResult{
 		OK:     len(issues) == 0,
@@ -276,7 +276,7 @@ func cmdConfigGet(args []string) {
 		die(usageErrf("usage: homepodctl config get <path> [--json]"))
 	}
 	key := strings.TrimSpace(pos[0])
-	cfg, err := native.LoadConfigOptional()
+	cfg, err := loadConfigOptional()
 	if err != nil {
 		die(err)
 	}
@@ -308,7 +308,7 @@ func cmdConfigSet(args []string) {
 	key := strings.TrimSpace(fs.Arg(0))
 	values := fs.Args()[1:]
 
-	cfg, err := native.LoadConfigOptional()
+	cfg, err := loadConfigOptional()
 	if err != nil {
 		die(err)
 	}
@@ -319,7 +319,7 @@ func cmdConfigSet(args []string) {
 	if len(issues) > 0 {
 		die(usageErrf("updated config is invalid: %s", strings.Join(issues, "; ")))
 	}
-	path, err := native.ConfigPath()
+	path, err := configPath()
 	if err != nil {
 		die(err)
 	}
@@ -976,10 +976,8 @@ func executeAutomationPlay(ctx context.Context, cfg *native.Config, backend stri
 			}
 		}
 		if defaults.Volume != nil && len(rooms) > 0 {
-			for _, room := range rooms {
-				if err := setDeviceVolume(ctx, room, *defaults.Volume); err != nil {
-					return err
-				}
+			if err := setVolumeForRooms(ctx, rooms, *defaults.Volume); err != nil {
+				return err
 			}
 		}
 		if defaults.Shuffle != nil {
@@ -1016,16 +1014,7 @@ func executeAutomationPlay(ctx context.Context, cfg *native.Config, backend stri
 				return err
 			}
 		}
-		for _, room := range rooms {
-			shortcutName, ok := cfg.Native.Playlists[room][name]
-			if !ok || strings.TrimSpace(shortcutName) == "" {
-				return fmt.Errorf("no native mapping for room=%q playlist=%q", room, name)
-			}
-			if err := runNativeShortcut(ctx, shortcutName); err != nil {
-				return err
-			}
-		}
-		return nil
+		return runNativePlaylistShortcuts(ctx, cfg, rooms, name)
 	default:
 		return fmt.Errorf("unknown backend %q", backend)
 	}
@@ -1044,12 +1033,7 @@ func executeAutomationVolume(ctx context.Context, cfg *native.Config, backend st
 		if len(rooms) == 0 {
 			return fmt.Errorf("no rooms available for volume.set")
 		}
-		for _, room := range rooms {
-			if err := setDeviceVolume(ctx, room, value); err != nil {
-				return err
-			}
-		}
-		return nil
+		return setVolumeForRooms(ctx, rooms, value)
 	case "native":
 		if cfg == nil {
 			return fmt.Errorf("native backend requires config")
@@ -1057,20 +1041,7 @@ func executeAutomationVolume(ctx context.Context, cfg *native.Config, backend st
 		if len(rooms) == 0 {
 			return fmt.Errorf("native volume.set requires rooms")
 		}
-		for _, room := range rooms {
-			m := cfg.Native.VolumeShortcuts[room]
-			shortcutName := ""
-			if m != nil {
-				shortcutName = m[fmt.Sprint(value)]
-			}
-			if strings.TrimSpace(shortcutName) == "" {
-				return fmt.Errorf("no native volume mapping for room=%q value=%d", room, value)
-			}
-			if err := runNativeShortcut(ctx, shortcutName); err != nil {
-				return err
-			}
-		}
-		return nil
+		return runNativeVolumeShortcuts(ctx, cfg, rooms, value)
 	default:
 		return fmt.Errorf("unknown backend %q", backend)
 	}
