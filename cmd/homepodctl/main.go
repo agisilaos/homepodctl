@@ -38,6 +38,7 @@ var (
 	stopPlayback         = music.Stop
 	sleepFn              = time.Sleep
 	verbose              bool
+	jsonErrorOut         bool
 )
 
 const (
@@ -59,6 +60,7 @@ Usage:
   homepodctl config <validate|get|set> [args]
   homepodctl automation <run|validate|plan|init> [args]
   homepodctl completion <bash|zsh|fish>
+  homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
   homepodctl doctor [--json] [--plain]
   homepodctl devices [--json] [--plain] [--include-network]
   homepodctl out list [--json] [--plain] [--include-network]
@@ -94,6 +96,17 @@ type globalOptions struct {
 	verbose bool
 }
 
+type jsonErrorResponse struct {
+	OK    bool             `json:"ok"`
+	Error jsonErrorPayload `json:"error"`
+}
+
+type jsonErrorPayload struct {
+	Code     string `json:"code"`
+	Message  string `json:"message"`
+	ExitCode int    `json:"exitCode"`
+}
+
 func parseGlobalOptions(args []string) (globalOptions, string, []string, error) {
 	opts := globalOptions{}
 	for i := 0; i < len(args); i++ {
@@ -117,14 +130,16 @@ func parseGlobalOptions(args []string) (globalOptions, string, []string, error) 
 }
 
 func main() {
+	jsonErrorOut = wantsJSONErrors(os.Args[1:])
 	if runtime.GOOS != "darwin" {
-		fmt.Fprintln(os.Stderr, "error: homepodctl only supports macOS (darwin)")
-		os.Exit(exitGeneric)
+		die(errors.New("homepodctl only supports macOS (darwin)"))
 	}
 
 	opts, cmd, args, err := parseGlobalOptions(os.Args[1:])
 	if err != nil {
-		usage()
+		if !jsonErrorOut {
+			usage()
+		}
 		die(err)
 	}
 	verbose = opts.verbose || envTruthy(os.Getenv("HOMEPODCTL_VERBOSE"))
@@ -464,17 +479,62 @@ func main() {
 		}
 		fmt.Printf("Wrote %s\n", path)
 	default:
-		usage()
+		if !jsonErrorOut {
+			usage()
+		}
 		die(usageErrf("unknown command: %q (run `homepodctl --help`)", cmd))
 	}
 }
 
 func die(err error) {
+	code := classifyExitCode(err)
 	if verbose {
-		fmt.Fprintf(os.Stderr, "debug: exit_code=%d error_type=%T\n", classifyExitCode(err), err)
+		fmt.Fprintf(os.Stderr, "debug: exit_code=%d error_type=%T\n", code, err)
+	}
+	if jsonErrorOut {
+		enc := json.NewEncoder(os.Stderr)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(jsonErrorResponse{
+			OK: false,
+			Error: jsonErrorPayload{
+				Code:     classifyErrorCode(err),
+				Message:  formatError(err),
+				ExitCode: code,
+			},
+		})
+		os.Exit(code)
 	}
 	fmt.Fprintln(os.Stderr, "error:", formatError(err))
-	os.Exit(classifyExitCode(err))
+	os.Exit(code)
+}
+
+func wantsJSONErrors(args []string) bool {
+	for _, a := range args {
+		if a == "--json" {
+			return true
+		}
+		if strings.HasPrefix(a, "--json=") {
+			v := strings.TrimSpace(strings.TrimPrefix(a, "--json="))
+			switch strings.ToLower(v) {
+			case "1", "true", "yes", "on":
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func classifyErrorCode(err error) string {
+	switch classifyExitCode(err) {
+	case exitUsage:
+		return "USAGE_ERROR"
+	case exitConfig:
+		return "CONFIG_ERROR"
+	case exitBackend:
+		return "BACKEND_ERROR"
+	default:
+		return "GENERIC_ERROR"
+	}
 }
 
 func formatError(err error) string {
@@ -641,6 +701,7 @@ Usage:
 
 Usage:
   homepodctl completion <bash|zsh|fish>
+  homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
 `)
 	case "config-init":
 		path, _ := native.ConfigPath()
@@ -680,6 +741,15 @@ Supported paths:
   defaults.shuffle
   defaults.volume
   defaults.rooms
+  aliases.<name>.backend
+  aliases.<name>.rooms
+  aliases.<name>.playlist
+  aliases.<name>.playlistId
+  aliases.<name>.shuffle
+  aliases.<name>.volume
+  aliases.<name>.shortcut
+  native.playlists.<room>.<playlist>
+  native.volumeShortcuts.<room>.<0-100>
 `)
 	default:
 		usage()
@@ -1261,11 +1331,46 @@ func validateConfigValues(cfg *native.Config) []string {
 		}
 	}
 	for name, a := range cfg.Aliases {
+		if strings.TrimSpace(name) == "" {
+			issues = append(issues, "aliases key must be non-empty")
+		}
 		if a.Backend != "" && a.Backend != "airplay" && a.Backend != "native" {
 			issues = append(issues, fmt.Sprintf("aliases.%s.backend must be airplay|native, got %q", name, a.Backend))
 		}
+		for i, room := range a.Rooms {
+			if strings.TrimSpace(room) == "" {
+				issues = append(issues, fmt.Sprintf("aliases.%s.rooms[%d] must be non-empty", name, i))
+			}
+		}
 		if a.Volume != nil && (*a.Volume < 0 || *a.Volume > 100) {
 			issues = append(issues, fmt.Sprintf("aliases.%s.volume must be 0..100, got %d", name, *a.Volume))
+		}
+	}
+	for room, mappings := range cfg.Native.Playlists {
+		if strings.TrimSpace(room) == "" {
+			issues = append(issues, "native.playlists room key must be non-empty")
+		}
+		for playlist, shortcut := range mappings {
+			if strings.TrimSpace(playlist) == "" {
+				issues = append(issues, fmt.Sprintf("native.playlists.%s playlist key must be non-empty", room))
+			}
+			if strings.TrimSpace(shortcut) == "" {
+				issues = append(issues, fmt.Sprintf("native.playlists.%s.%s shortcut must be non-empty", room, playlist))
+			}
+		}
+	}
+	for room, mappings := range cfg.Native.VolumeShortcuts {
+		if strings.TrimSpace(room) == "" {
+			issues = append(issues, "native.volumeShortcuts room key must be non-empty")
+		}
+		for volStr, shortcut := range mappings {
+			n, err := strconv.Atoi(volStr)
+			if err != nil || n < 0 || n > 100 {
+				issues = append(issues, fmt.Sprintf("native.volumeShortcuts.%s.%s key must be 0..100", room, volStr))
+			}
+			if strings.TrimSpace(shortcut) == "" {
+				issues = append(issues, fmt.Sprintf("native.volumeShortcuts.%s.%s shortcut must be non-empty", room, volStr))
+			}
 		}
 	}
 	return issues
@@ -1284,9 +1389,69 @@ func getConfigPathValue(cfg *native.Config, key string) (any, error) {
 		return *cfg.Defaults.Volume, nil
 	case "defaults.rooms":
 		return append([]string(nil), cfg.Defaults.Rooms...), nil
-	default:
-		return nil, usageErrf("unsupported config path %q", key)
 	}
+
+	parts := strings.Split(key, ".")
+	if len(parts) >= 3 && parts[0] == "aliases" {
+		aliasName := strings.TrimSpace(parts[1])
+		if aliasName == "" {
+			return nil, usageErrf("alias name must be non-empty in path %q", key)
+		}
+		a, ok := cfg.Aliases[aliasName]
+		if !ok {
+			return nil, usageErrf("unknown alias %q", aliasName)
+		}
+		if len(parts) != 3 {
+			return nil, usageErrf("unsupported config path %q", key)
+		}
+		switch parts[2] {
+		case "backend":
+			return a.Backend, nil
+		case "rooms":
+			return append([]string(nil), a.Rooms...), nil
+		case "playlist":
+			return a.Playlist, nil
+		case "playlistId":
+			return a.PlaylistID, nil
+		case "shuffle":
+			if a.Shuffle == nil {
+				return nil, nil
+			}
+			return *a.Shuffle, nil
+		case "volume":
+			if a.Volume == nil {
+				return nil, nil
+			}
+			return *a.Volume, nil
+		case "shortcut":
+			return a.Shortcut, nil
+		default:
+			return nil, usageErrf("unsupported config path %q", key)
+		}
+	}
+	if len(parts) >= 4 && parts[0] == "native" && parts[1] == "playlists" {
+		if len(parts) != 4 {
+			return nil, usageErrf("unsupported config path %q", key)
+		}
+		room := strings.TrimSpace(parts[2])
+		playlist := strings.TrimSpace(parts[3])
+		if room == "" || playlist == "" {
+			return nil, usageErrf("native playlists path must include non-empty room and playlist: %q", key)
+		}
+		return cfg.Native.Playlists[room][playlist], nil
+	}
+	if len(parts) >= 4 && parts[0] == "native" && parts[1] == "volumeShortcuts" {
+		if len(parts) != 4 {
+			return nil, usageErrf("unsupported config path %q", key)
+		}
+		room := strings.TrimSpace(parts[2])
+		volumeKey := strings.TrimSpace(parts[3])
+		if room == "" || volumeKey == "" {
+			return nil, usageErrf("native volumeShortcuts path must include non-empty room and volume: %q", key)
+		}
+		return cfg.Native.VolumeShortcuts[room][volumeKey], nil
+	}
+	return nil, usageErrf("unsupported config path %q", key)
 }
 
 func setConfigPathValue(cfg *native.Config, key string, values []string) error {
@@ -1340,9 +1505,147 @@ func setConfigPathValue(cfg *native.Config, key string, values []string) error {
 		}
 		cfg.Defaults.Rooms = rooms
 		return nil
-	default:
-		return usageErrf("unsupported config path %q", key)
 	}
+
+	parts := strings.Split(key, ".")
+	if len(parts) >= 3 && parts[0] == "aliases" {
+		if len(parts) != 3 {
+			return usageErrf("unsupported config path %q", key)
+		}
+		aliasName := strings.TrimSpace(parts[1])
+		field := parts[2]
+		if aliasName == "" {
+			return usageErrf("alias name must be non-empty in path %q", key)
+		}
+		if cfg.Aliases == nil {
+			cfg.Aliases = map[string]native.Alias{}
+		}
+		a := cfg.Aliases[aliasName]
+		switch field {
+		case "backend":
+			if len(values) != 1 {
+				return usageErrf("%s expects exactly 1 value", key)
+			}
+			v := strings.TrimSpace(values[0])
+			if v != "airplay" && v != "native" {
+				return usageErrf("%s must be airplay|native", key)
+			}
+			a.Backend = v
+		case "rooms":
+			rooms := make([]string, 0, len(values))
+			for _, v := range values {
+				r := strings.TrimSpace(v)
+				if r == "" {
+					return usageErrf("%s values must be non-empty", key)
+				}
+				rooms = append(rooms, r)
+			}
+			a.Rooms = rooms
+		case "playlist":
+			if len(values) != 1 {
+				return usageErrf("%s expects exactly 1 value", key)
+			}
+			a.Playlist = strings.TrimSpace(values[0])
+		case "playlistId":
+			if len(values) != 1 {
+				return usageErrf("%s expects exactly 1 value", key)
+			}
+			a.PlaylistID = strings.TrimSpace(values[0])
+		case "shuffle":
+			if len(values) != 1 {
+				return usageErrf("%s expects exactly 1 value", key)
+			}
+			v := strings.ToLower(strings.TrimSpace(values[0]))
+			if v == "null" {
+				a.Shuffle = nil
+				cfg.Aliases[aliasName] = a
+				return nil
+			}
+			var b bool
+			switch v {
+			case "true", "1", "yes", "on":
+				b = true
+			case "false", "0", "no", "off":
+				b = false
+			default:
+				return usageErrf("%s expects boolean true|false or null", key)
+			}
+			a.Shuffle = &b
+		case "volume":
+			if len(values) != 1 {
+				return usageErrf("%s expects exactly 1 value", key)
+			}
+			v := strings.TrimSpace(values[0])
+			if v == "null" {
+				a.Volume = nil
+				cfg.Aliases[aliasName] = a
+				return nil
+			}
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 || n > 100 {
+				return usageErrf("%s expects 0..100 or null", key)
+			}
+			a.Volume = &n
+		case "shortcut":
+			if len(values) != 1 {
+				return usageErrf("%s expects exactly 1 value", key)
+			}
+			a.Shortcut = strings.TrimSpace(values[0])
+		default:
+			return usageErrf("unsupported config path %q", key)
+		}
+		cfg.Aliases[aliasName] = a
+		return nil
+	}
+	if len(parts) >= 4 && parts[0] == "native" && parts[1] == "playlists" {
+		if len(parts) != 4 {
+			return usageErrf("unsupported config path %q", key)
+		}
+		if len(values) != 1 {
+			return usageErrf("%s expects exactly 1 value", key)
+		}
+		room := strings.TrimSpace(parts[2])
+		playlist := strings.TrimSpace(parts[3])
+		shortcut := strings.TrimSpace(values[0])
+		if room == "" || playlist == "" || shortcut == "" {
+			return usageErrf("%s expects non-empty room, playlist, and shortcut", key)
+		}
+		if cfg.Native.Playlists == nil {
+			cfg.Native.Playlists = map[string]map[string]string{}
+		}
+		if cfg.Native.Playlists[room] == nil {
+			cfg.Native.Playlists[room] = map[string]string{}
+		}
+		cfg.Native.Playlists[room][playlist] = shortcut
+		return nil
+	}
+	if len(parts) >= 4 && parts[0] == "native" && parts[1] == "volumeShortcuts" {
+		if len(parts) != 4 {
+			return usageErrf("unsupported config path %q", key)
+		}
+		if len(values) != 1 {
+			return usageErrf("%s expects exactly 1 value", key)
+		}
+		room := strings.TrimSpace(parts[2])
+		volumeKey := strings.TrimSpace(parts[3])
+		shortcut := strings.TrimSpace(values[0])
+		n, err := strconv.Atoi(volumeKey)
+		if err != nil || n < 0 || n > 100 {
+			return usageErrf("%s volume key must be 0..100", key)
+		}
+		if room == "" || shortcut == "" {
+			return usageErrf("%s expects non-empty room and shortcut", key)
+		}
+		if cfg.Native.VolumeShortcuts == nil {
+			cfg.Native.VolumeShortcuts = map[string]map[string]string{}
+		}
+		if cfg.Native.VolumeShortcuts[room] == nil {
+			cfg.Native.VolumeShortcuts[room] = map[string]string{}
+		}
+		cfg.Native.VolumeShortcuts[room][volumeKey] = shortcut
+		return nil
+	}
+	return usageErrf("unsupported config path %q", key)
 }
 
 func loadAutomationFile(path string) (*automationFile, error) {
@@ -1964,8 +2267,15 @@ func printDoctorReport(report doctorReport, plain bool) {
 }
 
 func cmdCompletion(args []string) {
+	if len(args) == 0 {
+		die(usageErrf("usage: homepodctl completion <bash|zsh|fish>\n       homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
+	}
+	if args[0] == "install" {
+		cmdCompletionInstall(args[1:])
+		return
+	}
 	if len(args) != 1 {
-		die(usageErrf("usage: homepodctl completion <bash|zsh|fish>"))
+		die(usageErrf("usage: homepodctl completion <bash|zsh|fish>\n       homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
 	}
 	shell := strings.ToLower(strings.TrimSpace(args[0]))
 	script, err := completionScript(shell)
@@ -1973,6 +2283,129 @@ func cmdCompletion(args []string) {
 		die(err)
 	}
 	fmt.Print(script)
+}
+
+func cmdCompletionInstall(args []string) {
+	var shell string
+	var path string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "--path=") {
+			path = strings.TrimSpace(strings.TrimPrefix(a, "--path="))
+			continue
+		}
+		if a == "--path" {
+			if i+1 >= len(args) {
+				die(usageErrf("usage: homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
+			}
+			i++
+			path = strings.TrimSpace(args[i])
+			continue
+		}
+		if strings.HasPrefix(a, "-") {
+			die(usageErrf("unknown flag: %s", a))
+		}
+		if shell != "" {
+			die(usageErrf("usage: homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
+		}
+		shell = strings.ToLower(strings.TrimSpace(a))
+	}
+	if shell == "" {
+		die(usageErrf("usage: homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
+	}
+	installedPath, err := installCompletion(shell, path)
+	if err != nil {
+		die(err)
+	}
+	fmt.Printf("Installed %s completion: %s\n", shell, installedPath)
+}
+
+func completionInstallPath(shell string, override string) (string, error) {
+	name, err := completionFileName(shell)
+	if err != nil {
+		return "", err
+	}
+	target := strings.TrimSpace(override)
+	if target != "" {
+		target = expandHomePath(target)
+		base := filepath.Base(target)
+		info, statErr := os.Stat(target)
+		if statErr == nil && info.IsDir() {
+			return filepath.Join(target, name), nil
+		}
+		if strings.HasSuffix(target, string(os.PathSeparator)) {
+			return filepath.Join(target, name), nil
+		}
+		if statErr != nil && os.IsNotExist(statErr) && filepath.Ext(target) == "" && base != name {
+			return filepath.Join(target, name), nil
+		}
+		return target, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	switch shell {
+	case "bash":
+		return filepath.Join(home, ".local", "share", "bash-completion", "completions", name), nil
+	case "zsh":
+		return filepath.Join(home, ".zsh", "completions", name), nil
+	case "fish":
+		return filepath.Join(home, ".config", "fish", "completions", name), nil
+	default:
+		return "", usageErrf("unknown shell %q (expected bash, zsh, or fish)", shell)
+	}
+}
+
+func completionFileName(shell string) (string, error) {
+	switch shell {
+	case "bash":
+		return "homepodctl", nil
+	case "zsh":
+		return "_homepodctl", nil
+	case "fish":
+		return "homepodctl.fish", nil
+	default:
+		return "", usageErrf("unknown shell %q (expected bash, zsh, or fish)", shell)
+	}
+}
+
+func installCompletion(shell string, override string) (string, error) {
+	target, err := completionInstallPath(shell, override)
+	if err != nil {
+		return "", err
+	}
+	script, err := completionScript(shell)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(target, []byte(script), 0o644); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+func expandHomePath(path string) string {
+	if path == "~" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return home
+		}
+		return path
+	}
+	prefix := "~" + string(os.PathSeparator)
+	if !strings.HasPrefix(path, prefix) {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return filepath.Join(home, strings.TrimPrefix(path, prefix))
 }
 
 func completionData(cfg *native.Config) (aliases []string, rooms []string) {

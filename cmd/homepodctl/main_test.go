@@ -269,6 +269,66 @@ func TestCompletionData(t *testing.T) {
 	}
 }
 
+func TestCompletionInstallPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	got, err := completionInstallPath("bash", "")
+	if err != nil {
+		t.Fatalf("completionInstallPath(bash): %v", err)
+	}
+	want := filepath.Join(home, ".local", "share", "bash-completion", "completions", "homepodctl")
+	if got != want {
+		t.Fatalf("bash path=%q want=%q", got, want)
+	}
+
+	customDir := filepath.Join(home, "custom")
+	if err := os.MkdirAll(customDir, 0o755); err != nil {
+		t.Fatalf("mkdir custom dir: %v", err)
+	}
+	got, err = completionInstallPath("zsh", customDir)
+	if err != nil {
+		t.Fatalf("completionInstallPath(zsh custom dir): %v", err)
+	}
+	want = filepath.Join(customDir, "_homepodctl")
+	if got != want {
+		t.Fatalf("zsh custom path=%q want=%q", got, want)
+	}
+
+	got, err = completionInstallPath("fish", "~/dotfiles/homepodctl.fish")
+	if err != nil {
+		t.Fatalf("completionInstallPath(fish tilde): %v", err)
+	}
+	want = filepath.Join(home, "dotfiles", "homepodctl.fish")
+	if got != want {
+		t.Fatalf("fish tilde path=%q want=%q", got, want)
+	}
+}
+
+func TestInstallCompletionWritesFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	targetDir := filepath.Join(home, "completions")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatalf("mkdir target dir: %v", err)
+	}
+	path, err := installCompletion("fish", targetDir)
+	if err != nil {
+		t.Fatalf("installCompletion: %v", err)
+	}
+	if path != filepath.Join(targetDir, "homepodctl.fish") {
+		t.Fatalf("path=%q", path)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read completion file: %v", err)
+	}
+	if !strings.Contains(string(b), "complete -c homepodctl") {
+		t.Fatalf("completion file content unexpected: %s", string(b))
+	}
+}
+
 func TestWriteActionOutput_DryRunJSON(t *testing.T) {
 	out := captureStdout(t, func() {
 		writeActionOutput("play", true, false, actionOutput{
@@ -583,6 +643,96 @@ func TestCLIConfigCommands(t *testing.T) {
 	}
 	if code, out := run("config", "set", "defaults.backend", "invalid"); code != exitUsage {
 		t.Fatalf("invalid backend exit=%d want=%d out=%s", code, exitUsage, out)
+	}
+	if code, out := run("config", "set", "aliases.night.backend", "native"); code != 0 {
+		t.Fatalf("config set alias backend exit=%d out=%s", code, out)
+	}
+	if code, out := run("config", "set", "aliases.night.rooms", "Bedroom"); code != 0 {
+		t.Fatalf("config set alias rooms exit=%d out=%s", code, out)
+	}
+	if code, out := run("config", "set", "native.playlists.Bedroom.Focus", "BR Focus Shortcut"); code != 0 {
+		t.Fatalf("config set native playlist mapping exit=%d out=%s", code, out)
+	}
+	if code, out := run("config", "set", "native.volumeShortcuts.Bedroom.30", "BR Volume 30"); code != 0 {
+		t.Fatalf("config set native volume mapping exit=%d out=%s", code, out)
+	}
+	if code, out := run("config", "get", "aliases.night.backend"); code != 0 || strings.TrimSpace(out) != "native" {
+		t.Fatalf("config get alias backend exit=%d out=%q", code, out)
+	}
+	if code, out := run("config", "get", "native.playlists.Bedroom.Focus"); code != 0 || strings.TrimSpace(out) != "BR Focus Shortcut" {
+		t.Fatalf("config get native playlist mapping exit=%d out=%q", code, out)
+	}
+	if code, out := run("config", "get", "native.volumeShortcuts.Bedroom.30"); code != 0 || strings.TrimSpace(out) != "BR Volume 30" {
+		t.Fatalf("config get native volume mapping exit=%d out=%q", code, out)
+	}
+
+	code, out := run("config", "get", "does.not.exist", "--json")
+	if code != exitUsage {
+		t.Fatalf("json error exit=%d want=%d out=%s", code, exitUsage, out)
+	}
+	var payload struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code     string `json:"code"`
+			Message  string `json:"message"`
+			ExitCode int    `json:"exitCode"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("json unmarshal error payload: %v; raw=%s", err, out)
+	}
+	if payload.OK {
+		t.Fatalf("payload.ok=true want=false")
+	}
+	if payload.Error.Code != "USAGE_ERROR" {
+		t.Fatalf("payload.error.code=%q want=%q", payload.Error.Code, "USAGE_ERROR")
+	}
+	if payload.Error.ExitCode != exitUsage {
+		t.Fatalf("payload.error.exitCode=%d want=%d", payload.Error.ExitCode, exitUsage)
+	}
+	if !strings.Contains(payload.Error.Message, "unsupported config path") {
+		t.Fatalf("payload.error.message=%q", payload.Error.Message)
+	}
+}
+
+func TestCLICompletionInstall(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	targetDir := filepath.Join(home, "custom-completions")
+	code, out := run("completion", "install", "bash", "--path", targetDir)
+	if code != 0 {
+		t.Fatalf("completion install exit=%d out=%s", code, out)
+	}
+	targetFile := filepath.Join(targetDir, "homepodctl")
+	b, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatalf("read installed completion: %v", err)
+	}
+	if !strings.Contains(string(b), "homepodctl") {
+		t.Fatalf("installed completion content unexpected: %s", string(b))
 	}
 }
 func TestCmdHelp_PlayExamplesUseQuotes(t *testing.T) {
