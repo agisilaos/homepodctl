@@ -1,4 +1,4 @@
-.PHONY: build test vet fmt release
+.PHONY: build test vet fmt release-check release
 
 build:
 	go build -o homepodctl ./cmd/homepodctl
@@ -10,7 +10,11 @@ vet:
 	go vet ./...
 
 fmt:
-	gofmt -w cmd/homepodctl/main.go internal/music/music.go internal/native/native.go internal/music/music_test.go
+	gofmt -w cmd/homepodctl/*.go internal/music/*.go internal/native/*.go
+
+release-check:
+	@if [ -z "$(VERSION)" ]; then echo "VERSION is required (e.g. make release-check VERSION=v0.1.0)"; exit 2; fi
+	./scripts/release-check.sh "$(VERSION)"
 
 release:
 	@if [ -z "$(VERSION)" ]; then echo "VERSION is required (e.g. make release VERSION=v0.1.0)"; exit 2; fi
