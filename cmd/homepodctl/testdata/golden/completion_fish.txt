@@ -1,5 +1,5 @@
 # fish completion for homepodctl
-complete -c homepodctl -f -a "help version config automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+complete -c homepodctl -f -a "help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
 complete -c homepodctl -l json
 complete -c homepodctl -l plain
 complete -c homepodctl -l verbose

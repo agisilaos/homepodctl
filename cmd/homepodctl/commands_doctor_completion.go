@@ -336,7 +336,7 @@ _homepodctl_completion() {
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   local aliases="%s"
   local rooms="%s"
-  local cmds="help version config automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+  local cmds="help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "$cmds --help --verbose" -- "$cur") )
     return 0
@@ -369,6 +369,8 @@ _homepodctl() {
     'version:Show version'
     'config:Inspect/update config'
     'automation:Run automation routines'
+    'plan:Preview command execution'
+    'schema:Show JSON schemas'
     'completion:Generate shell completion'
     'doctor:Run diagnostics'
     'devices:List devices'
@@ -429,7 +431,7 @@ _homepodctl "$@"
 	case "fish":
 		var fish strings.Builder
 		fish.WriteString(`# fish completion for homepodctl
-complete -c homepodctl -f -a "help version config automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+complete -c homepodctl -f -a "help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
 complete -c homepodctl -l json
 complete -c homepodctl -l plain
 complete -c homepodctl -l verbose

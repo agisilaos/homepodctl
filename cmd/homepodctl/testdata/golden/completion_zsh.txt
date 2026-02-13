@@ -9,6 +9,8 @@ _homepodctl() {
     'version:Show version'
     'config:Inspect/update config'
     'automation:Run automation routines'
+    'plan:Preview command execution'
+    'schema:Show JSON schemas'
     'completion:Generate shell completion'
     'doctor:Run diagnostics'
     'devices:List devices'

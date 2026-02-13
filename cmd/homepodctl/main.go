@@ -74,6 +74,8 @@ Usage:
   homepodctl version
   homepodctl config <validate|get|set> [args]
   homepodctl automation <run|validate|plan|init> [args]
+  homepodctl plan <run|play|volume|vol|native-run|out set> [args]
+  homepodctl schema [<name>] [--json]
   homepodctl completion <bash|zsh|fish>
   homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
   homepodctl doctor [--json] [--plain]
@@ -198,6 +200,10 @@ func main() {
 		cmdCompletion(args)
 	case "doctor":
 		cmdDoctor(ctx, args)
+	case "plan":
+		cmdPlan(args)
+	case "schema":
+		cmdSchema(args)
 	case "devices":
 		fs := flag.NewFlagSet("devices", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -761,6 +767,26 @@ Notes:
   - automation run is non-interactive by default (no confirmation prompt).
   - Use --dry-run to preview resolved actions without executing.
   - Use --json --no-input for agent-safe usage.
+`)
+	case "plan":
+		fmt.Fprint(os.Stdout, `homepodctl plan - preview resolved command execution
+
+Usage:
+  homepodctl plan <run|play|volume|vol|native-run|out set> [args] [--json]
+
+Notes:
+  - plan executes the target command in dry-run JSON mode.
+  - use --json for a machine-friendly envelope containing the planned action.
+`)
+	case "schema":
+		fmt.Fprint(os.Stdout, `homepodctl schema - inspect machine-readable JSON contracts
+
+Usage:
+  homepodctl schema [<name>] [--json]
+
+Examples:
+  homepodctl schema
+  homepodctl schema action-result --json
 `)
 	case "config":
 		fmt.Fprint(os.Stdout, `homepodctl config - inspect and update config values

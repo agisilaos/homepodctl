@@ -11,6 +11,8 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 ### Added
 
 - diagnostics: global `--verbose` flag (or `HOMEPODCTL_VERBOSE=1`) to print command/backend resolution details to stderr.
+- CLI: `homepodctl plan` for agent-friendly previews that resolve and return dry-run JSON plans for `run`, `play`, `volume/vol`, `native-run`, and `out set`.
+- CLI: `homepodctl schema` to list/emit JSON schemas for stable machine output contracts.
 - CLI: `homepodctl aliases --json` for machine-readable alias listings.
 - CLI: `homepodctl doctor` command with `--json`/`--plain` output for environment/config/backend diagnostics.
 - CLI: `homepodctl completion <bash|zsh|fish>` to generate shell completion scripts.

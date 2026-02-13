@@ -397,3 +397,104 @@ func TestCLICompletionInstall(t *testing.T) {
 		t.Fatalf("installed completion content unexpected: %s", string(b))
 	}
 }
+
+func TestCLIPlanCommand(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	code, out := run("plan", "native-run", "--shortcut", "Example", "--json")
+	if code != 0 {
+		t.Fatalf("plan native-run exit=%d out=%s", code, out)
+	}
+	var payload struct {
+		OK      bool           `json:"ok"`
+		Command string         `json:"command"`
+		Plan    map[string]any `json:"plan"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("parse plan json: %v: %s", err, out)
+	}
+	if !payload.OK || payload.Command != "native-run" {
+		t.Fatalf("unexpected plan envelope: %+v", payload)
+	}
+	if payload.Plan["action"] != "native-run" {
+		t.Fatalf("plan action=%v", payload.Plan["action"])
+	}
+	if payload.Plan["dryRun"] != true {
+		t.Fatalf("plan dryRun=%v", payload.Plan["dryRun"])
+	}
+
+	code, out = run("plan", "pause")
+	if code != exitUsage {
+		t.Fatalf("plan unsupported exit=%d want=%d out=%s", code, exitUsage, out)
+	}
+	if !strings.Contains(strings.ToLower(out), "only supports") {
+		t.Fatalf("unexpected unsupported output: %s", out)
+	}
+}
+
+func TestCLISchemaCommand(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	code, out := run("schema", "--json")
+	if code != 0 {
+		t.Fatalf("schema list exit=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, "action-result") || !strings.Contains(out, "plan-response") {
+		t.Fatalf("schema list missing expected names: %s", out)
+	}
+
+	code, out = run("schema", "action-result", "--json")
+	if code != 0 {
+		t.Fatalf("schema action-result exit=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, `"$schema"`) || !strings.Contains(out, `"action"`) {
+		t.Fatalf("schema action-result output unexpected: %s", out)
+	}
+
+	code, out = run("schema", "does-not-exist")
+	if code != exitUsage {
+		t.Fatalf("unknown schema exit=%d want=%d out=%s", code, exitUsage, out)
+	}
+}

@@ -219,6 +219,8 @@ homepodctl run bed --dry-run --json
 - `homepodctl config-init`: create starter config
 - `homepodctl doctor`: diagnostics checklist
 - `homepodctl completion <bash|zsh|fish>`: generate completion script
+- `homepodctl plan <command> ...`: preview resolved dry-run execution for core actions
+- `homepodctl schema [<name>] [--json]`: inspect JSON output contracts
 - `homepodctl automation validate|plan|run|init ...`: routine workflows (non-interactive by default; add `--dry-run` to preview)
 - `homepodctl version`: version info
 

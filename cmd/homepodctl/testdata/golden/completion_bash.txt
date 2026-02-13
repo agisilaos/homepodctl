@@ -6,7 +6,7 @@ _homepodctl_completion() {
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   local aliases=""
   local rooms=""
-  local cmds="help version config automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+  local cmds="help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "$cmds --help --verbose" -- "$cur") )
     return 0
