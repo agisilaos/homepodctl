@@ -37,10 +37,28 @@ var (
 	lookPath             = exec.LookPath
 	configPath           = native.ConfigPath
 	loadConfigOptional   = native.LoadConfigOptional
+	newStatusTicker      = func(d time.Duration) statusTicker { return realStatusTicker{ticker: time.NewTicker(d)} }
 	sleepFn              = time.Sleep
 	verbose              bool
 	jsonErrorOut         bool
 )
+
+type statusTicker interface {
+	Chan() <-chan time.Time
+	Stop()
+}
+
+type realStatusTicker struct {
+	ticker *time.Ticker
+}
+
+func (t realStatusTicker) Chan() <-chan time.Time {
+	return t.ticker.C
+}
+
+func (t realStatusTicker) Stop() {
+	t.ticker.Stop()
+}
 
 const (
 	exitGeneric = 1
@@ -1476,7 +1494,7 @@ func cmdStatus(ctx context.Context, args []string) {
 	}
 	debugf("status: json=%t plain=%t watch=%s", *jsonOut, *plain, watch.String())
 	printOnce := func() error {
-		np, err := music.GetNowPlaying(ctx)
+		np, err := getNowPlaying(ctx)
 		if err != nil {
 			return err
 		}
@@ -1491,19 +1509,26 @@ func cmdStatus(ctx context.Context, args []string) {
 		}
 		return nil
 	}
-	if *watch <= 0 {
-		if err := printOnce(); err != nil {
-			die(err)
-		}
-		return
+	if err := runStatusLoop(ctx, *watch, printOnce); err != nil {
+		die(err)
 	}
-	ticker := time.NewTicker(*watch)
+}
+
+func runStatusLoop(ctx context.Context, watch time.Duration, printOnce func() error) error {
+	if watch <= 0 {
+		return printOnce()
+	}
+	ticker := newStatusTicker(watch)
 	defer ticker.Stop()
 	for {
 		if err := printOnce(); err != nil {
-			die(err)
+			return err
 		}
-		<-ticker.C
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.Chan():
+		}
 	}
 }
 
