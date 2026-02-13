@@ -347,6 +347,53 @@ func TestCLIDryRunCommands(t *testing.T) {
 	assertDryRun("native-run", "--shortcut", "Example", "--dry-run", "--json")
 }
 
+func TestCLIDryRunErrorPaths(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	if code, out := run("config-init"); code != 0 {
+		t.Fatalf("config-init exit=%d out=%s", code, out)
+	}
+
+	assertUsage := func(args []string, contains string) {
+		t.Helper()
+		code, out := run(args...)
+		if code != exitUsage {
+			t.Fatalf("%v exit=%d want=%d out=%s", args, code, exitUsage, out)
+		}
+		if !strings.Contains(strings.ToLower(out), strings.ToLower(contains)) {
+			t.Fatalf("%v output missing %q: %s", args, contains, out)
+		}
+	}
+
+	assertUsage([]string{"out", "set", "Bedroom", "--backend", "native", "--dry-run"}, "only supports backend=airplay")
+	assertUsage([]string{"volume", "101", "--dry-run"}, "volume must be 0-100")
+	assertUsage([]string{"play", "--dry-run", "--json"}, "playlist is required")
+	assertUsage([]string{"run", "missing-alias", "--dry-run", "--json"}, "unknown alias")
+	assertUsage([]string{"native-run", "--dry-run", "--json"}, "--shortcut is required")
+}
 func TestCLIAutomationCommands(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", ".."))
 	bin := filepath.Join(t.TempDir(), "homepodctl")
