@@ -6,6 +6,8 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ## [Unreleased]
 
+## [v0.1.3] - 2026-02-13
+
 ### Added
 
 - diagnostics: global `--verbose` flag (or `HOMEPODCTL_VERBOSE=1`) to print command/backend resolution details to stderr.
