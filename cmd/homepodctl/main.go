@@ -1488,6 +1488,7 @@ complete -F _homepodctl_completion homepodctl
 		return `#compdef homepodctl
 _homepodctl() {
   local -a commands
+  local -a opts
   commands=(
     'help:Show help'
     'version:Show version'
@@ -1511,7 +1512,28 @@ _homepodctl() {
     'native-run:Run shortcut'
     'config-init:Write starter config'
   )
-  _arguments '*::command:->command'
+  opts=(
+    '--json[output JSON]'
+    '--plain[plain output]'
+    '--verbose[verbose diagnostics]'
+    '--dry-run[preview without side effects]'
+    '--backend[backend]:backend:(airplay native)'
+    '--room[room name]'
+    '--playlist[playlist name]'
+    '--playlist-id[playlist ID]'
+    '--shuffle[shuffle toggle]'
+    '--volume[volume 0-100]'
+    '--watch[poll interval]'
+    '--query[playlist filter]'
+    '--limit[max results]'
+    '--shortcut[shortcut name]'
+    '--include-network[include network address]'
+    '--file[input file]'
+    '--no-input[non-interactive mode]'
+    '--preset[preset name]'
+    '--name[routine name]'
+  )
+  _arguments $opts '*::command:->command'
   case $state in
     command) _describe -t commands "homepodctl command" commands ;;
   esac

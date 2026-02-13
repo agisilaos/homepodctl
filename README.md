@@ -178,6 +178,15 @@ homepodctl completion bash
 homepodctl completion fish
 ```
 
+Dry-run mutating commands without side effects:
+
+```sh
+homepodctl play chill --dry-run --json
+homepodctl out set "Bedroom" --dry-run --json
+homepodctl volume 30 --dry-run --json
+homepodctl run bed --dry-run --json
+```
+
 ## Exit codes
 
 - `0`: success
@@ -200,6 +209,7 @@ homepodctl completion fish
 - `homepodctl config-init`: create starter config
 - `homepodctl doctor`: diagnostics checklist
 - `homepodctl completion <bash|zsh|fish>`: generate completion script
+- `homepodctl automation validate|plan|run|init ...`: routine workflow scaffolding (`run` is currently `--dry-run` only)
 - `homepodctl version`: version info
 
 ## Common gotchas

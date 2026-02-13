@@ -231,6 +231,12 @@ func TestCompletionScript(t *testing.T) {
 		if !strings.Contains(s, "homepodctl") {
 			t.Fatalf("completionScript(%q) missing command name", shell)
 		}
+		if !strings.Contains(s, "dry-run") {
+			t.Fatalf("completionScript(%q) missing dry-run flag", shell)
+		}
+		if !strings.Contains(s, "automation") {
+			t.Fatalf("completionScript(%q) missing automation command", shell)
+		}
 	}
 	if _, err := completionScript("pwsh"); err == nil {
 		t.Fatalf("expected error for unknown shell")
