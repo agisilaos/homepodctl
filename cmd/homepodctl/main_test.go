@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -1013,5 +1014,140 @@ func TestExecuteAutomationPlayNative(t *testing.T) {
 	}
 	if called != 1 {
 		t.Fatalf("runNativeShortcut calls=%d, want 1", called)
+	}
+}
+
+func TestSetVolumeForRooms(t *testing.T) {
+	orig := setDeviceVolume
+	t.Cleanup(func() { setDeviceVolume = orig })
+
+	var got []string
+	setDeviceVolume = func(_ context.Context, room string, value int) error {
+		got = append(got, room+":"+strconv.Itoa(value))
+		if room == "Kitchen" {
+			return errors.New("boom")
+		}
+		return nil
+	}
+
+	err := setVolumeForRooms(context.Background(), []string{"Bedroom", "Kitchen"}, 35)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if len(got) != 2 {
+		t.Fatalf("calls=%v, want 2 calls", got)
+	}
+}
+
+func TestResolveNativeShortcuts(t *testing.T) {
+	cfg := &native.Config{
+		Native: native.NativeConfig{
+			Playlists:       map[string]map[string]string{"Bedroom": {"Focus": "Focus Shortcut"}},
+			VolumeShortcuts: map[string]map[string]string{"Bedroom": {"30": "Volume 30 Shortcut"}},
+		},
+	}
+
+	playlistShortcut, err := resolveNativePlaylistShortcut(cfg, "Bedroom", "Focus")
+	if err != nil {
+		t.Fatalf("resolveNativePlaylistShortcut: %v", err)
+	}
+	if playlistShortcut != "Focus Shortcut" {
+		t.Fatalf("playlist shortcut=%q", playlistShortcut)
+	}
+
+	volumeShortcut, err := resolveNativeVolumeShortcut(cfg, "Bedroom", 30)
+	if err != nil {
+		t.Fatalf("resolveNativeVolumeShortcut: %v", err)
+	}
+	if volumeShortcut != "Volume 30 Shortcut" {
+		t.Fatalf("volume shortcut=%q", volumeShortcut)
+	}
+
+	if _, err := resolveNativePlaylistShortcut(cfg, "Bedroom", "Missing"); err == nil {
+		t.Fatalf("expected missing playlist mapping error")
+	}
+	if _, err := resolveNativeVolumeShortcut(cfg, "Bedroom", 99); err == nil {
+		t.Fatalf("expected missing volume mapping error")
+	}
+}
+
+func TestRunNativeShortcutsUsesResolvedMappings(t *testing.T) {
+	orig := runNativeShortcut
+	t.Cleanup(func() { runNativeShortcut = orig })
+
+	cfg := &native.Config{
+		Native: native.NativeConfig{
+			Playlists:       map[string]map[string]string{"Bedroom": {"Focus": "Focus Shortcut"}},
+			VolumeShortcuts: map[string]map[string]string{"Bedroom": {"30": "Volume 30 Shortcut"}},
+		},
+	}
+
+	var calls []string
+	runNativeShortcut = func(_ context.Context, name string) error {
+		calls = append(calls, name)
+		return nil
+	}
+
+	if err := runNativePlaylistShortcuts(context.Background(), cfg, []string{"Bedroom"}, "Focus"); err != nil {
+		t.Fatalf("runNativePlaylistShortcuts: %v", err)
+	}
+	if err := runNativeVolumeShortcuts(context.Background(), cfg, []string{"Bedroom"}, 30); err != nil {
+		t.Fatalf("runNativeVolumeShortcuts: %v", err)
+	}
+	if len(calls) != 2 || calls[0] != "Focus Shortcut" || calls[1] != "Volume 30 Shortcut" {
+		t.Fatalf("shortcut calls=%v", calls)
+	}
+}
+
+func TestRunDoctorChecksUsesInjectedSeams(t *testing.T) {
+	origLookPath := lookPath
+	origConfigPath := configPath
+	origLoadConfigOptional := loadConfigOptional
+	origGetNowPlaying := getNowPlaying
+	t.Cleanup(func() {
+		lookPath = origLookPath
+		configPath = origConfigPath
+		loadConfigOptional = origLoadConfigOptional
+		getNowPlaying = origGetNowPlaying
+	})
+
+	lookPath = func(name string) (string, error) {
+		switch name {
+		case "osascript":
+			return "", errors.New("missing")
+		case "shortcuts":
+			return "/usr/bin/shortcuts", nil
+		default:
+			return "", errors.New("unexpected")
+		}
+	}
+	configPath = func() (string, error) { return "/tmp/homepodctl/config.json", nil }
+	loadConfigOptional = func() (*native.Config, error) {
+		return &native.Config{Aliases: map[string]native.Alias{"bed": {Playlist: "Focus"}}}, nil
+	}
+	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+		return music.NowPlaying{}, errors.New("music unavailable")
+	}
+
+	report := runDoctorChecks(context.Background())
+	if report.OK {
+		t.Fatalf("report.OK=true, want false due to missing osascript")
+	}
+
+	statusByName := map[string]string{}
+	for _, check := range report.Checks {
+		statusByName[check.Name] = check.Status
+	}
+	if statusByName["osascript"] != "fail" {
+		t.Fatalf("osascript status=%q", statusByName["osascript"])
+	}
+	if statusByName["shortcuts"] != "pass" {
+		t.Fatalf("shortcuts status=%q", statusByName["shortcuts"])
+	}
+	if statusByName["config"] != "pass" {
+		t.Fatalf("config status=%q", statusByName["config"])
+	}
+	if statusByName["music-backend"] != "warn" {
+		t.Fatalf("music-backend status=%q", statusByName["music-backend"])
 	}
 }
