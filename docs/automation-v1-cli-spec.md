@@ -1,6 +1,6 @@
 # homepodctl Automation v1 CLI Spec
 
-Status: planned (design locked before implementation).
+Status: implemented for v1 (run/validate/plan/init).
 
 ## One-liner
 
@@ -36,7 +36,7 @@ Flags:
   -f, --file <path|->   Automation YAML/JSON path, or "-" for stdin (required)
   -n, --dry-run         Print resolved execution with no state changes
       --json            Emit single JSON object to stdout
-      --no-input        Disable any interactive fallback behavior
+      --no-input        Explicit non-interactive mode (automation is non-interactive by default)
   -h, --help            Show help
 ```
 

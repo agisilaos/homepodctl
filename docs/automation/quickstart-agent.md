@@ -1,10 +1,12 @@
 # Automation Quickstart (Agent)
 
-For stable non-interactive execution, use this contract:
+For stable agent execution, use this contract:
 
 ```sh
 homepodctl automation run -f routine.yaml --json --no-input
 ```
+
+`--no-input` is explicit/safe for agents; automation is already non-interactive by default.
 
 ## Contract
 

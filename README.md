@@ -200,7 +200,7 @@ homepodctl run bed --dry-run --json
 
 - `0`: success
 - `2`: usage/flag/validation error
-- `3`: config read/parse/write error
+- `3`: config or automation validation error
 - `4`: backend command error (`osascript` / `shortcuts`)
 - `1`: other runtime failures
 
@@ -219,7 +219,7 @@ homepodctl run bed --dry-run --json
 - `homepodctl config-init`: create starter config
 - `homepodctl doctor`: diagnostics checklist
 - `homepodctl completion <bash|zsh|fish>`: generate completion script
-- `homepodctl automation validate|plan|run|init ...`: routine workflow scaffolding (`run` is currently `--dry-run` only)
+- `homepodctl automation validate|plan|run|init ...`: routine workflows (non-interactive by default; add `--dry-run` to preview)
 - `homepodctl version`: version info
 
 ## Common gotchas

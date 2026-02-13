@@ -525,6 +525,10 @@ func wantsJSONErrors(args []string) bool {
 }
 
 func classifyErrorCode(err error) string {
+	var autoValErr *automationValidationError
+	if errors.As(err, &autoValErr) {
+		return "AUTOMATION_VALIDATION_ERROR"
+	}
 	switch classifyExitCode(err) {
 	case exitUsage:
 		return "USAGE_ERROR"
@@ -579,6 +583,16 @@ func usageErrf(format string, args ...any) error {
 	return &usageError{msg: fmt.Sprintf(format, args...)}
 }
 
+type automationValidationError struct {
+	msg string
+}
+
+func (e *automationValidationError) Error() string { return e.msg }
+
+func automationValidationErrf(format string, args ...any) error {
+	return &automationValidationError{msg: fmt.Sprintf(format, args...)}
+}
+
 func classifyExitCode(err error) int {
 	if err == nil {
 		return 0
@@ -589,6 +603,10 @@ func classifyExitCode(err error) int {
 	}
 	var cfgErr *native.ConfigError
 	if errors.As(err, &cfgErr) {
+		return exitConfig
+	}
+	var autoValErr *automationValidationError
+	if errors.As(err, &autoValErr) {
 		return exitConfig
 	}
 	var scriptErr *music.ScriptError
@@ -725,6 +743,7 @@ Usage:
 
 Notes:
   - run executes steps sequentially and stops on first failed step.
+  - automation run is non-interactive by default (no confirmation prompt).
   - Use --dry-run to preview resolved actions without executing.
   - Use --json --no-input for agent-safe usage.
 `)
@@ -1073,7 +1092,7 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 	fs.StringVar(filePath, "f", "", "automation file path or - for stdin")
 	dryRun := fs.Bool("dry-run", false, "resolve and print without executing")
 	jsonOut := fs.Bool("json", false, "output JSON")
-	noInput := fs.Bool("no-input", false, "disable interactive confirmation prompt")
+	noInput := fs.Bool("no-input", false, "disable prompts (no-op: automation is non-interactive by default)")
 	if err := fs.Parse(args); err != nil {
 		die(usageErrf("usage: homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]"))
 	}
@@ -1096,9 +1115,7 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 		emitAutomationResult(result, *jsonOut)
 		return
 	}
-	if err := maybeConfirmAutomationRun(*noInput, doc.Name, len(doc.Steps)); err != nil {
-		die(err)
-	}
+	_ = noInput // accepted for compatibility; automation runs are non-interactive.
 	// automation runs can include waits; use a longer timeout than one-off commands.
 	runCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
@@ -1678,36 +1695,36 @@ func readAutomationInput(path string) ([]byte, error) {
 func parseAutomationBytes(b []byte) (*automationFile, error) {
 	b = bytes.TrimSpace(b)
 	if len(b) == 0 {
-		return nil, usageErrf("automation file is empty")
+		return nil, automationValidationErrf("automation file is empty")
 	}
 	var doc automationFile
 	if b[0] == '{' {
 		if err := json.Unmarshal(b, &doc); err != nil {
-			return nil, usageErrf("invalid automation JSON: %v", err)
+			return nil, automationValidationErrf("invalid automation JSON: %v", err)
 		}
 		return &doc, nil
 	}
 	if err := yaml.Unmarshal(b, &doc); err != nil {
-		return nil, usageErrf("invalid automation YAML: %v", err)
+		return nil, automationValidationErrf("invalid automation YAML: %v", err)
 	}
 	return &doc, nil
 }
 
 func validateAutomation(doc *automationFile) error {
 	if doc == nil {
-		return usageErrf("automation file is required")
+		return automationValidationErrf("automation file is required")
 	}
 	if strings.TrimSpace(doc.Version) != "1" {
-		return usageErrf("version: expected \"1\"")
+		return automationValidationErrf("version: expected \"1\"")
 	}
 	if strings.TrimSpace(doc.Name) == "" {
-		return usageErrf("name: required")
+		return automationValidationErrf("name: required")
 	}
 	if err := validateAutomationDefaults("defaults", doc.Defaults); err != nil {
 		return err
 	}
 	if len(doc.Steps) == 0 {
-		return usageErrf("steps: must contain at least one step")
+		return automationValidationErrf("steps: must contain at least one step")
 	}
 	for i, st := range doc.Steps {
 		if err := validateAutomationStep(i, st); err != nil {
@@ -1719,14 +1736,14 @@ func validateAutomation(doc *automationFile) error {
 
 func validateAutomationDefaults(path string, d automationDefaults) error {
 	if d.Backend != "" && d.Backend != "airplay" && d.Backend != "native" {
-		return usageErrf("%s.backend: expected airplay or native", path)
+		return automationValidationErrf("%s.backend: expected airplay or native", path)
 	}
 	if d.Volume != nil && (*d.Volume < 0 || *d.Volume > 100) {
-		return usageErrf("%s.volume: expected 0..100", path)
+		return automationValidationErrf("%s.volume: expected 0..100", path)
 	}
 	for i, r := range d.Rooms {
 		if strings.TrimSpace(r) == "" {
-			return usageErrf("%s.rooms[%d]: must be non-empty", path, i)
+			return automationValidationErrf("%s.rooms[%d]: must be non-empty", path, i)
 		}
 	}
 	return nil
@@ -1736,52 +1753,52 @@ func validateAutomationStep(i int, st automationStep) error {
 	path := fmt.Sprintf("steps[%d]", i)
 	t := strings.TrimSpace(st.Type)
 	if t == "" {
-		return usageErrf("%s.type: required", path)
+		return automationValidationErrf("%s.type: required", path)
 	}
 	switch t {
 	case "out.set":
 		if len(st.Rooms) == 0 {
-			return usageErrf("%s.rooms: required for out.set", path)
+			return automationValidationErrf("%s.rooms: required for out.set", path)
 		}
 		for j, r := range st.Rooms {
 			if strings.TrimSpace(r) == "" {
-				return usageErrf("%s.rooms[%d]: must be non-empty", path, j)
+				return automationValidationErrf("%s.rooms[%d]: must be non-empty", path, j)
 			}
 		}
 	case "play":
 		hasQ := strings.TrimSpace(st.Query) != ""
 		hasID := strings.TrimSpace(st.PlaylistID) != ""
 		if hasQ == hasID {
-			return usageErrf("%s: play requires exactly one of query or playlistId", path)
+			return automationValidationErrf("%s: play requires exactly one of query or playlistId", path)
 		}
 	case "volume.set":
 		if st.Value == nil {
-			return usageErrf("%s.value: required for volume.set", path)
+			return automationValidationErrf("%s.value: required for volume.set", path)
 		}
 		if *st.Value < 0 || *st.Value > 100 {
-			return usageErrf("%s.value: expected 0..100", path)
+			return automationValidationErrf("%s.value: expected 0..100", path)
 		}
 	case "wait":
 		s := strings.TrimSpace(st.State)
 		if s != "playing" && s != "paused" && s != "stopped" {
-			return usageErrf("%s.state: expected playing|paused|stopped", path)
+			return automationValidationErrf("%s.state: expected playing|paused|stopped", path)
 		}
 		if strings.TrimSpace(st.Timeout) == "" {
-			return usageErrf("%s.timeout: required", path)
+			return automationValidationErrf("%s.timeout: required", path)
 		}
 		d, err := time.ParseDuration(st.Timeout)
 		if err != nil {
-			return usageErrf("%s.timeout: invalid duration", path)
+			return automationValidationErrf("%s.timeout: invalid duration", path)
 		}
 		if d < time.Second || d > 10*time.Minute {
-			return usageErrf("%s.timeout: expected between 1s and 10m", path)
+			return automationValidationErrf("%s.timeout: expected between 1s and 10m", path)
 		}
 	case "transport":
 		if strings.TrimSpace(st.Action) != "stop" {
-			return usageErrf("%s.action: only \"stop\" is supported in v1", path)
+			return automationValidationErrf("%s.action: only \"stop\" is supported in v1", path)
 		}
 	default:
-		return usageErrf("%s.type: unsupported step type %q", path, st.Type)
+		return automationValidationErrf("%s.type: unsupported step type %q", path, st.Type)
 	}
 	return nil
 }
@@ -1873,30 +1890,6 @@ func buildAutomationResult(mode string, doc *automationFile, steps []automationS
 		EndedAt:    ended.Format(time.RFC3339),
 		DurationMS: ended.Sub(started).Milliseconds(),
 		Steps:      steps,
-	}
-}
-
-func maybeConfirmAutomationRun(noInput bool, name string, stepCount int) error {
-	if noInput {
-		return nil
-	}
-	info, err := os.Stdin.Stat()
-	if err != nil {
-		return nil
-	}
-	if (info.Mode() & os.ModeCharDevice) == 0 {
-		return nil
-	}
-	fmt.Fprintf(os.Stderr, "Execute automation %q with %d steps? [y/N]: ", name, stepCount)
-	var answer string
-	if _, err := fmt.Fscanln(os.Stdin, &answer); err != nil {
-		return usageErrf("aborted")
-	}
-	switch strings.ToLower(strings.TrimSpace(answer)) {
-	case "y", "yes":
-		return nil
-	default:
-		return usageErrf("aborted")
 	}
 }
 

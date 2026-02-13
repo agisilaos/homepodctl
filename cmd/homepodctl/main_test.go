@@ -106,6 +106,7 @@ func TestClassifyExitCode(t *testing.T) {
 	}{
 		{name: "usage", err: usageErrf("bad flag"), want: exitUsage},
 		{name: "config", err: &native.ConfigError{Op: "read", Err: errors.New("boom")}, want: exitConfig},
+		{name: "automation validation", err: automationValidationErrf("bad automation"), want: exitConfig},
 		{name: "script", err: &music.ScriptError{Err: errors.New("boom"), Output: "x"}, want: exitBackend},
 		{name: "shortcut", err: &native.ShortcutError{Name: "x", Err: errors.New("boom")}, want: exitBackend},
 		{name: "generic", err: exec.ErrNotFound, want: exitGeneric},
@@ -568,13 +569,24 @@ func TestCLIAutomationErrorPaths(t *testing.T) {
 		t.Fatalf("missing file output unexpected: %s", out)
 	}
 	assertUsage([]string{"automation", "validate", "-f", ""}, "--file is required")
-	assertUsage([]string{"automation", "run", "-f", "-", "--dry-run"}, "automation file is empty")
+	assertValidation := func(args []string, contains string) {
+		t.Helper()
+		code, out := run(args...)
+		if code != exitConfig {
+			t.Fatalf("%v exit=%d want=%d out=%s", args, code, exitConfig, out)
+		}
+		if !strings.Contains(strings.ToLower(out), strings.ToLower(contains)) {
+			t.Fatalf("%v output missing %q: %s", args, contains, out)
+		}
+	}
+
+	assertValidation([]string{"automation", "run", "-f", "-", "--dry-run"}, "automation file is empty")
 
 	badYAML := filepath.Join(t.TempDir(), "bad.yaml")
 	if err := os.WriteFile(badYAML, []byte("version: [\n"), 0o644); err != nil {
 		t.Fatalf("write bad yaml: %v", err)
 	}
-	assertUsage([]string{"automation", "validate", "-f", badYAML}, "invalid automation yaml")
+	assertValidation([]string{"automation", "validate", "-f", badYAML}, "invalid automation yaml")
 
 	badSchema := filepath.Join(t.TempDir(), "bad-schema.yaml")
 	if err := os.WriteFile(badSchema, []byte(`version: "2"
@@ -586,7 +598,7 @@ steps:
 `), 0o644); err != nil {
 		t.Fatalf("write bad schema: %v", err)
 	}
-	assertUsage([]string{"automation", "validate", "-f", badSchema}, `version: expected "1"`)
+	assertValidation([]string{"automation", "validate", "-f", badSchema}, `version: expected "1"`)
 
 	badStep := filepath.Join(t.TempDir(), "bad-step.yaml")
 	if err := os.WriteFile(badStep, []byte(`version: "1"
@@ -598,7 +610,7 @@ steps:
 `), 0o644); err != nil {
 		t.Fatalf("write bad step: %v", err)
 	}
-	assertUsage([]string{"automation", "plan", "-f", badStep}, "expected playing|paused|stopped")
+	assertValidation([]string{"automation", "plan", "-f", badStep}, "expected playing|paused|stopped")
 }
 func TestCLIConfigCommands(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", ".."))
