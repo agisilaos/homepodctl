@@ -221,7 +221,7 @@ func TestFriendlyScriptError(t *testing.T) {
 }
 
 func TestCompletionScript(t *testing.T) {
-	t.Parallel()
+	t.Setenv("HOME", t.TempDir())
 
 	for _, shell := range []string{"bash", "zsh", "fish"} {
 		s, err := completionScript(shell)
@@ -240,6 +240,32 @@ func TestCompletionScript(t *testing.T) {
 	}
 	if _, err := completionScript("pwsh"); err == nil {
 		t.Fatalf("expected error for unknown shell")
+	}
+}
+
+func TestCompletionData(t *testing.T) {
+	t.Parallel()
+
+	cfg := &native.Config{
+		Defaults: native.DefaultsConfig{
+			Rooms: []string{"Bedroom"},
+		},
+		Aliases: map[string]native.Alias{
+			"bed": {Rooms: []string{"Bedroom"}},
+			"lr":  {Rooms: []string{"Living Room"}},
+		},
+		Native: native.NativeConfig{
+			Playlists: map[string]map[string]string{
+				"Kitchen": {"X": "Y"},
+			},
+		},
+	}
+	aliases, rooms := completionData(cfg)
+	if len(aliases) != 2 || aliases[0] != "bed" || aliases[1] != "lr" {
+		t.Fatalf("aliases=%v", aliases)
+	}
+	if len(rooms) != 3 {
+		t.Fatalf("rooms=%v", rooms)
 	}
 }
 
@@ -384,12 +410,55 @@ func TestCLIAutomationCommands(t *testing.T) {
 		t.Fatalf("automation dry-run json unexpected: %s", out)
 	}
 
-	code, out = run("automation", "run", "-f", routinePath)
-	if code != exitUsage {
-		t.Fatalf("automation run without --dry-run exit=%d, want %d out=%s", code, exitUsage, out)
+	code, out = run("automation", "run", "-f", routinePath, "--no-input")
+	if code == exitUsage && strings.Contains(out, "not implemented yet") {
+		t.Fatalf("automation run should execute now, got old scaffold error: %s", out)
 	}
-	if !strings.Contains(out, "not implemented yet") {
-		t.Fatalf("automation run without --dry-run message unexpected: %s", out)
+}
+
+func TestCLIConfigCommands(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	if code, out := run("config", "validate", "--json"); code != 0 || !strings.Contains(out, `"ok": true`) {
+		t.Fatalf("config validate exit=%d out=%s", code, out)
+	}
+	if code, out := run("config", "set", "defaults.backend", "native"); code != 0 {
+		t.Fatalf("config set backend exit=%d out=%s", code, out)
+	}
+	if code, out := run("config", "get", "defaults.backend"); code != 0 || strings.TrimSpace(out) != "native" {
+		t.Fatalf("config get backend exit=%d out=%q", code, out)
+	}
+	if code, out := run("config", "set", "defaults.rooms", "Bedroom", "Living Room"); code != 0 {
+		t.Fatalf("config set rooms exit=%d out=%s", code, out)
+	}
+	if code, out := run("config", "get", "defaults.rooms", "--json"); code != 0 || !strings.Contains(out, "Living Room") {
+		t.Fatalf("config get rooms exit=%d out=%s", code, out)
+	}
+	if code, out := run("config", "set", "defaults.backend", "invalid"); code != exitUsage {
+		t.Fatalf("invalid backend exit=%d want=%d out=%s", code, exitUsage, out)
 	}
 }
 func TestCmdHelp_PlayExamplesUseQuotes(t *testing.T) {
@@ -581,5 +650,82 @@ func TestBuildAutomationResultJSONShape(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `"steps"`) {
 		t.Fatalf("missing steps in json: %s", string(b))
+	}
+}
+
+func TestExecuteAutomationSteps_StopsOnFailure(t *testing.T) {
+	origSetCurrentOutputs := setCurrentOutputs
+	origSetDeviceVolume := setDeviceVolume
+	origSetShuffle := setShuffle
+	origSearchPlaylists := searchPlaylists
+	origPlayPlaylistByID := playPlaylistByID
+	t.Cleanup(func() {
+		setCurrentOutputs = origSetCurrentOutputs
+		setDeviceVolume = origSetDeviceVolume
+		setShuffle = origSetShuffle
+		searchPlaylists = origSearchPlaylists
+		playPlaylistByID = origPlayPlaylistByID
+	})
+
+	setCurrentOutputs = func(context.Context, []string) error { return errors.New("boom") }
+	setDeviceVolume = func(context.Context, string, int) error { return nil }
+	setShuffle = func(context.Context, bool) error { return nil }
+	searchPlaylists = func(context.Context, string) ([]music.UserPlaylist, error) {
+		return []music.UserPlaylist{{PersistentID: "P1", Name: "X"}}, nil
+	}
+	playPlaylistByID = func(context.Context, string) error { return nil }
+
+	doc := &automationFile{
+		Version: "1",
+		Name:    "test",
+		Defaults: automationDefaults{
+			Backend: "airplay",
+			Rooms:   []string{"Bedroom"},
+		},
+		Steps: []automationStep{
+			{Type: "out.set", Rooms: []string{"Bedroom"}},
+			{Type: "play", Query: "Chill"},
+		},
+	}
+	results, ok := executeAutomationSteps(context.Background(), &native.Config{}, doc)
+	if ok {
+		t.Fatalf("ok=true, want false")
+	}
+	if len(results) != 2 {
+		t.Fatalf("len(results)=%d, want 2", len(results))
+	}
+	if results[0].OK {
+		t.Fatalf("first step should fail")
+	}
+	if !results[1].Skipped {
+		t.Fatalf("second step should be skipped")
+	}
+}
+
+func TestExecuteAutomationPlayNative(t *testing.T) {
+	origRunShortcut := runNativeShortcut
+	t.Cleanup(func() { runNativeShortcut = origRunShortcut })
+
+	called := 0
+	runNativeShortcut = func(context.Context, string) error {
+		called++
+		return nil
+	}
+	cfg := &native.Config{
+		Native: native.NativeConfig{
+			Playlists: map[string]map[string]string{
+				"Bedroom": {"Focus": "BR Focus"},
+			},
+		},
+	}
+	err := executeAutomationPlay(context.Background(), cfg, "native", automationDefaults{Backend: "native", Rooms: []string{"Bedroom"}}, automationStep{
+		Type:  "play",
+		Query: "Focus",
+	})
+	if err != nil {
+		t.Fatalf("executeAutomationPlay: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("runNativeShortcut calls=%d, want 1", called)
 	}
 }

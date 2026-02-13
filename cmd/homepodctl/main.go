@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -23,11 +24,20 @@ import (
 )
 
 var (
-	version       = "dev"
-	commit        = "none"
-	date          = "unknown"
-	getNowPlaying = music.GetNowPlaying
-	verbose       bool
+	version              = "dev"
+	commit               = "none"
+	date                 = "unknown"
+	getNowPlaying        = music.GetNowPlaying
+	searchPlaylists      = music.SearchUserPlaylists
+	setCurrentOutputs    = music.SetCurrentAirPlayDevices
+	setDeviceVolume      = music.SetAirPlayDeviceVolume
+	setShuffle           = music.SetShuffleEnabled
+	playPlaylistByID     = music.PlayUserPlaylistByPersistentID
+	findPlaylistNameByID = music.FindUserPlaylistNameByPersistentID
+	runNativeShortcut    = native.RunShortcut
+	stopPlayback         = music.Stop
+	sleepFn              = time.Sleep
+	verbose              bool
 )
 
 const (
@@ -46,6 +56,7 @@ Usage:
   homepodctl --help
   homepodctl help [<command>]
   homepodctl version
+  homepodctl config <validate|get|set> [args]
   homepodctl automation <run|validate|plan|init> [args]
   homepodctl completion <bash|zsh|fish>
   homepodctl doctor [--json] [--plain]
@@ -150,7 +161,9 @@ func main() {
 	case "version":
 		fmt.Printf("homepodctl %s (%s) %s\n", version, commit, date)
 	case "automation":
-		cmdAutomation(loadCfg(), args)
+		cmdAutomation(ctx, loadCfg(), args)
+	case "config":
+		cmdConfig(args)
 	case "completion":
 		cmdCompletion(args)
 	case "doctor":
@@ -641,17 +654,32 @@ Notes:
   - Edit defaults.rooms to your AirPlay device names (homepodctl devices).
 `, path)
 	case "automation":
-		fmt.Fprint(os.Stdout, `homepodctl automation - declarative playback routines (v1 scaffold)
+		fmt.Fprint(os.Stdout, `homepodctl automation - declarative playback routines (v1)
 
 Usage:
   homepodctl automation init --preset <morning|focus|winddown|party|reset> [--name <string>] [--json]
   homepodctl automation validate -f <file|-> [--json]
   homepodctl automation plan -f <file|-> [--json]
-  homepodctl automation run -f <file|-> --dry-run [--json] [--no-input]
+  homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]
 
 Notes:
-  - run currently supports --dry-run only (execution scaffolding).
+  - run executes steps sequentially and stops on first failed step.
+  - Use --dry-run to preview resolved actions without executing.
   - Use --json --no-input for agent-safe usage.
+`)
+	case "config":
+		fmt.Fprint(os.Stdout, `homepodctl config - inspect and update config values
+
+Usage:
+  homepodctl config validate [--json]
+  homepodctl config get <path> [--json]
+  homepodctl config set <path> <value...>
+
+Supported paths:
+  defaults.backend
+  defaults.shuffle
+  defaults.volume
+  defaults.rooms
 `)
 	default:
 		usage()
@@ -950,13 +978,13 @@ type automationInitResult struct {
 	Content string `json:"content"`
 }
 
-func cmdAutomation(cfg *native.Config, args []string) {
+func cmdAutomation(ctx context.Context, cfg *native.Config, args []string) {
 	if len(args) == 0 {
 		die(usageErrf("usage: homepodctl automation <run|validate|plan|init> [args]"))
 	}
 	switch args[0] {
 	case "run":
-		cmdAutomationRun(cfg, args[1:])
+		cmdAutomationRun(ctx, cfg, args[1:])
 	case "validate":
 		cmdAutomationValidate(cfg, args[1:])
 	case "plan":
@@ -968,22 +996,19 @@ func cmdAutomation(cfg *native.Config, args []string) {
 	}
 }
 
-func cmdAutomationRun(cfg *native.Config, args []string) {
+func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 	fs := flag.NewFlagSet("automation run", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	filePath := fs.String("file", "", "automation file path or - for stdin")
 	fs.StringVar(filePath, "f", "", "automation file path or - for stdin")
 	dryRun := fs.Bool("dry-run", false, "resolve and print without executing")
 	jsonOut := fs.Bool("json", false, "output JSON")
-	_ = fs.Bool("no-input", false, "disable interactive fallback")
+	noInput := fs.Bool("no-input", false, "disable interactive confirmation prompt")
 	if err := fs.Parse(args); err != nil {
 		die(usageErrf("usage: homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]"))
 	}
 	if strings.TrimSpace(*filePath) == "" {
 		die(usageErrf("--file is required"))
-	}
-	if !*dryRun {
-		die(usageErrf("automation run without --dry-run is not implemented yet (use --dry-run, plan, or validate)"))
 	}
 	doc, err := loadAutomationFile(*filePath)
 	if err != nil {
@@ -992,8 +1017,28 @@ func cmdAutomationRun(cfg *native.Config, args []string) {
 	if err := validateAutomation(doc); err != nil {
 		die(err)
 	}
-	result := buildAutomationResult("dry-run", doc, resolveAutomationSteps(cfg, doc))
+
+	mode := "run"
+	steps := resolveAutomationSteps(cfg, doc)
+	if *dryRun {
+		mode = "dry-run"
+		result := buildAutomationResult(mode, doc, steps)
+		emitAutomationResult(result, *jsonOut)
+		return
+	}
+	if err := maybeConfirmAutomationRun(*noInput, doc.Name, len(doc.Steps)); err != nil {
+		die(err)
+	}
+	// automation runs can include waits; use a longer timeout than one-off commands.
+	runCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer cancel()
+	executed, ok := executeAutomationSteps(runCtx, cfg, doc)
+	result := buildAutomationResult(mode, doc, executed)
+	result.OK = ok
 	emitAutomationResult(result, *jsonOut)
+	if !result.OK {
+		os.Exit(exitGeneric)
+	}
 }
 
 func cmdAutomationValidate(_ *native.Config, args []string) {
@@ -1070,6 +1115,234 @@ func cmdAutomationInit(args []string) {
 		return
 	}
 	fmt.Print(string(b))
+}
+
+type configValidateResult struct {
+	OK     bool     `json:"ok"`
+	Path   string   `json:"path"`
+	Errors []string `json:"errors,omitempty"`
+}
+
+func cmdConfig(args []string) {
+	if len(args) == 0 {
+		die(usageErrf("usage: homepodctl config <validate|get|set> [args]"))
+	}
+	switch args[0] {
+	case "validate":
+		cmdConfigValidate(args[1:])
+	case "get":
+		cmdConfigGet(args[1:])
+	case "set":
+		cmdConfigSet(args[1:])
+	default:
+		die(usageErrf("unknown config subcommand: %q", args[0]))
+	}
+}
+
+func cmdConfigValidate(args []string) {
+	fs := flag.NewFlagSet("config validate", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	jsonOut := fs.Bool("json", false, "output JSON")
+	if err := fs.Parse(args); err != nil {
+		die(usageErrf("usage: homepodctl config validate [--json]"))
+	}
+	cfg, err := native.LoadConfigOptional()
+	if err != nil {
+		die(err)
+	}
+	path, _ := native.ConfigPath()
+	issues := validateConfigValues(cfg)
+	res := configValidateResult{
+		OK:     len(issues) == 0,
+		Path:   path,
+		Errors: issues,
+	}
+	if *jsonOut {
+		writeJSON(res)
+		return
+	}
+	if res.OK {
+		fmt.Printf("config ok: %s\n", res.Path)
+		return
+	}
+	fmt.Printf("config invalid: %s\n", res.Path)
+	for _, issue := range res.Errors {
+		fmt.Printf("- %s\n", issue)
+	}
+	os.Exit(exitUsage)
+}
+
+func cmdConfigGet(args []string) {
+	flags, pos, err := parseArgs(args)
+	if err != nil {
+		die(err)
+	}
+	jsonOut, _, err := parseOutputFlags(flags)
+	if err != nil {
+		die(err)
+	}
+	if len(pos) != 1 {
+		die(usageErrf("usage: homepodctl config get <path> [--json]"))
+	}
+	key := strings.TrimSpace(pos[0])
+	cfg, err := native.LoadConfigOptional()
+	if err != nil {
+		die(err)
+	}
+	value, err := getConfigPathValue(cfg, key)
+	if err != nil {
+		die(err)
+	}
+	if jsonOut {
+		writeJSON(map[string]any{"path": key, "value": value})
+		return
+	}
+	switch v := value.(type) {
+	case []string:
+		fmt.Println(strings.Join(v, "\t"))
+	default:
+		fmt.Printf("%v\n", v)
+	}
+}
+
+func cmdConfigSet(args []string) {
+	fs := flag.NewFlagSet("config set", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		die(usageErrf("usage: homepodctl config set <path> <value...>"))
+	}
+	if fs.NArg() < 2 {
+		die(usageErrf("usage: homepodctl config set <path> <value...>"))
+	}
+	key := strings.TrimSpace(fs.Arg(0))
+	values := fs.Args()[1:]
+
+	cfg, err := native.LoadConfigOptional()
+	if err != nil {
+		die(err)
+	}
+	if err := setConfigPathValue(cfg, key, values); err != nil {
+		die(err)
+	}
+	issues := validateConfigValues(cfg)
+	if len(issues) > 0 {
+		die(usageErrf("updated config is invalid: %s", strings.Join(issues, "; ")))
+	}
+	path, err := native.ConfigPath()
+	if err != nil {
+		die(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		die(err)
+	}
+	b, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		die(err)
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		die(err)
+	}
+	fmt.Printf("Updated %s (%s)\n", path, key)
+}
+
+func validateConfigValues(cfg *native.Config) []string {
+	var issues []string
+	switch cfg.Defaults.Backend {
+	case "", "airplay", "native":
+	default:
+		issues = append(issues, fmt.Sprintf("defaults.backend must be airplay|native, got %q", cfg.Defaults.Backend))
+	}
+	if cfg.Defaults.Volume != nil && (*cfg.Defaults.Volume < 0 || *cfg.Defaults.Volume > 100) {
+		issues = append(issues, fmt.Sprintf("defaults.volume must be 0..100, got %d", *cfg.Defaults.Volume))
+	}
+	for i, room := range cfg.Defaults.Rooms {
+		if strings.TrimSpace(room) == "" {
+			issues = append(issues, fmt.Sprintf("defaults.rooms[%d] must be non-empty", i))
+		}
+	}
+	for name, a := range cfg.Aliases {
+		if a.Backend != "" && a.Backend != "airplay" && a.Backend != "native" {
+			issues = append(issues, fmt.Sprintf("aliases.%s.backend must be airplay|native, got %q", name, a.Backend))
+		}
+		if a.Volume != nil && (*a.Volume < 0 || *a.Volume > 100) {
+			issues = append(issues, fmt.Sprintf("aliases.%s.volume must be 0..100, got %d", name, *a.Volume))
+		}
+	}
+	return issues
+}
+
+func getConfigPathValue(cfg *native.Config, key string) (any, error) {
+	switch key {
+	case "defaults.backend":
+		return cfg.Defaults.Backend, nil
+	case "defaults.shuffle":
+		return cfg.Defaults.Shuffle, nil
+	case "defaults.volume":
+		if cfg.Defaults.Volume == nil {
+			return nil, nil
+		}
+		return *cfg.Defaults.Volume, nil
+	case "defaults.rooms":
+		return append([]string(nil), cfg.Defaults.Rooms...), nil
+	default:
+		return nil, usageErrf("unsupported config path %q", key)
+	}
+}
+
+func setConfigPathValue(cfg *native.Config, key string, values []string) error {
+	switch key {
+	case "defaults.backend":
+		if len(values) != 1 {
+			return usageErrf("%s expects exactly 1 value", key)
+		}
+		v := strings.TrimSpace(values[0])
+		if v != "airplay" && v != "native" {
+			return usageErrf("%s must be airplay|native", key)
+		}
+		cfg.Defaults.Backend = v
+		return nil
+	case "defaults.shuffle":
+		if len(values) != 1 {
+			return usageErrf("%s expects exactly 1 value", key)
+		}
+		switch strings.ToLower(strings.TrimSpace(values[0])) {
+		case "true", "1", "yes", "on":
+			cfg.Defaults.Shuffle = true
+		case "false", "0", "no", "off":
+			cfg.Defaults.Shuffle = false
+		default:
+			return usageErrf("%s expects boolean true|false", key)
+		}
+		return nil
+	case "defaults.volume":
+		if len(values) != 1 {
+			return usageErrf("%s expects exactly 1 value", key)
+		}
+		v := strings.TrimSpace(values[0])
+		if v == "null" {
+			cfg.Defaults.Volume = nil
+			return nil
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > 100 {
+			return usageErrf("%s expects 0..100 or null", key)
+		}
+		cfg.Defaults.Volume = &n
+		return nil
+	case "defaults.rooms":
+		rooms := make([]string, 0, len(values))
+		for _, v := range values {
+			r := strings.TrimSpace(v)
+			if r == "" {
+				return usageErrf("%s values must be non-empty", key)
+			}
+			rooms = append(rooms, r)
+		}
+		cfg.Defaults.Rooms = rooms
+		return nil
+	default:
+		return usageErrf("unsupported config path %q", key)
+	}
 }
 
 func loadAutomationFile(path string) (*automationFile, error) {
@@ -1211,23 +1484,7 @@ func validateAutomationStep(i int, st automationStep) error {
 }
 
 func resolveAutomationSteps(cfg *native.Config, doc *automationFile) []automationStepResult {
-	resolvedDefaults := doc.Defaults
-	if cfg != nil {
-		if strings.TrimSpace(resolvedDefaults.Backend) == "" {
-			resolvedDefaults.Backend = cfg.Defaults.Backend
-		}
-		if len(resolvedDefaults.Rooms) == 0 {
-			resolvedDefaults.Rooms = append([]string(nil), cfg.Defaults.Rooms...)
-		}
-		if resolvedDefaults.Volume == nil && cfg.Defaults.Volume != nil {
-			v := *cfg.Defaults.Volume
-			resolvedDefaults.Volume = &v
-		}
-		if resolvedDefaults.Shuffle == nil {
-			v := cfg.Defaults.Shuffle
-			resolvedDefaults.Shuffle = &v
-		}
-	}
+	resolvedDefaults := resolveAutomationDefaults(cfg, doc.Defaults)
 
 	out := make([]automationStepResult, 0, len(doc.Steps))
 	for i, st := range doc.Steps {
@@ -1279,6 +1536,28 @@ func resolveAutomationSteps(cfg *native.Config, doc *automationFile) []automatio
 	return out
 }
 
+func resolveAutomationDefaults(cfg *native.Config, in automationDefaults) automationDefaults {
+	out := in
+	if cfg == nil {
+		return out
+	}
+	if strings.TrimSpace(out.Backend) == "" {
+		out.Backend = cfg.Defaults.Backend
+	}
+	if len(out.Rooms) == 0 {
+		out.Rooms = append([]string(nil), cfg.Defaults.Rooms...)
+	}
+	if out.Volume == nil && cfg.Defaults.Volume != nil {
+		v := *cfg.Defaults.Volume
+		out.Volume = &v
+	}
+	if out.Shuffle == nil {
+		v := cfg.Defaults.Shuffle
+		out.Shuffle = &v
+	}
+	return out
+}
+
 func buildAutomationResult(mode string, doc *automationFile, steps []automationStepResult) automationCommandResult {
 	started := time.Now().UTC()
 	ended := started
@@ -1291,6 +1570,236 @@ func buildAutomationResult(mode string, doc *automationFile, steps []automationS
 		EndedAt:    ended.Format(time.RFC3339),
 		DurationMS: ended.Sub(started).Milliseconds(),
 		Steps:      steps,
+	}
+}
+
+func maybeConfirmAutomationRun(noInput bool, name string, stepCount int) error {
+	if noInput {
+		return nil
+	}
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return nil
+	}
+	if (info.Mode() & os.ModeCharDevice) == 0 {
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "Execute automation %q with %d steps? [y/N]: ", name, stepCount)
+	var answer string
+	if _, err := fmt.Fscanln(os.Stdin, &answer); err != nil {
+		return usageErrf("aborted")
+	}
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "y", "yes":
+		return nil
+	default:
+		return usageErrf("aborted")
+	}
+}
+
+func executeAutomationSteps(ctx context.Context, cfg *native.Config, doc *automationFile) ([]automationStepResult, bool) {
+	defaults := resolveAutomationDefaults(cfg, doc.Defaults)
+	results := make([]automationStepResult, 0, len(doc.Steps))
+	ok := true
+
+	for i, st := range doc.Steps {
+		stepStart := time.Now()
+		res := automationStepResult{
+			Index: i,
+			Type:  st.Type,
+			Input: st,
+		}
+		err := executeAutomationStep(ctx, cfg, defaults, st)
+		res.DurationMS = time.Since(stepStart).Milliseconds()
+		if err != nil {
+			res.OK = false
+			res.Error = err.Error()
+			ok = false
+			results = append(results, res)
+			// mark remaining steps as skipped so callers can inspect full plan shape.
+			for j := i + 1; j < len(doc.Steps); j++ {
+				results = append(results, automationStepResult{
+					Index:   j,
+					Type:    doc.Steps[j].Type,
+					Input:   doc.Steps[j],
+					OK:      false,
+					Skipped: true,
+					Error:   "skipped due to previous step failure",
+				})
+			}
+			break
+		}
+		res.OK = true
+		results = append(results, res)
+	}
+	return results, ok
+}
+
+func executeAutomationStep(ctx context.Context, cfg *native.Config, defaults automationDefaults, st automationStep) error {
+	backend := strings.TrimSpace(defaults.Backend)
+	if backend == "" {
+		backend = "airplay"
+	}
+
+	switch st.Type {
+	case "out.set":
+		if backend != "airplay" {
+			return fmt.Errorf("out.set only supports backend=airplay")
+		}
+		return setCurrentOutputs(ctx, st.Rooms)
+	case "play":
+		return executeAutomationPlay(ctx, cfg, backend, defaults, st)
+	case "volume.set":
+		if st.Value == nil {
+			return fmt.Errorf("volume.set requires value")
+		}
+		return executeAutomationVolume(ctx, cfg, backend, defaults, *st.Value, st.Rooms)
+	case "wait":
+		return executeAutomationWait(ctx, st.State, st.Timeout)
+	case "transport":
+		if strings.TrimSpace(st.Action) != "stop" {
+			return fmt.Errorf("unsupported transport action %q", st.Action)
+		}
+		return stopPlayback(ctx)
+	default:
+		return fmt.Errorf("unsupported step type %q", st.Type)
+	}
+}
+
+func executeAutomationPlay(ctx context.Context, cfg *native.Config, backend string, defaults automationDefaults, st automationStep) error {
+	switch backend {
+	case "airplay":
+		rooms := append([]string(nil), defaults.Rooms...)
+		if len(rooms) > 0 {
+			if err := setCurrentOutputs(ctx, rooms); err != nil {
+				return err
+			}
+		}
+		if defaults.Volume != nil && len(rooms) > 0 {
+			for _, room := range rooms {
+				if err := setDeviceVolume(ctx, room, *defaults.Volume); err != nil {
+					return err
+				}
+			}
+		}
+		if defaults.Shuffle != nil {
+			if err := setShuffle(ctx, *defaults.Shuffle); err != nil {
+				return err
+			}
+		}
+		id := strings.TrimSpace(st.PlaylistID)
+		if id == "" {
+			matches, err := searchPlaylists(ctx, st.Query)
+			if err != nil {
+				return err
+			}
+			best, ok := music.PickBestPlaylist(st.Query, matches)
+			if !ok {
+				return fmt.Errorf("no playlists match %q", st.Query)
+			}
+			id = best.PersistentID
+		}
+		return playPlaylistByID(ctx, id)
+	case "native":
+		if cfg == nil {
+			return fmt.Errorf("native backend requires config")
+		}
+		rooms := append([]string(nil), defaults.Rooms...)
+		if len(rooms) == 0 {
+			return fmt.Errorf("native play requires rooms")
+		}
+		name := strings.TrimSpace(st.Query)
+		if name == "" {
+			var err error
+			name, err = findPlaylistNameByID(ctx, st.PlaylistID)
+			if err != nil {
+				return err
+			}
+		}
+		for _, room := range rooms {
+			shortcutName, ok := cfg.Native.Playlists[room][name]
+			if !ok || strings.TrimSpace(shortcutName) == "" {
+				return fmt.Errorf("no native mapping for room=%q playlist=%q", room, name)
+			}
+			if err := runNativeShortcut(ctx, shortcutName); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown backend %q", backend)
+	}
+}
+
+func executeAutomationVolume(ctx context.Context, cfg *native.Config, backend string, defaults automationDefaults, value int, overrideRooms []string) error {
+	rooms := append([]string(nil), overrideRooms...)
+	if len(rooms) == 0 {
+		rooms = append(rooms, defaults.Rooms...)
+	}
+	switch backend {
+	case "airplay":
+		if len(rooms) == 0 {
+			rooms = inferSelectedOutputs(ctx)
+		}
+		if len(rooms) == 0 {
+			return fmt.Errorf("no rooms available for volume.set")
+		}
+		for _, room := range rooms {
+			if err := setDeviceVolume(ctx, room, value); err != nil {
+				return err
+			}
+		}
+		return nil
+	case "native":
+		if cfg == nil {
+			return fmt.Errorf("native backend requires config")
+		}
+		if len(rooms) == 0 {
+			return fmt.Errorf("native volume.set requires rooms")
+		}
+		for _, room := range rooms {
+			m := cfg.Native.VolumeShortcuts[room]
+			shortcutName := ""
+			if m != nil {
+				shortcutName = m[fmt.Sprint(value)]
+			}
+			if strings.TrimSpace(shortcutName) == "" {
+				return fmt.Errorf("no native volume mapping for room=%q value=%d", room, value)
+			}
+			if err := runNativeShortcut(ctx, shortcutName); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown backend %q", backend)
+	}
+}
+
+func executeAutomationWait(ctx context.Context, wantState string, timeoutRaw string) error {
+	timeout, err := time.ParseDuration(timeoutRaw)
+	if err != nil {
+		return err
+	}
+	deadline := time.Now().Add(timeout)
+	want := strings.ToLower(strings.TrimSpace(wantState))
+	for {
+		np, err := getNowPlaying(ctx)
+		if err != nil {
+			return err
+		}
+		if strings.ToLower(strings.TrimSpace(np.PlayerState)) == want {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("wait timeout after %s for state=%s", timeout.String(), want)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		sleepFn(1 * time.Second)
 	}
 }
 
@@ -1466,32 +1975,116 @@ func cmdCompletion(args []string) {
 	fmt.Print(script)
 }
 
+func completionData(cfg *native.Config) (aliases []string, rooms []string) {
+	aliasSet := map[string]bool{}
+	roomSet := map[string]bool{}
+	if cfg == nil {
+		return nil, nil
+	}
+	for name, a := range cfg.Aliases {
+		if strings.TrimSpace(name) != "" {
+			aliasSet[name] = true
+		}
+		for _, room := range a.Rooms {
+			room = strings.TrimSpace(room)
+			if room != "" {
+				roomSet[room] = true
+			}
+		}
+	}
+	for _, room := range cfg.Defaults.Rooms {
+		room = strings.TrimSpace(room)
+		if room != "" {
+			roomSet[room] = true
+		}
+	}
+	for room := range cfg.Native.Playlists {
+		if strings.TrimSpace(room) != "" {
+			roomSet[room] = true
+		}
+	}
+	for room := range cfg.Native.VolumeShortcuts {
+		if strings.TrimSpace(room) != "" {
+			roomSet[room] = true
+		}
+	}
+	for a := range aliasSet {
+		aliases = append(aliases, a)
+	}
+	for r := range roomSet {
+		rooms = append(rooms, r)
+	}
+	sort.Strings(aliases)
+	sort.Strings(rooms)
+	return aliases, rooms
+}
+
+func joinBashWords(words []string) string {
+	escaped := make([]string, 0, len(words))
+	for _, w := range words {
+		escaped = append(escaped, strings.ReplaceAll(w, " ", `\ `))
+	}
+	return strings.Join(escaped, " ")
+}
+
+func joinZshWords(words []string) string {
+	quoted := make([]string, 0, len(words))
+	for _, w := range words {
+		quoted = append(quoted, "'"+strings.ReplaceAll(w, "'", `'\''`)+"'")
+	}
+	return strings.Join(quoted, " ")
+}
+
 func completionScript(shell string) (string, error) {
+	cfg, _ := native.LoadConfigOptional()
+	aliases, rooms := completionData(cfg)
+	aliasBash := joinBashWords(aliases)
+	roomBash := joinBashWords(rooms)
+	aliasZsh := joinZshWords(aliases)
+	roomZsh := joinZshWords(rooms)
+
 	switch shell {
 	case "bash":
-		return `# bash completion for homepodctl
+		return fmt.Sprintf(`# bash completion for homepodctl
 _homepodctl_completion() {
   local cur prev
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  local cmds="help version automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+  local aliases="%s"
+  local rooms="%s"
+  local cmds="help version config automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "$cmds --help --verbose" -- "$cur") )
+    return 0
+  fi
+  if [[ "${COMP_WORDS[1]}" == "run" && $COMP_CWORD -eq 2 ]]; then
+    COMPREPLY=( $(compgen -W "$aliases" -- "$cur") )
+    return 0
+  fi
+  if [[ "$prev" == "--room" ]]; then
+    COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
+    return 0
+  fi
+  if [[ "${COMP_WORDS[1]}" == "out" && "${COMP_WORDS[2]}" == "set" ]]; then
+    COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
     return 0
   fi
   COMPREPLY=( $(compgen -W "--json --plain --help --verbose --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
 }
 complete -F _homepodctl_completion homepodctl
-`, nil
+`, aliasBash, roomBash), nil
 	case "zsh":
-		return `#compdef homepodctl
+		return fmt.Sprintf(`#compdef homepodctl
 _homepodctl() {
   local -a commands
   local -a opts
+  local -a aliases
+  local -a rooms
   commands=(
     'help:Show help'
     'version:Show version'
+    'config:Inspect/update config'
     'automation:Run automation routines'
     'completion:Generate shell completion'
     'doctor:Run diagnostics'
@@ -1512,6 +2105,8 @@ _homepodctl() {
     'native-run:Run shortcut'
     'config-init:Write starter config'
   )
+  aliases=(%s)
+  rooms=(%s)
   opts=(
     '--json[output JSON]'
     '--plain[plain output]'
@@ -1533,16 +2128,25 @@ _homepodctl() {
     '--preset[preset name]'
     '--name[routine name]'
   )
+  if [[ $CURRENT -eq 3 && ${words[2]} == run ]]; then
+    _describe -t aliases "alias" aliases
+    return
+  fi
+  if [[ ${words[CURRENT-1]} == --room ]]; then
+    _describe -t rooms "room" rooms
+    return
+  fi
   _arguments $opts '*::command:->command'
   case $state in
     command) _describe -t commands "homepodctl command" commands ;;
   esac
 }
 _homepodctl "$@"
-`, nil
+`, aliasZsh, roomZsh), nil
 	case "fish":
-		return `# fish completion for homepodctl
-complete -c homepodctl -f -a "help version automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+		var fish strings.Builder
+		fish.WriteString(`# fish completion for homepodctl
+complete -c homepodctl -f -a "help version config automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
 complete -c homepodctl -l json
 complete -c homepodctl -l plain
 complete -c homepodctl -l verbose
@@ -1562,7 +2166,15 @@ complete -c homepodctl -l dry-run
 complete -c homepodctl -l no-input
 complete -c homepodctl -l preset
 complete -c homepodctl -l name
-`, nil
+`)
+		for _, a := range aliases {
+			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_subcommand_from run' -a %q\n", a))
+		}
+		for _, r := range rooms {
+			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_argument --room' -a %q\n", r))
+			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_subcommand_from out; and __fish_seen_subcommand_from set' -a %q\n", r))
+		}
+		return fish.String(), nil
 	default:
 		return "", usageErrf("unknown shell %q (expected bash, zsh, or fish)", shell)
 	}

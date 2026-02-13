@@ -1,0 +1,21 @@
+# fish completion for homepodctl
+complete -c homepodctl -f -a "help version config automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+complete -c homepodctl -l json
+complete -c homepodctl -l plain
+complete -c homepodctl -l verbose
+complete -c homepodctl -l backend
+complete -c homepodctl -l room
+complete -c homepodctl -l playlist
+complete -c homepodctl -l playlist-id
+complete -c homepodctl -l shuffle
+complete -c homepodctl -l volume
+complete -c homepodctl -l watch
+complete -c homepodctl -l query
+complete -c homepodctl -l limit
+complete -c homepodctl -l shortcut
+complete -c homepodctl -l include-network
+complete -c homepodctl -l file
+complete -c homepodctl -l dry-run
+complete -c homepodctl -l no-input
+complete -c homepodctl -l preset
+complete -c homepodctl -l name

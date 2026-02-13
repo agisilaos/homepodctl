@@ -1,0 +1,67 @@
+#compdef homepodctl
+_homepodctl() {
+  local -a commands
+  local -a opts
+  local -a aliases
+  local -a rooms
+  commands=(
+    'help:Show help'
+    'version:Show version'
+    'config:Inspect/update config'
+    'automation:Run automation routines'
+    'completion:Generate shell completion'
+    'doctor:Run diagnostics'
+    'devices:List devices'
+    'out:Manage outputs'
+    'playlists:List playlists'
+    'status:Show now playing'
+    'now:Alias of status'
+    'aliases:List aliases'
+    'run:Run alias'
+    'pause:Pause playback'
+    'stop:Stop playback'
+    'next:Next track'
+    'prev:Previous track'
+    'play:Play playlist'
+    'volume:Set volume'
+    'vol:Set volume'
+    'native-run:Run shortcut'
+    'config-init:Write starter config'
+  )
+  aliases=()
+  rooms=()
+  opts=(
+    '--json[output JSON]'
+    '--plain[plain output]'
+    '--verbose[verbose diagnostics]'
+    '--dry-run[preview without side effects]'
+    '--backend[backend]:backend:(airplay native)'
+    '--room[room name]'
+    '--playlist[playlist name]'
+    '--playlist-id[playlist ID]'
+    '--shuffle[shuffle toggle]'
+    '--volume[volume 0-100]'
+    '--watch[poll interval]'
+    '--query[playlist filter]'
+    '--limit[max results]'
+    '--shortcut[shortcut name]'
+    '--include-network[include network address]'
+    '--file[input file]'
+    '--no-input[non-interactive mode]'
+    '--preset[preset name]'
+    '--name[routine name]'
+  )
+  if [[ $CURRENT -eq 3 && ${words[2]} == run ]]; then
+    _describe -t aliases "alias" aliases
+    return
+  fi
+  if [[ ${words[CURRENT-1]} == --room ]]; then
+    _describe -t rooms "room" rooms
+    return
+  fi
+  _arguments $opts '*::command:->command'
+  case $state in
+    command) _describe -t commands "homepodctl command" commands ;;
+  esac
+}
+_homepodctl "$@"

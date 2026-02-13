@@ -12,6 +12,7 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 - CLI: `homepodctl aliases --json` for machine-readable alias listings.
 - CLI: `homepodctl doctor` command with `--json`/`--plain` output for environment/config/backend diagnostics.
 - CLI: `homepodctl completion <bash|zsh|fish>` to generate shell completion scripts.
+- CLI: `homepodctl config validate|get|set` for config inspection/editing of `defaults.*`.
 
 ### Changed
 
@@ -24,6 +25,8 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 - output: added `--plain` support across status/aliases/playlists and action commands for stable script-friendly text mode.
 - safety: added `--dry-run` to mutating commands (`run`, `play`, `volume/vol`, `out set`, `native-run`) with structured action previews.
 - errors: common AppleScript backend failures now map to concise user-friendly messages in non-verbose mode.
+- automation: `homepodctl automation run` now executes steps (not only dry-run), stops on first failure, and marks remaining steps as skipped.
+- completion: generated scripts now include config-derived alias/room suggestions for `run` and room-targeted commands.
 
 ## [v0.1.2] - 2026-02-12
 

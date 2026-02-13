@@ -178,6 +178,15 @@ homepodctl completion bash
 homepodctl completion fish
 ```
 
+Inspect and update config values:
+
+```sh
+homepodctl config validate --json
+homepodctl config get defaults.backend
+homepodctl config set defaults.backend airplay
+homepodctl config set defaults.rooms "Bedroom" "Living Room"
+```
+
 Dry-run mutating commands without side effects:
 
 ```sh
@@ -206,6 +215,7 @@ homepodctl run bed --dry-run --json
 - `homepodctl volume <0-100> [room ...] [--json|--plain|--dry-run]` / `homepodctl vol ...`: output volume
 - `homepodctl aliases [--json|--plain]` / `homepodctl run <alias> [--json|--plain|--dry-run]`: config shortcuts
 - `homepodctl native-run --shortcut <name> [--json|--dry-run]`: run a Shortcut directly
+- `homepodctl config validate|get|set ...`: validate and edit config values (`defaults.*`)
 - `homepodctl config-init`: create starter config
 - `homepodctl doctor`: diagnostics checklist
 - `homepodctl completion <bash|zsh|fish>`: generate completion script

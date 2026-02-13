@@ -1,0 +1,12 @@
+homepodctl automation - declarative playback routines (v1)
+
+Usage:
+  homepodctl automation init --preset <morning|focus|winddown|party|reset> [--name <string>] [--json]
+  homepodctl automation validate -f <file|-> [--json]
+  homepodctl automation plan -f <file|-> [--json]
+  homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]
+
+Notes:
+  - run executes steps sequentially and stops on first failed step.
+  - Use --dry-run to preview resolved actions without executing.
+  - Use --json --no-input for agent-safe usage.

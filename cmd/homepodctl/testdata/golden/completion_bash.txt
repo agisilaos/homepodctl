@@ -1,0 +1,28 @@
+# bash completion for homepodctl
+_homepodctl_completion() {
+  local cur prev
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  local aliases=""
+  local rooms=""
+  local cmds="help version config automation completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+  if [[ $COMP_CWORD -eq 1 ]]; then
+    COMPREPLY=( $(compgen -W "$cmds --help --verbose" -- "$cur") )
+    return 0
+  fi
+  if [[ "${COMP_WORDS[1]}" == "run" && $COMP_CWORD -eq 2 ]]; then
+    COMPREPLY=( $(compgen -W "$aliases" -- "$cur") )
+    return 0
+  fi
+  if [[ "$prev" == "--room" ]]; then
+    COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
+    return 0
+  fi
+  if [[ "${COMP_WORDS[1]}" == "out" && "${COMP_WORDS[2]}" == "set" ]]; then
+    COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
+    return 0
+  fi
+  COMPREPLY=( $(compgen -W "--json --plain --help --verbose --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
+}
+complete -F _homepodctl_completion homepodctl

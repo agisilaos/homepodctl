@@ -1,0 +1,8 @@
+homepodctl run - execute a configured alias
+
+Usage:
+  homepodctl run <alias> [--json] [--plain] [--dry-run]
+
+Notes:
+  - Aliases come from config.json (see homepodctl aliases).
+  - --dry-run resolves backend/rooms/targets without executing backend calls.
