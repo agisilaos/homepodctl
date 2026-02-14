@@ -6,6 +6,13 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ## [Unreleased]
 
+## [v0.1.4] - 2026-02-14
+
+- feat: improve automation docs, completion UX, and backend resilience (2705777)
+- feat(plan): support automation run previews (ed9e981)
+- feat(cli): add schema and plan commands for agent-friendly automation (695430e)
+- refactor(cli): split playback and doctor/completion handlers from main (ec02ccc)
+
 ## [v0.1.3] - 2026-02-13
 
 ### Added
