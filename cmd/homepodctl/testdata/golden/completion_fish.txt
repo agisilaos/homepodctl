@@ -19,3 +19,4 @@ complete -c homepodctl -l dry-run
 complete -c homepodctl -l no-input
 complete -c homepodctl -l preset
 complete -c homepodctl -l name
+complete -c homepodctl -n '__fish_seen_argument --preset' -a "morning focus winddown party reset"

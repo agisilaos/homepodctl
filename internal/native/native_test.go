@@ -1,6 +1,7 @@
 package native
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -86,5 +87,19 @@ func TestLoadConfigOptional_ValidConfig(t *testing.T) {
 	}
 	if len(cfg.Aliases) != 1 {
 		t.Fatalf("len(aliases)=%d, want 1", len(cfg.Aliases))
+	}
+}
+
+func TestShouldRetryShortcut(t *testing.T) {
+	t.Parallel()
+
+	if !shouldRetryShortcut(errors.New("exit"), "The operation timed out. Please try again.") {
+		t.Fatalf("expected timeout output to be retryable")
+	}
+	if shouldRetryShortcut(context.Canceled, "timed out") {
+		t.Fatalf("context cancellation should not be retried")
+	}
+	if shouldRetryShortcut(errors.New("exit"), "No shortcut named Bedroom Play") {
+		t.Fatalf("missing shortcut should not be retried")
 	}
 }

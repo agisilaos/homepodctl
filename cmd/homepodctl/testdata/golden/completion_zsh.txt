@@ -4,6 +4,8 @@ _homepodctl() {
   local -a opts
   local -a aliases
   local -a rooms
+  local -a playlists
+  local -a presets
   commands=(
     'help:Show help'
     'version:Show version'
@@ -32,6 +34,8 @@ _homepodctl() {
   )
   aliases=()
   rooms=()
+  playlists=()
+  presets=('morning' 'focus' 'winddown' 'party' 'reset')
   opts=(
     '--json[output JSON]'
     '--plain[plain output]'
@@ -59,6 +63,14 @@ _homepodctl() {
   fi
   if [[ ${words[CURRENT-1]} == --room ]]; then
     _describe -t rooms "room" rooms
+    return
+  fi
+  if [[ ${words[CURRENT-1]} == --playlist || ( ${words[2]} == play && $CURRENT -eq 3 ) ]]; then
+    _describe -t playlists "playlist" playlists
+    return
+  fi
+  if [[ ${words[CURRENT-1]} == --preset ]]; then
+    _describe -t presets "preset" presets
     return
   fi
   _arguments $opts '*::command:->command'

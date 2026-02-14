@@ -1,6 +1,10 @@
 package music
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"testing"
+)
 
 func TestParseFloatLoose(t *testing.T) {
 	t.Parallel()
@@ -79,5 +83,49 @@ func TestPickBestPlaylist(t *testing.T) {
 	}
 	if best.Name != "Super Chill Mix" {
 		t.Fatalf("best = %q, want %q", best.Name, "Super Chill Mix")
+	}
+}
+
+func TestShouldRetryAppleScript(t *testing.T) {
+	t.Parallel()
+
+	if !shouldRetryAppleScript(errors.New("exit"), "AppleEvent timed out (-1712)") {
+		t.Fatalf("expected timeout output to be retryable")
+	}
+	if shouldRetryAppleScript(context.DeadlineExceeded, "timed out") {
+		t.Fatalf("context deadline should not be retried")
+	}
+	if shouldRetryAppleScript(errors.New("exit"), "Not authorised to send Apple events") {
+		t.Fatalf("auth errors should not be retried")
+	}
+}
+
+func BenchmarkCanonicalizeName(b *testing.B) {
+	in := "Songs  I've been obsessed recently pt. 2 \uFE0F\u200D🎶"
+	for i := 0; i < b.N; i++ {
+		_ = canonicalizeName(in)
+	}
+}
+
+func BenchmarkScoreMatchPlaylistSet(b *testing.B) {
+	query := "chill morning"
+	candidates := []string{
+		"Chill Morning",
+		"Morning Focus",
+		"Deep Focus Mix",
+		"Songs I've been obsessed recently pt. 2",
+		"CHILL",
+		"Chill Vibes",
+		"Morning Chill Set",
+		"Winddown",
+		"Party Starters",
+		"Jazz Study",
+	}
+	needle := canonicalizeName(query)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, c := range candidates {
+			_ = scoreMatch(needle, canonicalizeName(c))
+		}
 	}
 }

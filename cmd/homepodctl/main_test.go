@@ -250,21 +250,24 @@ func TestCompletionData(t *testing.T) {
 			Rooms: []string{"Bedroom"},
 		},
 		Aliases: map[string]native.Alias{
-			"bed": {Rooms: []string{"Bedroom"}},
+			"bed": {Rooms: []string{"Bedroom"}, Playlist: "Morning Chill"},
 			"lr":  {Rooms: []string{"Living Room"}},
 		},
 		Native: native.NativeConfig{
 			Playlists: map[string]map[string]string{
-				"Kitchen": {"X": "Y"},
+				"Kitchen": {"Focus": "Y"},
 			},
 		},
 	}
-	aliases, rooms := completionData(cfg)
+	aliases, rooms, playlists := completionData(cfg)
 	if len(aliases) != 2 || aliases[0] != "bed" || aliases[1] != "lr" {
 		t.Fatalf("aliases=%v", aliases)
 	}
 	if len(rooms) != 3 {
 		t.Fatalf("rooms=%v", rooms)
+	}
+	if len(playlists) != 2 || playlists[0] != "Focus" || playlists[1] != "Morning Chill" {
+		t.Fatalf("playlists=%v", playlists)
 	}
 }
 

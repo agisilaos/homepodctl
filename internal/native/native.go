@@ -3,10 +3,13 @@ package native
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 type Config struct {
@@ -202,14 +205,77 @@ func normalizeConfig(cfg *Config) {
 }
 
 func RunShortcut(ctx context.Context, name string) error {
-	cmd := exec.CommandContext(ctx, "shortcuts", "run", name)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return &ShortcutError{
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		cmd := exec.CommandContext(ctx, "shortcuts", "run", name)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+		trimmed := strings.TrimSpace(string(out))
+		lastErr = &ShortcutError{
 			Name:   name,
 			Err:    err,
-			Output: string(out),
+			Output: trimmed,
+		}
+		if !shouldRetryShortcut(err, trimmed) || attempt == 2 {
+			return lastErr
+		}
+		if err := sleepWithContext(ctx, retryBackoff(attempt)); err != nil {
+			return err
 		}
 	}
-	return nil
+	return lastErr
+}
+
+func shouldRetryShortcut(err error, output string) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(output))
+	if msg == "" {
+		var exitErr *exec.ExitError
+		return errors.As(err, &exitErr)
+	}
+	transientMarkers := []string{
+		"timed out",
+		"temporarily unavailable",
+		"connection invalid",
+		"couldn’t communicate",
+		"couldn't communicate",
+		"try again",
+		"4099",
+	}
+	for _, marker := range transientMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func retryBackoff(attempt int) time.Duration {
+	switch attempt {
+	case 0:
+		return 150 * time.Millisecond
+	default:
+		return 400 * time.Millisecond
+	}
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

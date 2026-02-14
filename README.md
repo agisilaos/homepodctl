@@ -178,6 +178,29 @@ homepodctl completion bash
 homepodctl completion fish
 ```
 
+Install shell completions:
+
+```sh
+# auto-target default path for shell
+homepodctl completion install zsh
+homepodctl completion install bash
+homepodctl completion install fish
+```
+
+Manual load snippets:
+
+```sh
+# zsh (~/.zshrc)
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit && compinit
+
+# bash (~/.bashrc)
+source ~/.local/share/bash-completion/completions/homepodctl
+
+# fish
+# file is auto-loaded from ~/.config/fish/completions/homepodctl.fish
+```
+
 Inspect and update config values:
 
 ```sh
@@ -239,6 +262,7 @@ Design docs:
 - CLI spec: `docs/automation-v1-cli-spec.md`
 - User quickstart: `docs/automation/quickstart-user.md`
 - Agent quickstart: `docs/automation/quickstart-agent.md`
+- Troubleshooting matrix: `docs/automation/troubleshooting.md`
 - Preset templates: `docs/automation/presets/`
 
 Canonical presets included:

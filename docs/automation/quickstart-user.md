@@ -51,3 +51,4 @@ homepodctl automation run -f morning.yaml --dry-run
 - Validation errors: include exact path (for example `steps[1].play.query`).
 - Timeout in `wait` step: increase `timeout` or check Music app state.
 - Device not found: verify exact room names from `homepodctl devices`.
+- See `docs/automation/troubleshooting.md` for a full symptom/fix matrix.

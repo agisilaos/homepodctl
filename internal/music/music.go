@@ -2,11 +2,13 @@ package music
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -454,16 +456,76 @@ end tell
 }
 
 func runAppleScript(ctx context.Context, script string) (string, error) {
-	cmd := exec.CommandContext(ctx, "osascript")
-	cmd.Stdin = strings.NewReader(script)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", &ScriptError{
-			Err:    err,
-			Output: strings.TrimSpace(string(out)),
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		cmd := exec.CommandContext(ctx, "osascript")
+		cmd.Stdin = strings.NewReader(script)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return string(out), nil
+		}
+		trimmed := strings.TrimSpace(string(out))
+		lastErr = &ScriptError{Err: err, Output: trimmed}
+		if !shouldRetryAppleScript(err, trimmed) || attempt == 2 {
+			return "", lastErr
+		}
+		if err := sleepWithContext(ctx, retryBackoff(attempt)); err != nil {
+			return "", err
 		}
 	}
-	return string(out), nil
+	return "", lastErr
+}
+
+func shouldRetryAppleScript(err error, output string) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(output))
+	if msg == "" {
+		var exitErr *exec.ExitError
+		return errors.As(err, &exitErr)
+	}
+	transientMarkers := []string{
+		"connection is invalid",
+		"appleevent timed out",
+		"event timed out",
+		"timed out",
+		"resource busy",
+		"busy",
+		"(-1712)",
+	}
+	for _, marker := range transientMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func retryBackoff(attempt int) time.Duration {
+	switch attempt {
+	case 0:
+		return 150 * time.Millisecond
+	default:
+		return 400 * time.Millisecond
+	}
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func escapeAppleScriptString(s string) string {

@@ -258,11 +258,12 @@ func expandHomePath(path string) string {
 	return filepath.Join(home, strings.TrimPrefix(path, prefix))
 }
 
-func completionData(cfg *native.Config) (aliases []string, rooms []string) {
+func completionData(cfg *native.Config) (aliases []string, rooms []string, playlists []string) {
 	aliasSet := map[string]bool{}
 	roomSet := map[string]bool{}
+	playlistSet := map[string]bool{}
 	if cfg == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	for name, a := range cfg.Aliases {
 		if strings.TrimSpace(name) != "" {
@@ -274,6 +275,10 @@ func completionData(cfg *native.Config) (aliases []string, rooms []string) {
 				roomSet[room] = true
 			}
 		}
+		playlist := strings.TrimSpace(a.Playlist)
+		if playlist != "" {
+			playlistSet[playlist] = true
+		}
 	}
 	for _, room := range cfg.Defaults.Rooms {
 		room = strings.TrimSpace(room)
@@ -284,6 +289,12 @@ func completionData(cfg *native.Config) (aliases []string, rooms []string) {
 	for room := range cfg.Native.Playlists {
 		if strings.TrimSpace(room) != "" {
 			roomSet[room] = true
+		}
+		for playlist := range cfg.Native.Playlists[room] {
+			playlist = strings.TrimSpace(playlist)
+			if playlist != "" {
+				playlistSet[playlist] = true
+			}
 		}
 	}
 	for room := range cfg.Native.VolumeShortcuts {
@@ -297,9 +308,13 @@ func completionData(cfg *native.Config) (aliases []string, rooms []string) {
 	for r := range roomSet {
 		rooms = append(rooms, r)
 	}
+	for p := range playlistSet {
+		playlists = append(playlists, p)
+	}
 	sort.Strings(aliases)
 	sort.Strings(rooms)
-	return aliases, rooms
+	sort.Strings(playlists)
+	return aliases, rooms, playlists
 }
 
 func joinBashWords(words []string) string {
@@ -320,11 +335,13 @@ func joinZshWords(words []string) string {
 
 func completionScript(shell string) (string, error) {
 	cfg, _ := native.LoadConfigOptional()
-	aliases, rooms := completionData(cfg)
+	aliases, rooms, playlists := completionData(cfg)
 	aliasBash := joinBashWords(aliases)
 	roomBash := joinBashWords(rooms)
+	playlistBash := joinBashWords(playlists)
 	aliasZsh := joinZshWords(aliases)
 	roomZsh := joinZshWords(rooms)
+	playlistZsh := joinZshWords(playlists)
 
 	switch shell {
 	case "bash":
@@ -336,6 +353,8 @@ _homepodctl_completion() {
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   local aliases="%s"
   local rooms="%s"
+  local playlists="%s"
+  local presets="morning focus winddown party reset"
   local cmds="help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "$cmds --help --verbose" -- "$cur") )
@@ -349,6 +368,14 @@ _homepodctl_completion() {
     COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
     return 0
   fi
+  if [[ "$prev" == "--playlist" || ( "${COMP_WORDS[1]}" == "play" && $COMP_CWORD -eq 2 ) ]]; then
+    COMPREPLY=( $(compgen -W "$playlists" -- "$cur") )
+    return 0
+  fi
+  if [[ "$prev" == "--preset" ]]; then
+    COMPREPLY=( $(compgen -W "$presets" -- "$cur") )
+    return 0
+  fi
   if [[ "${COMP_WORDS[1]}" == "out" && "${COMP_WORDS[2]}" == "set" ]]; then
     COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
     return 0
@@ -356,7 +383,7 @@ _homepodctl_completion() {
   COMPREPLY=( $(compgen -W "--json --plain --help --verbose --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
 }
 complete -F _homepodctl_completion homepodctl
-`, aliasBash, roomBash), nil
+`, aliasBash, roomBash, playlistBash), nil
 	case "zsh":
 		return fmt.Sprintf(`#compdef homepodctl
 _homepodctl() {
@@ -364,6 +391,8 @@ _homepodctl() {
   local -a opts
   local -a aliases
   local -a rooms
+  local -a playlists
+  local -a presets
   commands=(
     'help:Show help'
     'version:Show version'
@@ -392,6 +421,8 @@ _homepodctl() {
   )
   aliases=(%s)
   rooms=(%s)
+  playlists=(%s)
+  presets=('morning' 'focus' 'winddown' 'party' 'reset')
   opts=(
     '--json[output JSON]'
     '--plain[plain output]'
@@ -421,13 +452,21 @@ _homepodctl() {
     _describe -t rooms "room" rooms
     return
   fi
+  if [[ ${words[CURRENT-1]} == --playlist || ( ${words[2]} == play && $CURRENT -eq 3 ) ]]; then
+    _describe -t playlists "playlist" playlists
+    return
+  fi
+  if [[ ${words[CURRENT-1]} == --preset ]]; then
+    _describe -t presets "preset" presets
+    return
+  fi
   _arguments $opts '*::command:->command'
   case $state in
     command) _describe -t commands "homepodctl command" commands ;;
   esac
 }
 _homepodctl "$@"
-`, aliasZsh, roomZsh), nil
+`, aliasZsh, roomZsh, playlistZsh), nil
 	case "fish":
 		var fish strings.Builder
 		fish.WriteString(`# fish completion for homepodctl
@@ -451,6 +490,7 @@ complete -c homepodctl -l dry-run
 complete -c homepodctl -l no-input
 complete -c homepodctl -l preset
 complete -c homepodctl -l name
+complete -c homepodctl -n '__fish_seen_argument --preset' -a "morning focus winddown party reset"
 `)
 		for _, a := range aliases {
 			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_subcommand_from run' -a %q\n", a))
@@ -458,6 +498,10 @@ complete -c homepodctl -l name
 		for _, r := range rooms {
 			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_argument --room' -a %q\n", r))
 			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_subcommand_from out; and __fish_seen_subcommand_from set' -a %q\n", r))
+		}
+		for _, p := range playlists {
+			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_subcommand_from play' -a %q\n", p))
+			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_argument --playlist' -a %q\n", p))
 		}
 		return fish.String(), nil
 	default:

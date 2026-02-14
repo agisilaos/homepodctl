@@ -6,6 +6,8 @@ _homepodctl_completion() {
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   local aliases=""
   local rooms=""
+  local playlists=""
+  local presets="morning focus winddown party reset"
   local cmds="help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "$cmds --help --verbose" -- "$cur") )
@@ -17,6 +19,14 @@ _homepodctl_completion() {
   fi
   if [[ "$prev" == "--room" ]]; then
     COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
+    return 0
+  fi
+  if [[ "$prev" == "--playlist" || ( "${COMP_WORDS[1]}" == "play" && $COMP_CWORD -eq 2 ) ]]; then
+    COMPREPLY=( $(compgen -W "$playlists" -- "$cur") )
+    return 0
+  fi
+  if [[ "$prev" == "--preset" ]]; then
+    COMPREPLY=( $(compgen -W "$presets" -- "$cur") )
     return 0
   fi
   if [[ "${COMP_WORDS[1]}" == "out" && "${COMP_WORDS[2]}" == "set" ]]; then
