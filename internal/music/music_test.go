@@ -3,6 +3,7 @@ package music
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -182,5 +183,168 @@ func TestRunAppleScript_FailFastOnPermanentError(t *testing.T) {
 	}
 	if attempts != 1 {
 		t.Fatalf("attempts=%d, want 1", attempts)
+	}
+}
+
+func TestListUserPlaylists_QueryAndLimit(t *testing.T) {
+	origExec := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = origExec })
+
+	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
+		return []byte(strings.Join([]string{
+			"AA11\tFocus\ttrue\tfalse",
+			"BB22\tDeep Focus\tfalse\tfalse",
+			"CC33\tParty\tfalse\ttrue",
+			"",
+		}, "\n")), nil
+	}
+
+	got, err := ListUserPlaylists(context.Background(), "focus", 1)
+	if err != nil {
+		t.Fatalf("ListUserPlaylists: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got)=%d, want 1", len(got))
+	}
+	if got[0].PersistentID != "AA11" || got[0].Name != "Focus" || !got[0].Smart || got[0].Genius {
+		t.Fatalf("unexpected playlist: %+v", got[0])
+	}
+}
+
+func TestFindUserPlaylistPersistentIDByName(t *testing.T) {
+	origExec := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = origExec })
+
+	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
+		return []byte(strings.Join([]string{
+			"P001\tFocus\tfalse\tfalse",
+			"P002\tDeep Focus\tfalse\tfalse",
+			"P003\tFocus Mix\tfalse\tfalse",
+			"",
+		}, "\n")), nil
+	}
+
+	id, err := FindUserPlaylistPersistentIDByName(context.Background(), " Focus ")
+	if err != nil {
+		t.Fatalf("exact match: %v", err)
+	}
+	if id != "P001" {
+		t.Fatalf("id=%q, want P001", id)
+	}
+
+	_, err = FindUserPlaylistPersistentIDByName(context.Background(), "fo")
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
+		t.Fatalf("ambiguous query expected error, got %v", err)
+	}
+
+	_, err = FindUserPlaylistPersistentIDByName(context.Background(), "missing")
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "not found") {
+		t.Fatalf("missing query expected not found, got %v", err)
+	}
+}
+
+func TestSearchUserPlaylists_Ranking(t *testing.T) {
+	origExec := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = origExec })
+
+	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
+		return []byte(strings.Join([]string{
+			"P001\tChill\tfalse\tfalse",
+			"P002\tMorning Chill\tfalse\tfalse",
+			"P003\tSuper Chill Mix\tfalse\tfalse",
+			"P004\tParty\tfalse\tfalse",
+			"",
+		}, "\n")), nil
+	}
+
+	got, err := SearchUserPlaylists(context.Background(), "chill")
+	if err != nil {
+		t.Fatalf("SearchUserPlaylists: %v", err)
+	}
+	if len(got) < 3 {
+		t.Fatalf("len(got)=%d, want >=3", len(got))
+	}
+	if got[0].Name != "Chill" {
+		t.Fatalf("top result=%q, want Chill", got[0].Name)
+	}
+}
+
+func TestListAirPlayDevices_ParsesFields(t *testing.T) {
+	origExec := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = origExec })
+
+	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
+		return []byte(strings.Join([]string{
+			"Bedroom\tHomePod\ttrue\ttrue\ttrue\t35\t192.168.1.12\tPID1",
+			"Kitchen\tApple TV\tfalse\tfalse\tfalse\tnot-a-number\t\t",
+			"",
+		}, "\n")), nil
+	}
+
+	got, err := ListAirPlayDevices(context.Background())
+	if err != nil {
+		t.Fatalf("ListAirPlayDevices: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got)=%d, want 2", len(got))
+	}
+	if !got[0].Available || !got[0].Selected || got[0].Volume != 35 {
+		t.Fatalf("unexpected first device: %+v", got[0])
+	}
+	if got[1].Volume != 0 || got[1].NetworkAddress != "" || got[1].PersistentID != "" {
+		t.Fatalf("unexpected second device parsing: %+v", got[1])
+	}
+}
+
+func TestGetNowPlaying_SelectedOutputsAndDeviceFailure(t *testing.T) {
+	origExec := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = origExec })
+
+	calls := 0
+	runAppleScriptExec = func(_ context.Context, script string) ([]byte, error) {
+		calls++
+		if strings.Contains(script, "set ps to (player state as text)") {
+			return []byte("playing\t12.5\ttrue\tall\tFocus\tPL123\tTrack\tArtist\tAlbum\t240.0\tT123"), nil
+		}
+		if strings.Contains(script, "every AirPlay device") {
+			return []byte(strings.Join([]string{
+				"Bedroom\tHomePod\ttrue\ttrue\ttrue\t35\t\tB1",
+				"Kitchen\tHomePod\ttrue\tfalse\tfalse\t30\t\tK1",
+			}, "\n")), nil
+		}
+		t.Fatalf("unexpected script call: %s", script)
+		return nil, nil
+	}
+
+	np, err := GetNowPlaying(context.Background())
+	if err != nil {
+		t.Fatalf("GetNowPlaying: %v", err)
+	}
+	if np.PlayerState != "playing" || np.Track.Name != "Track" || np.Track.DurationS != 240 {
+		t.Fatalf("unexpected now playing payload: %+v", np)
+	}
+	if len(np.Outputs) != 1 || np.Outputs[0].Name != "Bedroom" {
+		t.Fatalf("selected outputs=%+v, want only Bedroom", np.Outputs)
+	}
+	if calls != 2 {
+		t.Fatalf("calls=%d, want 2", calls)
+	}
+
+	runAppleScriptExec = func(_ context.Context, script string) ([]byte, error) {
+		if strings.Contains(script, "set ps to (player state as text)") {
+			return []byte("paused\t0\tfalse\toff\t\t\t\t\t\t0\t"), nil
+		}
+		if strings.Contains(script, "every AirPlay device") {
+			return nil, errors.New("boom")
+		}
+		return nil, errors.New("unexpected script")
+	}
+
+	np, err = GetNowPlaying(context.Background())
+	if err != nil {
+		t.Fatalf("GetNowPlaying with device error: %v", err)
+	}
+	if len(np.Outputs) != 0 {
+		t.Fatalf("outputs=%v, want empty when device listing fails", np.Outputs)
 	}
 }
