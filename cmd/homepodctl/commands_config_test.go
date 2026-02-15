@@ -201,6 +201,100 @@ func TestGetConfigPathValue_Table(t *testing.T) {
 	}
 }
 
+func TestGetConfigPathValue_NilOptionalsAndInvalidShapes(t *testing.T) {
+	t.Parallel()
+
+	cfg := &native.Config{
+		Defaults: native.DefaultsConfig{
+			Backend: "airplay",
+		},
+		Aliases: map[string]native.Alias{
+			"focus": {
+				Playlist: "Focus",
+			},
+		},
+		Native: native.NativeConfig{
+			Playlists:       map[string]map[string]string{},
+			VolumeShortcuts: map[string]map[string]string{},
+		},
+	}
+
+	got, err := getConfigPathValue(cfg, "defaults.volume")
+	if err != nil || got != nil {
+		t.Fatalf("defaults.volume got=%v err=%v, want nil,nil", got, err)
+	}
+	got, err = getConfigPathValue(cfg, "aliases.focus.shuffle")
+	if err != nil || got != nil {
+		t.Fatalf("aliases.focus.shuffle got=%v err=%v, want nil,nil", got, err)
+	}
+	got, err = getConfigPathValue(cfg, "aliases.focus.volume")
+	if err != nil || got != nil {
+		t.Fatalf("aliases.focus.volume got=%v err=%v, want nil,nil", got, err)
+	}
+
+	invalid := []string{
+		"aliases.focus.backend.extra",
+		"native.playlists.Bedroom",
+		"native.playlists..Focus",
+		"native.volumeShortcuts.Bedroom.",
+		"native.volumeShortcuts.Bedroom.30.extra",
+	}
+	for _, key := range invalid {
+		t.Run(key, func(t *testing.T) {
+			if _, err := getConfigPathValue(cfg, key); err == nil {
+				t.Fatalf("expected error for key=%q", key)
+			}
+		})
+	}
+}
+
+func TestSetConfigPathValue_NullsAndInvalidShapes(t *testing.T) {
+	t.Parallel()
+
+	cfg := &native.Config{}
+
+	if err := setConfigPathValue(cfg, "defaults.volume", []string{"null"}); err != nil {
+		t.Fatalf("defaults.volume null: %v", err)
+	}
+	if cfg.Defaults.Volume != nil {
+		t.Fatalf("defaults.volume expected nil, got %v", *cfg.Defaults.Volume)
+	}
+
+	if err := setConfigPathValue(cfg, "aliases.focus.shuffle", []string{"null"}); err != nil {
+		t.Fatalf("aliases.focus.shuffle null: %v", err)
+	}
+	if got := cfg.Aliases["focus"].Shuffle; got != nil {
+		t.Fatalf("aliases.focus.shuffle expected nil, got %v", *got)
+	}
+
+	if err := setConfigPathValue(cfg, "aliases.focus.volume", []string{"null"}); err != nil {
+		t.Fatalf("aliases.focus.volume null: %v", err)
+	}
+	if got := cfg.Aliases["focus"].Volume; got != nil {
+		t.Fatalf("aliases.focus.volume expected nil, got %v", *got)
+	}
+
+	bad := []struct {
+		key    string
+		values []string
+	}{
+		{key: "defaults.backend", values: []string{}},
+		{key: "defaults.shuffle", values: []string{"true", "false"}},
+		{key: "aliases.focus.backend.extra", values: []string{"airplay"}},
+		{key: "native.playlists.Bedroom", values: []string{"Shortcut"}},
+		{key: "native.playlists..Focus", values: []string{"Shortcut"}},
+		{key: "native.volumeShortcuts.Bedroom.200", values: []string{"Shortcut"}},
+		{key: "native.volumeShortcuts.Bedroom.10", values: []string{}},
+	}
+	for _, tc := range bad {
+		t.Run(tc.key, func(t *testing.T) {
+			if err := setConfigPathValue(cfg, tc.key, tc.values); err == nil {
+				t.Fatalf("expected error for key=%q values=%v", tc.key, tc.values)
+			}
+		})
+	}
+}
+
 func TestParseAutomationBytes_JSON(t *testing.T) {
 	t.Parallel()
 
