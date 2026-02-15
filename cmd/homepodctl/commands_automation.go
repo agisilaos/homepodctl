@@ -122,7 +122,7 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 	result.OK = ok
 	emitAutomationResult(result, *jsonOut)
 	if !result.OK {
-		os.Exit(exitGeneric)
+		exitCode(exitGeneric)
 	}
 }
 

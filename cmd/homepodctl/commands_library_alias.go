@@ -18,7 +18,7 @@ func cmdDevices(ctx context.Context, args []string) {
 	includeNetwork := fs.Bool("include-network", false, "include network address (MAC) in JSON output")
 	plain := fs.Bool("plain", false, "plain (no header) output")
 	if err := fs.Parse(args); err != nil {
-		os.Exit(exitUsage)
+		exitCode(exitUsage)
 	}
 
 	devs, err := music.ListAirPlayDevices(ctx)
@@ -45,7 +45,7 @@ func cmdPlaylists(ctx context.Context, args []string) {
 	jsonOut := fs.Bool("json", false, "output JSON")
 	plain := fs.Bool("plain", false, "plain (no header) output")
 	if err := fs.Parse(args); err != nil {
-		os.Exit(exitUsage)
+		exitCode(exitUsage)
 	}
 
 	playlists, err := music.ListUserPlaylists(ctx, *query, *limit)
@@ -70,7 +70,7 @@ func cmdAliases(cfg *native.Config, args []string) {
 	jsonOut := fs.Bool("json", false, "output JSON")
 	plain := fs.Bool("plain", false, "plain (no header) output")
 	if err := fs.Parse(args); err != nil {
-		os.Exit(exitUsage)
+		exitCode(exitUsage)
 	}
 	rows := buildAliasRows(cfg)
 	if len(rows) == 0 {
@@ -254,7 +254,7 @@ func cmdNativeRun(ctx context.Context, args []string) {
 	jsonOut := fs.Bool("json", false, "output JSON")
 	dryRun := fs.Bool("dry-run", false, "resolve and print action without running")
 	if err := fs.Parse(args); err != nil {
-		os.Exit(exitUsage)
+		exitCode(exitUsage)
 	}
 
 	if strings.TrimSpace(*shortcutName) == "" {

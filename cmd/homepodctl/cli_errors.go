@@ -22,7 +22,23 @@ type jsonErrorPayload struct {
 	ExitCode int    `json:"exitCode"`
 }
 
+type cliFatal struct {
+	err error
+}
+
+type cliExit struct {
+	code int
+}
+
 func die(err error) {
+	panic(cliFatal{err: err})
+}
+
+func exitCode(code int) {
+	panic(cliExit{code: code})
+}
+
+func emitAndExit(err error) {
 	code := classifyExitCode(err)
 	if verbose {
 		fmt.Fprintf(os.Stderr, "debug: exit_code=%d error_type=%T\n", code, err)

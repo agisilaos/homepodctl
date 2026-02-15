@@ -64,7 +64,7 @@ func cmdConfigValidate(args []string) {
 	for _, issue := range res.Errors {
 		fmt.Printf("- %s\n", issue)
 	}
-	os.Exit(exitUsage)
+	exitCode(exitUsage)
 }
 
 func cmdConfigGet(args []string) {

@@ -14,7 +14,7 @@ func cmdStatus(ctx context.Context, args []string) {
 	plain := fs.Bool("plain", false, "plain output")
 	watch := fs.Duration("watch", 0, "poll interval (e.g. 1s); 0 prints once")
 	if err := fs.Parse(args); err != nil {
-		os.Exit(exitUsage)
+		exitCode(exitUsage)
 	}
 	debugf("status: json=%t plain=%t watch=%s", *jsonOut, *plain, watch.String())
 	printOnce := func() error {

@@ -89,6 +89,20 @@ func parseGlobalOptions(args []string) (globalOptions, string, []string, error) 
 
 func main() {
 	jsonErrorOut = wantsJSONErrors(os.Args[1:])
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		switch v := r.(type) {
+		case cliFatal:
+			emitAndExit(v.err)
+		case cliExit:
+			os.Exit(v.code)
+		default:
+			panic(r)
+		}
+	}()
 	if runtime.GOOS != "darwin" {
 		die(errors.New("homepodctl only supports macOS (darwin)"))
 	}
@@ -106,7 +120,7 @@ func main() {
 	if opts.help || cmd == "" {
 		usage()
 		if cmd == "" && !opts.help {
-			os.Exit(exitUsage)
+			exitCode(exitUsage)
 		}
 		return
 	}

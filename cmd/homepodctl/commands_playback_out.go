@@ -22,7 +22,7 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 		includeNetwork := fs.Bool("include-network", false, "include network address (MAC) in JSON output")
 		plain := fs.Bool("plain", false, "plain (no header) output")
 		if err := fs.Parse(args[1:]); err != nil {
-			os.Exit(exitUsage)
+			exitCode(exitUsage)
 		}
 		devs, err := music.ListAirPlayDevices(ctx)
 		if err != nil {

@@ -27,7 +27,7 @@ func cmdDoctor(ctx context.Context, args []string) {
 	jsonOut := fs.Bool("json", false, "output JSON")
 	plain := fs.Bool("plain", false, "plain output")
 	if err := fs.Parse(args); err != nil {
-		os.Exit(exitUsage)
+		exitCode(exitUsage)
 	}
 	report := runDoctorChecks(ctx)
 	if *jsonOut {
@@ -36,7 +36,7 @@ func cmdDoctor(ctx context.Context, args []string) {
 		printDoctorReport(report, *plain)
 	}
 	if !report.OK {
-		os.Exit(exitGeneric)
+		exitCode(exitGeneric)
 	}
 }
 

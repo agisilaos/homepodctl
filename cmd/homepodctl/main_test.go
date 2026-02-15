@@ -219,6 +219,34 @@ func TestFriendlyScriptError(t *testing.T) {
 	}
 }
 
+func TestDiePanicsCliFatal(t *testing.T) {
+	defer func() {
+		r := recover()
+		f, ok := r.(cliFatal)
+		if !ok {
+			t.Fatalf("panic type=%T, want cliFatal", r)
+		}
+		if f.err == nil || f.err.Error() != "boom" {
+			t.Fatalf("fatal err=%v", f.err)
+		}
+	}()
+	die(errors.New("boom"))
+}
+
+func TestExitCodePanicsCliExit(t *testing.T) {
+	defer func() {
+		r := recover()
+		e, ok := r.(cliExit)
+		if !ok {
+			t.Fatalf("panic type=%T, want cliExit", r)
+		}
+		if e.code != 7 {
+			t.Fatalf("exit code=%d, want 7", e.code)
+		}
+	}()
+	exitCode(7)
+}
+
 func TestCompletionScript(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

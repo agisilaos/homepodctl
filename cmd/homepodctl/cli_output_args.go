@@ -221,7 +221,7 @@ func parseArgs(args []string) (parsedArgs, []string, error) {
 		}
 		if a == "-h" || a == "--help" {
 			usage()
-			os.Exit(0)
+			exitCode(0)
 		}
 		if !strings.HasPrefix(a, "-") || a == "-" {
 			positionals = append(positionals, a)
