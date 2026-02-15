@@ -1,0 +1,43 @@
+{
+  "name": "action-result",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+      "action": {
+        "type": "string"
+      },
+      "backend": {
+        "type": "string"
+      },
+      "dryRun": {
+        "type": "boolean"
+      },
+      "nowPlaying": {
+        "type": "object"
+      },
+      "ok": {
+        "type": "boolean"
+      },
+      "playlist": {
+        "type": "string"
+      },
+      "playlistId": {
+        "type": "string"
+      },
+      "rooms": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "shortcut": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "ok",
+      "action"
+    ],
+    "type": "object"
+  }
+}

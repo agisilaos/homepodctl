@@ -61,6 +61,15 @@ type ScriptError struct {
 	Output string
 }
 
+var (
+	runAppleScriptExec = func(ctx context.Context, script string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, "osascript")
+		cmd.Stdin = strings.NewReader(script)
+		return cmd.CombinedOutput()
+	}
+	sleepWithContextFn = sleepWithContext
+)
+
 func (e *ScriptError) Error() string {
 	return fmt.Sprintf("osascript failed: %v: %s", e.Err, e.Output)
 }
@@ -458,9 +467,7 @@ end tell
 func runAppleScript(ctx context.Context, script string) (string, error) {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
-		cmd := exec.CommandContext(ctx, "osascript")
-		cmd.Stdin = strings.NewReader(script)
-		out, err := cmd.CombinedOutput()
+		out, err := runAppleScriptExec(ctx, script)
 		if err == nil {
 			return string(out), nil
 		}
@@ -469,7 +476,7 @@ func runAppleScript(ctx context.Context, script string) (string, error) {
 		if !shouldRetryAppleScript(err, trimmed) || attempt == 2 {
 			return "", lastErr
 		}
-		if err := sleepWithContext(ctx, retryBackoff(attempt)); err != nil {
+		if err := sleepWithContextFn(ctx, retryBackoff(attempt)); err != nil {
 			return "", err
 		}
 	}

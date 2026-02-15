@@ -1,0 +1,49 @@
+{
+  "durationMs": 0,
+  "endedAt": "\u003ctimestamp\u003e",
+  "mode": "dry-run",
+  "name": "test-routine",
+  "ok": true,
+  "startedAt": "\u003ctimestamp\u003e",
+  "steps": [
+    {
+      "durationMs": 0,
+      "index": 0,
+      "input": {
+        "rooms": [
+          "Bedroom"
+        ],
+        "type": "out.set"
+      },
+      "ok": true,
+      "resolved": {
+        "backend": "airplay",
+        "rooms": [
+          "Bedroom"
+        ]
+      },
+      "skipped": false,
+      "type": "out.set"
+    },
+    {
+      "durationMs": 0,
+      "index": 1,
+      "input": {
+        "query": "Focus",
+        "type": "play"
+      },
+      "ok": true,
+      "resolved": {
+        "backend": "airplay",
+        "query": "Focus",
+        "rooms": [
+          "Bedroom"
+        ],
+        "shuffle": false
+      },
+      "skipped": false,
+      "type": "play"
+    }
+  ],
+  "version": "1"
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -96,6 +97,107 @@ func TestSetConfigPathValue_RejectsInvalidInput(t *testing.T) {
 	}
 	if err := setConfigPathValue(cfg, "native.volumeShortcuts.Bedroom.xyz", []string{"x"}); err == nil {
 		t.Fatalf("expected invalid volume key error")
+	}
+}
+
+func TestSetConfigPathValue_Table(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		key     string
+		values  []string
+		wantErr bool
+	}{
+		{name: "defaults backend", key: "defaults.backend", values: []string{"native"}},
+		{name: "defaults volume null", key: "defaults.volume", values: []string{"null"}},
+		{name: "defaults rooms", key: "defaults.rooms", values: []string{"Bedroom", "Kitchen"}},
+		{name: "alias playlist id", key: "aliases.evening.playlistId", values: []string{"ABC123"}},
+		{name: "alias shuffle null", key: "aliases.evening.shuffle", values: []string{"null"}},
+		{name: "native playlist mapping", key: "native.playlists.Bedroom.Focus", values: []string{"BR Focus"}},
+		{name: "native volume mapping", key: "native.volumeShortcuts.Bedroom.25", values: []string{"BR Vol 25"}},
+		{name: "bad alias path", key: "aliases..backend", values: []string{"airplay"}, wantErr: true},
+		{name: "bad native volume key", key: "native.volumeShortcuts.Bedroom.xx", values: []string{"x"}, wantErr: true},
+		{name: "unknown path", key: "defaults.nope", values: []string{"x"}, wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &native.Config{
+				Aliases: map[string]native.Alias{},
+				Native: native.NativeConfig{
+					Playlists:       map[string]map[string]string{},
+					VolumeShortcuts: map[string]map[string]string{},
+				},
+			}
+			err := setConfigPathValue(cfg, tc.key, tc.values)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("setConfigPathValue err=%v wantErr=%v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestGetConfigPathValue_Table(t *testing.T) {
+	t.Parallel()
+
+	v := 35
+	b := true
+	cfg := &native.Config{
+		Defaults: native.DefaultsConfig{
+			Backend: "airplay",
+			Rooms:   []string{"Bedroom", "Kitchen"},
+			Volume:  &v,
+			Shuffle: true,
+		},
+		Aliases: map[string]native.Alias{
+			"focus": {
+				Backend:    "native",
+				Rooms:      []string{"Bedroom"},
+				Playlist:   "Deep Focus",
+				PlaylistID: "P123",
+				Shuffle:    &b,
+				Volume:     &v,
+				Shortcut:   "Focus Shortcut",
+			},
+		},
+		Native: native.NativeConfig{
+			Playlists: map[string]map[string]string{
+				"Bedroom": {"Deep Focus": "BR Focus"},
+			},
+			VolumeShortcuts: map[string]map[string]string{
+				"Bedroom": {"35": "BR Vol 35"},
+			},
+		},
+	}
+
+	tests := []struct {
+		key     string
+		want    any
+		wantErr bool
+	}{
+		{key: "defaults.backend", want: "airplay"},
+		{key: "defaults.rooms", want: []string{"Bedroom", "Kitchen"}},
+		{key: "aliases.focus.playlistId", want: "P123"},
+		{key: "native.playlists.Bedroom.Deep Focus", want: "BR Focus"},
+		{key: "native.volumeShortcuts.Bedroom.35", want: "BR Vol 35"},
+		{key: "aliases.missing.backend", wantErr: true},
+		{key: "no.such.path", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.key, func(t *testing.T) {
+			got, err := getConfigPathValue(cfg, tc.key)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("getConfigPathValue err=%v wantErr=%v", err, tc.wantErr)
+			}
+			if tc.wantErr {
+				return
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got=%#v want=%#v", got, tc.want)
+			}
+		})
 	}
 }
 

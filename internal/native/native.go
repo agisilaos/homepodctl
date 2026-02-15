@@ -61,6 +61,14 @@ type ShortcutError struct {
 	Output string
 }
 
+var (
+	runShortcutExec = func(ctx context.Context, name string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, "shortcuts", "run", name)
+		return cmd.CombinedOutput()
+	}
+	sleepWithContextFn = sleepWithContext
+)
+
 func (e *ShortcutError) Error() string {
 	return fmt.Sprintf("shortcuts run %q failed: %v: %s", e.Name, e.Err, e.Output)
 }
@@ -207,8 +215,7 @@ func normalizeConfig(cfg *Config) {
 func RunShortcut(ctx context.Context, name string) error {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
-		cmd := exec.CommandContext(ctx, "shortcuts", "run", name)
-		out, err := cmd.CombinedOutput()
+		out, err := runShortcutExec(ctx, name)
 		if err == nil {
 			return nil
 		}
@@ -221,7 +228,7 @@ func RunShortcut(ctx context.Context, name string) error {
 		if !shouldRetryShortcut(err, trimmed) || attempt == 2 {
 			return lastErr
 		}
-		if err := sleepWithContext(ctx, retryBackoff(attempt)); err != nil {
+		if err := sleepWithContextFn(ctx, retryBackoff(attempt)); err != nil {
 			return err
 		}
 	}

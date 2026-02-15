@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "command": "native-run",
+  "args": [
+    "--shortcut",
+    "Example",
+    "--dry-run",
+    "--json"
+  ],
+  "plan": {
+    "action": "native-run",
+    "dryRun": true,
+    "ok": true,
+    "shortcut": "Example"
+  }
+}

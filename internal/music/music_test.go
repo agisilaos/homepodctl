@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestParseFloatLoose(t *testing.T) {
@@ -127,5 +128,59 @@ func BenchmarkScoreMatchPlaylistSet(b *testing.B) {
 		for _, c := range candidates {
 			_ = scoreMatch(needle, canonicalizeName(c))
 		}
+	}
+}
+
+func TestRunAppleScript_RetriesTransientThenSucceeds(t *testing.T) {
+	origExec := runAppleScriptExec
+	origSleep := sleepWithContextFn
+	t.Cleanup(func() {
+		runAppleScriptExec = origExec
+		sleepWithContextFn = origSleep
+	})
+
+	attempts := 0
+	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
+		attempts++
+		if attempts < 3 {
+			return []byte("AppleEvent timed out (-1712)"), errors.New("boom")
+		}
+		return []byte("ok"), nil
+	}
+	sleepWithContextFn = func(context.Context, time.Duration) error { return nil }
+
+	out, err := runAppleScript(context.Background(), `return "ok"`)
+	if err != nil {
+		t.Fatalf("runAppleScript: %v", err)
+	}
+	if out != "ok" {
+		t.Fatalf("out=%q, want ok", out)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts=%d, want 3", attempts)
+	}
+}
+
+func TestRunAppleScript_FailFastOnPermanentError(t *testing.T) {
+	origExec := runAppleScriptExec
+	origSleep := sleepWithContextFn
+	t.Cleanup(func() {
+		runAppleScriptExec = origExec
+		sleepWithContextFn = origSleep
+	})
+
+	attempts := 0
+	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
+		attempts++
+		return []byte("Not authorised to send Apple events"), errors.New("boom")
+	}
+	sleepWithContextFn = func(context.Context, time.Duration) error { return nil }
+
+	_, err := runAppleScript(context.Background(), `return "nope"`)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts=%d, want 1", attempts)
 	}
 }

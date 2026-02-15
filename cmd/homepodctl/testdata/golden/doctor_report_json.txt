@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "checkedAt": "\u003ctimestamp\u003e",
+  "checks": [
+    {
+      "name": "osascript",
+      "status": "pass",
+      "message": "osascript available"
+    },
+    {
+      "name": "shortcuts",
+      "status": "pass",
+      "message": "shortcuts available"
+    },
+    {
+      "name": "config-path",
+      "status": "pass",
+      "message": "/tmp/homepodctl/config.json"
+    },
+    {
+      "name": "config",
+      "status": "pass",
+      "message": "aliases=1"
+    },
+    {
+      "name": "music-backend",
+      "status": "pass",
+      "message": "Music backend reachable"
+    }
+  ]
+}
