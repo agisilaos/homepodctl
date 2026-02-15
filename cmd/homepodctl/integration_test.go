@@ -116,6 +116,90 @@ func TestCLIDryRunErrorPaths(t *testing.T) {
 	assertUsage([]string{"run", "missing-alias", "--dry-run", "--json"}, "unknown alias")
 	assertUsage([]string{"native-run", "--dry-run", "--json"}, "--shortcut is required")
 }
+
+func TestCLIExitBoundary_JSONAndUsagePaths(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	bin := filepath.Join(t.TempDir(), "homepodctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build cli: %v: %s", err, string(out))
+	}
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	code, out := run()
+	if code != exitUsage {
+		t.Fatalf("empty args exit=%d want=%d out=%s", code, exitUsage, out)
+	}
+	if !strings.Contains(strings.ToLower(out), "usage:") {
+		t.Fatalf("empty args output missing usage text: %s", out)
+	}
+
+	code, out = run("unknown-command", "--json")
+	if code != exitUsage {
+		t.Fatalf("unknown command --json exit=%d want=%d out=%s", code, exitUsage, out)
+	}
+	var usagePayload struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code     string `json:"code"`
+			ExitCode int    `json:"exitCode"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &usagePayload); err != nil {
+		t.Fatalf("parse usage json: %v: %s", err, out)
+	}
+	if usagePayload.OK || usagePayload.Error.Code != "USAGE_ERROR" || usagePayload.Error.ExitCode != exitUsage {
+		t.Fatalf("unexpected usage payload: %+v", usagePayload)
+	}
+
+	code, out = run("config", "validate", "--json")
+	if code != 0 {
+		t.Fatalf("initial config validate exit=%d out=%s", code, out)
+	}
+	var initialValidate struct {
+		OK   bool   `json:"ok"`
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal([]byte(out), &initialValidate); err != nil {
+		t.Fatalf("parse initial validate json: %v: %s", err, out)
+	}
+	if !initialValidate.OK || strings.TrimSpace(initialValidate.Path) == "" {
+		t.Fatalf("unexpected initial validate payload: %+v", initialValidate)
+	}
+
+	cfgPath := initialValidate.Path
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(`{"defaults":{"backend":"broken"}}`), 0o600); err != nil {
+		t.Fatalf("write invalid config: %v", err)
+	}
+
+	code, out = run("config", "validate")
+	if code != exitUsage {
+		t.Fatalf("config validate invalid exit=%d want=%d out=%s", code, exitUsage, out)
+	}
+	if !strings.Contains(strings.ToLower(out), "config invalid") || !strings.Contains(out, "defaults.backend") {
+		t.Fatalf("validate plain output missing expected diagnostics: %s", out)
+	}
+}
 func TestCLIAutomationCommands(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", ".."))
 	bin := filepath.Join(t.TempDir(), "homepodctl")
