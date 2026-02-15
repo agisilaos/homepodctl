@@ -70,10 +70,10 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 			})
 			return
 		}
-		if err := music.SetCurrentAirPlayDevices(ctx, rooms); err != nil {
+		if err := setCurrentOutputs(ctx, rooms); err != nil {
 			die(err)
 		}
-		if np, err := music.GetNowPlaying(ctx); err == nil {
+		if np, err := getNowPlaying(ctx); err == nil {
 			writeActionOutput("out.set", opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,

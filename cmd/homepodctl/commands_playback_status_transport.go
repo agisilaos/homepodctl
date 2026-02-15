@@ -5,8 +5,6 @@ import (
 	"flag"
 	"os"
 	"time"
-
-	"github.com/agisilaos/homepodctl/internal/music"
 )
 
 func cmdStatus(ctx context.Context, args []string) {
@@ -73,7 +71,7 @@ func cmdTransport(ctx context.Context, args []string, action string, fn func(con
 	if err := fn(ctx); err != nil {
 		die(err)
 	}
-	if np, err := music.GetNowPlaying(ctx); err == nil {
+	if np, err := getNowPlaying(ctx); err == nil {
 		writeActionOutput(action, jsonOut, plainOut, actionOutput{NowPlaying: &np})
 		return
 	}
