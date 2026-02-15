@@ -72,7 +72,7 @@ If multiple playlists match, auto-picks the best match; to pick interactively:
 homepodctl play autumn --choose
 ```
 
-See what’s playing (track/album/playlist + outputs):
+See status (playback + outputs/route + backend connectivity/auth):
 
 ```sh
 homepodctl status
@@ -233,7 +233,7 @@ homepodctl run bed --dry-run --json
 - `homepodctl out set <room> ... [--json|--plain|--dry-run]`: select Music.app outputs
 - `homepodctl play <query> [--json|--plain|--dry-run]` / `homepodctl play --playlist-id <id>`: play a playlist
 - `homepodctl playlists --query <text> [--json|--plain]`: search playlists
-- `homepodctl status [--json|--plain]` / `homepodctl now` / `homepodctl status --watch 1s`: now playing
+- `homepodctl status [--json|--plain]` / `homepodctl now` / `homepodctl status --watch 1s`: playback, route, and connectivity status
 - `homepodctl pause|stop|next|prev [--json|--plain]`: transport controls
 - `homepodctl volume <0-100> [room ...] [--json|--plain|--dry-run]` / `homepodctl vol ...`: output volume
 - `homepodctl aliases [--json|--plain]` / `homepodctl run <alias> [--json|--plain|--dry-run]`: config shortcuts

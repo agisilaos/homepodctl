@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"testing"
@@ -262,5 +263,124 @@ func TestRunStatusLoop_PropagatesPrintError(t *testing.T) {
 	err := runStatusLoop(context.Background(), 0, func() error { return errBoom })
 	if !errors.Is(err, errBoom) {
 		t.Fatalf("err=%v, want %v", err, errBoom)
+	}
+}
+
+func TestCollectStatus_Connected(t *testing.T) {
+	origLookPath := lookPath
+	origGetNowPlaying := getNowPlaying
+	t.Cleanup(func() {
+		lookPath = origLookPath
+		getNowPlaying = origGetNowPlaying
+	})
+
+	lookPath = func(string) (string, error) { return "/usr/bin/osascript", nil }
+	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+		return music.NowPlaying{
+			PlayerState: "playing",
+			Track: music.NowPlayingTrack{
+				Name:   "Song",
+				Artist: "Artist",
+				Album:  "Album",
+			},
+			Outputs: []music.AirPlayDevice{
+				{Name: "Bedroom", Volume: 30, Kind: "speaker"},
+				{Name: "Living Room", Volume: 50, Kind: "speaker"},
+			},
+		}, nil
+	}
+
+	res, err := collectStatus(context.Background())
+	if err != nil {
+		t.Fatalf("collectStatus: %v", err)
+	}
+	if !res.OK {
+		t.Fatalf("status ok=false")
+	}
+	if res.Player != "playing" {
+		t.Fatalf("player=%q", res.Player)
+	}
+	if res.Connection.Music != "connected" || res.Connection.Automation != "granted" {
+		t.Fatalf("connection=%+v", res.Connection)
+	}
+	if res.Volume == nil || *res.Volume != 40 {
+		t.Fatalf("volume=%v", res.Volume)
+	}
+	if len(res.Route) != 2 || res.Route[0] != "Bedroom" || res.Route[1] != "Living Room" {
+		t.Fatalf("route=%v", res.Route)
+	}
+}
+
+func TestCollectStatus_MissingOsaScript(t *testing.T) {
+	origLookPath := lookPath
+	t.Cleanup(func() { lookPath = origLookPath })
+	lookPath = func(string) (string, error) { return "", errors.New("missing") }
+
+	res, err := collectStatus(context.Background())
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if res.OK {
+		t.Fatalf("status ok=true")
+	}
+	if res.Connection.Music != "missing" {
+		t.Fatalf("music=%q", res.Connection.Music)
+	}
+}
+
+func TestInferStatusConnection(t *testing.T) {
+	scriptErr := func(output string) error {
+		return &music.ScriptError{Err: errors.New("boom"), Output: output}
+	}
+	tests := []struct {
+		name           string
+		err            error
+		wantMusic      string
+		wantAutomation string
+	}{
+		{name: "auth denied", err: scriptErr("Not authorised to send Apple events"), wantMusic: "connected", wantAutomation: "denied"},
+		{name: "connection invalid", err: scriptErr("Connection Invalid"), wantMusic: "unreachable", wantAutomation: "unknown"},
+		{name: "generic script error", err: scriptErr("random"), wantMusic: "error", wantAutomation: "unknown"},
+		{name: "deadline", err: context.DeadlineExceeded, wantMusic: "unreachable", wantAutomation: "unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := inferStatusConnection(tc.err)
+			if got.Music != tc.wantMusic || got.Automation != tc.wantAutomation {
+				t.Fatalf("got=%+v wantMusic=%s wantAutomation=%s", got, tc.wantMusic, tc.wantAutomation)
+			}
+		})
+	}
+}
+
+func TestCmdStatus_JSONIncludesConnectionState(t *testing.T) {
+	origLookPath := lookPath
+	origGetNowPlaying := getNowPlaying
+	t.Cleanup(func() {
+		lookPath = origLookPath
+		getNowPlaying = origGetNowPlaying
+	})
+
+	lookPath = func(string) (string, error) { return "/usr/bin/osascript", nil }
+	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+		return music.NowPlaying{
+			PlayerState: "paused",
+			Track:       music.NowPlayingTrack{Name: "Song"},
+			Outputs:     []music.AirPlayDevice{{Name: "Bedroom", Volume: 25}},
+		}, nil
+	}
+
+	out := captureStdout(t, func() {
+		cmdStatus(context.Background(), []string{"--json"})
+	})
+	var payload statusResult
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("status json: %v: %s", err, out)
+	}
+	if !payload.OK || payload.Player != "paused" {
+		t.Fatalf("payload=%+v", payload)
+	}
+	if payload.Connection.Music != "connected" {
+		t.Fatalf("connection=%+v", payload.Connection)
 	}
 }

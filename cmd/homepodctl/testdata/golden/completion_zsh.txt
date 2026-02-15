@@ -18,7 +18,7 @@ _homepodctl() {
     'devices:List devices'
     'out:Manage outputs'
     'playlists:List playlists'
-    'status:Show now playing'
+    'status:Show playback, route, and backend status'
     'now:Alias of status'
     'aliases:List aliases'
     'run:Run alias'
