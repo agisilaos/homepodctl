@@ -49,7 +49,7 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 		}
 		backend := strings.TrimSpace(flags.string("backend"))
 		if backend == "" {
-			backend = cfg.Defaults.Backend
+			backend = "airplay"
 		}
 		if backend != "airplay" {
 			die(usageErrf("out set only supports backend=airplay (got %q)", backend))

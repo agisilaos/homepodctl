@@ -39,6 +39,9 @@ func TestCLIDryRunCommands(t *testing.T) {
 	if code, out := run("config-init"); code != 0 {
 		t.Fatalf("config-init exit=%d out=%s", code, out)
 	}
+	if code, out := run("config", "set", "defaults.backend", "native"); code != 0 {
+		t.Fatalf("config set defaults.backend native exit=%d out=%s", code, out)
+	}
 
 	assertDryRun := func(args ...string) {
 		t.Helper()
@@ -56,6 +59,14 @@ func TestCLIDryRunCommands(t *testing.T) {
 	assertDryRun("play", "chill", "--dry-run", "--json")
 	assertDryRun("run", "bed", "--dry-run", "--json")
 	assertDryRun("native-run", "--shortcut", "Example", "--dry-run", "--json")
+
+	code, out := run("out", "set", "Bedroom", "--dry-run", "--json")
+	if code != 0 {
+		t.Fatalf("out set dry-run with defaults.backend=native exit=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, `"backend": "airplay"`) {
+		t.Fatalf("out set backend should be airplay, output=%s", out)
+	}
 }
 
 func TestCLIDryRunErrorPaths(t *testing.T) {
