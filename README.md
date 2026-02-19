@@ -281,8 +281,10 @@ This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `s
   - `brew tap agisilaos/tap`
   - `brew install homepodctl`
 - **From source (recommended while iterating):** `make build`
-- **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` validates changelog/test/vet and produces a version-stamped local binary.
+- **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` validates changelog/test/vet/docs and produces a version-stamped local binary.
+- **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds release artifacts only (no changelog/tag/push/release/tap writes).
 - **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.
+- **Release scripts:** `scripts/release-check.sh` and `scripts/release.sh`
 - **`go install` (after publishing):** `go install github.com/agisilaos/homepodctl/cmd/homepodctl@latest`
 
 ## Disclaimer
