@@ -14,6 +14,22 @@
 
 macOS CLI that controls Apple Music playback and routes audio to HomePods.
 
+## Install
+
+Homebrew (recommended):
+
+```sh
+brew tap agisilaos/tap
+brew install homepodctl
+```
+
+From source:
+
+```sh
+make build
+./homepodctl --help
+```
+
 ## Requirements
 
 - macOS with the Music app
@@ -39,6 +55,8 @@ On first use, macOS may prompt you to allow your terminal (or the built binary) 
 - `out set` changes **Music.app’s current AirPlay outputs** (it does not edit your config).
 - `play` plays a **Music.app user playlist** (by fuzzy search or by ID).
 - `config.json` is only for **defaults and aliases** (so you don’t have to type `--room` every time).
+
+## Usage
 
 ## Quick start (AirPlay)
 
@@ -253,7 +271,9 @@ homepodctl run bed --dry-run --json
 - **Rooms are not flags:** use `--room "Bedroom"` (repeatable), not `--bedroom` / `--Bedroom`.
 - **`out set` doesn’t edit config:** it only changes Music.app’s current outputs. Use `config-init` + edit `defaults.rooms` if you want persistent defaults.
 
-## Automation (v1 design)
+## Docs
+
+### Automation (v1 design)
 
 Automation commands are being designed for routine playback flows and agent usage.
 
@@ -273,14 +293,10 @@ Canonical presets included:
 - `docs/automation/presets/party.yaml`
 - `docs/automation/presets/reset.yaml`
 
-## Distribution
+## Release
 
 This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `shortcuts`).
 
-- **Homebrew (recommended):**
-  - `brew tap agisilaos/tap`
-  - `brew install homepodctl`
-- **From source (recommended while iterating):** `make build`
 - **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` validates changelog/test/vet/docs and produces a version-stamped local binary.
 - **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds release artifacts only (no changelog/tag/push/release/tap writes).
 - **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.

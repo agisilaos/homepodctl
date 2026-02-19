@@ -15,6 +15,9 @@ fi
 [[ -f README.md ]] || die "README.md not found"
 [[ -f CHANGELOG.md ]] || die "CHANGELOG.md not found"
 
+echo "[docs-check] validating shared docs contract"
+python3 ./scripts/docs-contract-check.py
+
 echo "[docs-check] validating release command references"
 grep -Fq 'make release-check VERSION=vX.Y.Z' README.md || die "README missing make release-check usage"
 grep -Fq 'make release-dry-run VERSION=vX.Y.Z' README.md || die "README missing make release-dry-run usage"
