@@ -16,11 +16,11 @@ fi
 [[ -f CHANGELOG.md ]] || die "CHANGELOG.md not found"
 
 echo "[docs-check] validating release command references"
-rg -q 'make release-check VERSION=vX.Y.Z' README.md || die "README missing make release-check usage"
-rg -q 'make release-dry-run VERSION=vX.Y.Z' README.md || die "README missing make release-dry-run usage"
-rg -q 'make release VERSION=vX.Y.Z' README.md || die "README missing make release usage"
-rg -q 'scripts/release-check.sh' README.md || die "README missing scripts/release-check.sh reference"
-rg -q 'scripts/release.sh' README.md || die "README missing scripts/release.sh reference"
+grep -Fq 'make release-check VERSION=vX.Y.Z' README.md || die "README missing make release-check usage"
+grep -Fq 'make release-dry-run VERSION=vX.Y.Z' README.md || die "README missing make release-dry-run usage"
+grep -Fq 'make release VERSION=vX.Y.Z' README.md || die "README missing make release usage"
+grep -Fq 'scripts/release-check.sh' README.md || die "README missing scripts/release-check.sh reference"
+grep -Fq 'scripts/release.sh' README.md || die "README missing scripts/release.sh reference"
 
 echo "[docs-check] validating README command examples are parseable"
 python3 - <<'PY'
