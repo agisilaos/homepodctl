@@ -11,13 +11,7 @@ import (
 )
 
 func TestCLIDryRunCommands(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	home := t.TempDir()
 	run := func(args ...string) (int, string) {
@@ -70,13 +64,7 @@ func TestCLIDryRunCommands(t *testing.T) {
 }
 
 func TestCLIDryRunErrorPaths(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	home := t.TempDir()
 	run := func(args ...string) (int, string) {
@@ -118,13 +106,7 @@ func TestCLIDryRunErrorPaths(t *testing.T) {
 }
 
 func TestCLIExitBoundary_JSONAndUsagePaths(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	home := t.TempDir()
 	run := func(args ...string) (int, string) {
@@ -201,13 +183,7 @@ func TestCLIExitBoundary_JSONAndUsagePaths(t *testing.T) {
 	}
 }
 func TestCLIAutomationCommands(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	home := t.TempDir()
 	run := func(args ...string) (int, string) {
@@ -270,13 +246,7 @@ func TestCLIAutomationCommands(t *testing.T) {
 }
 
 func TestCLIAutomationErrorPaths(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	home := t.TempDir()
 	run := func(args ...string) (int, string) {
@@ -358,13 +328,7 @@ steps:
 	assertValidation([]string{"automation", "plan", "-f", badStep}, "expected playing|paused|stopped")
 }
 func TestCLIConfigCommands(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	home := t.TempDir()
 	run := func(args ...string) (int, string) {
@@ -453,13 +417,7 @@ func TestCLIConfigCommands(t *testing.T) {
 }
 
 func TestCLICompletionInstall(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	home := t.TempDir()
 	run := func(args ...string) (int, string) {
@@ -494,13 +452,7 @@ func TestCLICompletionInstall(t *testing.T) {
 }
 
 func TestCLIPlanCommand(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	run := func(args ...string) (int, string) {
 		t.Helper()
@@ -595,13 +547,7 @@ steps:
 }
 
 func TestCLISchemaCommand(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
+	bin := buildCLIBinary(t)
 
 	run := func(args ...string) (int, string) {
 		t.Helper()

@@ -115,18 +115,6 @@ func TestCLIExitCodeContracts(t *testing.T) {
 	}
 }
 
-func buildCLIBinary(t *testing.T) string {
-	t.Helper()
-	repoRoot := filepath.Clean(filepath.Join("..", ".."))
-	bin := filepath.Join(t.TempDir(), "homepodctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/homepodctl")
-	build.Dir = repoRoot
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cli: %v: %s", err, string(out))
-	}
-	return bin
-}
-
 func runCLI(t *testing.T, bin, home string, args ...string) (int, string) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
