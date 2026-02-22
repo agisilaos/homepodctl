@@ -271,6 +271,16 @@ homepodctl run bed --dry-run --json
 - **Rooms are not flags:** use `--room "Bedroom"` (repeatable), not `--bedroom` / `--Bedroom`.
 - **`out set` doesn’t edit config:** it only changes Music.app’s current outputs. Use `config-init` + edit `defaults.rooms` if you want persistent defaults.
 
+## Release
+
+This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `shortcuts`).
+
+- **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` validates changelog/test/vet/docs and produces a version-stamped local binary.
+- **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds release artifacts only (no changelog/tag/push/release/tap writes).
+- **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.
+- **Release scripts:** `scripts/release-check.sh` and `scripts/release.sh`
+- **`go install` (after publishing):** `go install github.com/agisilaos/homepodctl/cmd/homepodctl@latest`
+
 ## Docs
 
 ### Automation (v1 design)
@@ -292,16 +302,6 @@ Canonical presets included:
 - `docs/automation/presets/winddown.yaml`
 - `docs/automation/presets/party.yaml`
 - `docs/automation/presets/reset.yaml`
-
-## Release
-
-This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `shortcuts`).
-
-- **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` validates changelog/test/vet/docs and produces a version-stamped local binary.
-- **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds release artifacts only (no changelog/tag/push/release/tap writes).
-- **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.
-- **Release scripts:** `scripts/release-check.sh` and `scripts/release.sh`
-- **`go install` (after publishing):** `go install github.com/agisilaos/homepodctl/cmd/homepodctl@latest`
 
 ## Disclaimer
 
