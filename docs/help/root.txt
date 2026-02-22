@@ -1,0 +1,41 @@
+homepodctl - control Apple Music + HomePods (macOS)
+
+Usage:
+  homepodctl [--verbose] --help
+  homepodctl [--verbose] <command> [args]
+  homepodctl --help
+  homepodctl help [<command>]
+  homepodctl version
+  homepodctl config <validate|get|set> [args]
+  homepodctl automation <run|validate|plan|init> [args]
+  homepodctl plan <run|play|volume|vol|native-run|out set|automation run> [args]
+  homepodctl schema [<name>] [--json]
+  homepodctl completion <bash|zsh|fish>
+  homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
+  homepodctl doctor [--json] [--plain]
+  homepodctl devices [--json] [--plain] [--include-network]
+  homepodctl out list [--json] [--plain] [--include-network]
+  homepodctl out set [<room> ...] [--backend airplay] [--json] [--plain] [--dry-run]
+  homepodctl playlists [--query <substr>] [--limit N] [--json] [--plain]
+  homepodctl status [--json] [--plain] [--watch <duration>]
+  homepodctl now [--json] [--plain] [--watch <duration>]
+  homepodctl aliases [--json] [--plain]
+  homepodctl run <alias> [--json] [--plain] [--dry-run]
+  homepodctl pause [--json] [--plain]
+  homepodctl stop [--json] [--plain]
+  homepodctl next [--json] [--plain]
+  homepodctl prev [--json] [--plain]
+  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--json] [--plain] [--dry-run]
+  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--json] [--plain] [--dry-run]
+  homepodctl volume <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
+  homepodctl vol <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
+  homepodctl native-run --shortcut <name> [--json] [--dry-run]
+  homepodctl config-init
+
+Notes:
+  - backend=airplay uses Music.app AirPlay selection (Mac is the sender).
+  - backend=native runs a Shortcut you map in the config file (HomePod plays natively if your Shortcut/Scene is set up that way).
+  - defaults come from config.json (run homepodctl config-init); commands use defaults when flags/args are omitted.
+  - if no rooms are provided and defaults.rooms is empty, airplay commands fall back to Music.app’s currently selected AirPlay outputs (when possible).
+  - --verbose (or HOMEPODCTL_VERBOSE=1) prints backend diagnostics to stderr.
+  - exit codes: 2 usage/flag errors, 3 config errors, 4 backend command failures.
