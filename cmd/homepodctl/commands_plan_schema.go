@@ -148,7 +148,7 @@ func normalizePlanTarget(cmd string, args []string) (string, []string, error) {
 		return cmd, targetArgs, nil
 	case "out":
 		if len(targetArgs) == 0 || strings.TrimSpace(targetArgs[0]) != "set" {
-			return "", nil, usageErrf("plan only supports `out set` (usage: homepodctl plan out set <room> ...)")
+			return "", nil, usageErrf("plan only supports `out set` (usage: homepodctl plan out set --room <name> ...)")
 		}
 		addDryRun()
 		addJSON()

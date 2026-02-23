@@ -69,7 +69,7 @@ homepodctl devices
 Pick outputs to play through (sets Music.app’s current outputs):
 
 ```sh
-homepodctl out set "Bedroom"
+homepodctl out set --room "Bedroom"
 ```
 
 Play a playlist by fuzzy query:
@@ -233,7 +233,7 @@ Dry-run mutating commands without side effects:
 
 ```sh
 homepodctl play chill --dry-run --json
-homepodctl out set "Bedroom" --dry-run --json
+homepodctl out set --room "Bedroom" --dry-run --json
 homepodctl volume 30 --dry-run --json
 homepodctl run bed --dry-run --json
 ```
@@ -249,7 +249,7 @@ homepodctl run bed --dry-run --json
 ## Command cheat sheet
 
 - `homepodctl devices` / `homepodctl out list`: list AirPlay devices
-- `homepodctl out set <room> ... [--json|--plain|--dry-run]`: select Music.app outputs
+- `homepodctl out set --room <name> ... [--json|--plain|--dry-run]`: select Music.app outputs
 - `homepodctl play <query> [--json|--plain|--dry-run]` / `homepodctl play --playlist-id <id>`: play a playlist
 - `homepodctl playlists --query <text> [--json|--plain]`: search playlists
 - `homepodctl status [--json|--plain]` / `homepodctl now` / `homepodctl status --watch 1s`: playback, route, and connectivity status

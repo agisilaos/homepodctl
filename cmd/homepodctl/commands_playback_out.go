@@ -54,12 +54,15 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 		if backend != "airplay" {
 			die(usageErrf("out set only supports backend=airplay (got %q)", backend))
 		}
-		rooms := positionals
+		rooms := append([]string(nil), flags.strings("room")...)
+		if len(rooms) == 0 {
+			rooms = append(rooms, positionals...)
+		}
 		if len(rooms) == 0 {
 			rooms = append(rooms, cfg.Defaults.Rooms...)
 		}
 		if len(rooms) == 0 {
-			die(usageErrf("no rooms provided (usage: homepodctl out set <room> ...; tip: run `homepodctl devices` to list names)"))
+			die(usageErrf("no rooms provided (usage: homepodctl out set --room <name> [--room <name> ...]; tip: run `homepodctl devices` to list names)"))
 		}
 		debugf("out set: backend=%s rooms=%v", backend, rooms)
 		if opts.DryRun {

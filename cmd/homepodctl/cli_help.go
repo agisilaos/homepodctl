@@ -27,7 +27,7 @@ Usage:
   homepodctl doctor [--json] [--plain]
   homepodctl devices [--json] [--plain] [--include-network]
   homepodctl out list [--json] [--plain] [--include-network]
-  homepodctl out set [<room> ...] [--backend airplay] [--json] [--plain] [--dry-run]
+  homepodctl out set [--room <name> ...] [<room> ...] [--backend airplay] [--json] [--plain] [--dry-run]
   homepodctl playlists [--query <substr>] [--limit N] [--json] [--plain]
   homepodctl status [--json] [--plain] [--watch <duration>]
   homepodctl now [--json] [--plain] [--watch <duration>]
@@ -83,16 +83,17 @@ Examples:
 
 Usage:
   homepodctl out list [--json] [--plain] [--include-network]
-  homepodctl out set [<room> ...] [--backend airplay] [--json] [--plain] [--dry-run]
+  homepodctl out set [--room <name> ...] [<room> ...] [--backend airplay] [--json] [--plain] [--dry-run]
 
 Notes:
   - Room names must match the AirPlay device names shown by: homepodctl devices
   - out set changes Music.app’s current outputs; it does not modify config.json.
+  - Prefer repeatable --room flags; positional rooms are kept for compatibility.
 
 Examples:
   homepodctl out list
-  homepodctl out set "Bedroom"
-  homepodctl out set "Bedroom" "Living Room"
+  homepodctl out set --room "Bedroom"
+  homepodctl out set --room "Bedroom" --room "Living Room"
 `)
 	case "volume", "vol":
 		fmt.Fprint(os.Stdout, `homepodctl volume - set output volume

@@ -49,6 +49,7 @@ func TestCLIDryRunCommands(t *testing.T) {
 	}
 
 	assertDryRun("out", "set", "Bedroom", "--dry-run", "--json")
+	assertDryRun("out", "set", "--room", "Bedroom", "--dry-run", "--json")
 	assertDryRun("volume", "30", "--dry-run", "--json")
 	assertDryRun("play", "chill", "--dry-run", "--json")
 	assertDryRun("run", "bed", "--dry-run", "--json")

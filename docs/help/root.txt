@@ -17,7 +17,7 @@ Usage:
   homepodctl doctor [--json] [--plain]
   homepodctl devices [--json] [--plain] [--include-network]
   homepodctl out list [--json] [--plain] [--include-network]
-  homepodctl out set [<room> ...] [--backend airplay] [--json] [--plain] [--dry-run]
+  homepodctl out set [--room <name> ...] [<room> ...] [--backend airplay] [--json] [--plain] [--dry-run]
   homepodctl playlists [--query <substr>] [--limit N] [--json] [--plain]
   homepodctl status [--json] [--plain] [--watch <duration>]
   homepodctl now [--json] [--plain] [--watch <duration>]
