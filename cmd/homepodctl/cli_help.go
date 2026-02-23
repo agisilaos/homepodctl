@@ -24,6 +24,7 @@ Usage:
   homepodctl schema [<name>] [--json]
   homepodctl completion <bash|zsh|fish>
   homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
+  homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]
   homepodctl doctor [--json] [--plain]
   homepodctl devices [--json] [--plain] [--include-network]
   homepodctl out list [--json] [--plain] [--include-network]
@@ -134,6 +135,17 @@ Notes:
 
 Usage:
   homepodctl doctor [--json] [--plain]
+`)
+	case "setup":
+		fmt.Fprint(os.Stdout, `homepodctl setup - onboard and verify local environment
+
+Usage:
+  homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]
+
+Notes:
+  - Ensures config exists (same as config-init behavior).
+  - Runs doctor checks and lists current AirPlay devices.
+  - Optionally updates defaults via --backend and --room.
 `)
 	case "completion":
 		fmt.Fprint(os.Stdout, `homepodctl completion - generate shell completion scripts

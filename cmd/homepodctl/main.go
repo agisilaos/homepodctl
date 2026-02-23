@@ -20,12 +20,14 @@ var (
 	date                 = "unknown"
 	getNowPlaying        = music.GetNowPlaying
 	searchPlaylists      = music.SearchUserPlaylists
+	listAirPlayDevices   = music.ListAirPlayDevices
 	setCurrentOutputs    = music.SetCurrentAirPlayDevices
 	setDeviceVolume      = music.SetAirPlayDeviceVolume
 	setShuffle           = music.SetShuffleEnabled
 	playPlaylistByID     = music.PlayUserPlaylistByPersistentID
 	findPlaylistNameByID = music.FindUserPlaylistNameByPersistentID
 	runNativeShortcut    = native.RunShortcut
+	initConfig           = native.InitConfig
 	stopPlayback         = music.Stop
 	lookPath             = exec.LookPath
 	configPath           = native.ConfigPath
@@ -204,6 +206,8 @@ func main() {
 		cmdNativeRun(ctx, args)
 	case "config-init":
 		cmdConfigInit()
+	case "setup":
+		cmdSetup(ctx, args)
 	default:
 		if !jsonErrorOut {
 			usage()

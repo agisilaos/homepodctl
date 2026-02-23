@@ -58,6 +58,12 @@ On first use, macOS may prompt you to allow your terminal (or the built binary) 
 
 ## Usage
 
+Bootstrap local config + diagnostics:
+
+```sh
+homepodctl setup --room "Bedroom"
+```
+
 ## Quick start (AirPlay)
 
 List available AirPlay outputs (these names are what you pass as “rooms”):
@@ -260,6 +266,7 @@ homepodctl run bed --dry-run --json
 - `homepodctl native-run --shortcut <name> [--json|--dry-run]`: run a Shortcut directly
 - `homepodctl config validate|get|set ...`: validate and edit config values (`defaults.*`)
 - `homepodctl config-init`: create starter config
+- `homepodctl setup [--backend ...] [--room ...]`: bootstrap config + diagnostics + device discovery
 - `homepodctl doctor`: diagnostics checklist
 - `homepodctl completion <bash|zsh|fish>`: generate completion script
 - `homepodctl plan <command> ...`: preview resolved dry-run execution for core actions

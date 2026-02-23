@@ -14,6 +14,7 @@ Usage:
   homepodctl schema [<name>] [--json]
   homepodctl completion <bash|zsh|fish>
   homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
+  homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]
   homepodctl doctor [--json] [--plain]
   homepodctl devices [--json] [--plain] [--include-network]
   homepodctl out list [--json] [--plain] [--include-network]

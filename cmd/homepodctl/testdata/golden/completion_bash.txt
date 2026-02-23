@@ -8,7 +8,7 @@ _homepodctl_completion() {
   local rooms=""
   local playlists=""
   local presets="morning focus winddown party reset"
-  local cmds="help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+  local cmds="help version config automation plan schema completion setup doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "$cmds --help --version --verbose --quiet" -- "$cur") )
     return 0

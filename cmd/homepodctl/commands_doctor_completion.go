@@ -251,7 +251,7 @@ _homepodctl_completion() {
   local rooms="%s"
   local playlists="%s"
   local presets="morning focus winddown party reset"
-  local cmds="help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+  local cmds="help version config automation plan schema completion setup doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "$cmds --help --version --verbose --quiet" -- "$cur") )
     return 0
@@ -297,6 +297,7 @@ _homepodctl() {
     'plan:Preview command execution'
     'schema:Show JSON schemas'
     'completion:Generate shell completion'
+    'setup:Onboard and verify environment'
     'doctor:Run diagnostics'
     'devices:List devices'
     'out:Manage outputs'
@@ -368,7 +369,7 @@ _homepodctl "$@"
 	case "fish":
 		var fish strings.Builder
 		fish.WriteString(`# fish completion for homepodctl
-complete -c homepodctl -f -a "help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+complete -c homepodctl -f -a "help version config automation plan schema completion setup doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
 complete -c homepodctl -l version
 complete -c homepodctl -l json
 complete -c homepodctl -l plain

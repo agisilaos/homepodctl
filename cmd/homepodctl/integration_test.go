@@ -108,6 +108,77 @@ func TestCLIQuietSuppressesDryRunOutput(t *testing.T) {
 	}
 }
 
+func TestCLISetupJSON(t *testing.T) {
+	bin := buildCLIBinary(t)
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	code, out := run("setup", "--json", "--no-input")
+	if code != 0 {
+		t.Fatalf("setup --json exit=%d out=%s", code, out)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("setup json parse: %v out=%s", err, out)
+	}
+	if _, ok := payload["configPath"]; !ok {
+		t.Fatalf("setup payload missing configPath: %v", payload)
+	}
+	if _, ok := payload["doctor"]; !ok {
+		t.Fatalf("setup payload missing doctor: %v", payload)
+	}
+}
+
+func TestCLISetupPersistsDefaults(t *testing.T) {
+	bin := buildCLIBinary(t)
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	code, out := run("setup", "--backend", "native", "--room", "Bedroom", "--json", "--no-input")
+	if code != 0 {
+		t.Fatalf("setup persist defaults exit=%d out=%s", code, out)
+	}
+
+	code, out = run("config", "get", "defaults.backend", "--json")
+	if code != 0 || !strings.Contains(out, `"value": "native"`) {
+		t.Fatalf("defaults.backend not updated exit=%d out=%s", code, out)
+	}
+	code, out = run("config", "get", "defaults.rooms", "--json")
+	if code != 0 || !strings.Contains(out, `"Bedroom"`) {
+		t.Fatalf("defaults.rooms not updated exit=%d out=%s", code, out)
+	}
+}
+
 func TestCLIDryRunErrorPaths(t *testing.T) {
 	bin := buildCLIBinary(t)
 

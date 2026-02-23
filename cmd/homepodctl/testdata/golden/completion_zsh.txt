@@ -14,6 +14,7 @@ _homepodctl() {
     'plan:Preview command execution'
     'schema:Show JSON schemas'
     'completion:Generate shell completion'
+    'setup:Onboard and verify environment'
     'doctor:Run diagnostics'
     'devices:List devices'
     'out:Manage outputs'
