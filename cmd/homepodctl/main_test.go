@@ -118,6 +118,24 @@ func TestParseGlobalOptions_Version(t *testing.T) {
 	}
 }
 
+func TestParseGlobalOptions_Quiet(t *testing.T) {
+	t.Parallel()
+
+	opts, cmd, args, err := parseGlobalOptions([]string{"--quiet", "play", "chill"})
+	if err != nil {
+		t.Fatalf("parseGlobalOptions: %v", err)
+	}
+	if !opts.quiet {
+		t.Fatalf("quiet=false, want true")
+	}
+	if cmd != "play" {
+		t.Fatalf("cmd=%q, want %q", cmd, "play")
+	}
+	if len(args) != 1 || args[0] != "chill" {
+		t.Fatalf("args=%v, want [chill]", args)
+	}
+}
+
 func TestParseGlobalOptions_UnknownFlag(t *testing.T) {
 	t.Parallel()
 

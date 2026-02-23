@@ -54,7 +54,9 @@ func cmdConfigValidate(args []string) {
 		return
 	}
 	if res.OK {
-		fmt.Printf("config ok: %s\n", res.Path)
+		if !quiet {
+			fmt.Printf("config ok: %s\n", res.Path)
+		}
 		return
 	}
 	fmt.Printf("config invalid: %s\n", res.Path)
@@ -134,5 +136,7 @@ func cmdConfigSet(args []string) {
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		die(err)
 	}
-	fmt.Printf("Updated %s (%s)\n", path, key)
+	if !quiet {
+		fmt.Printf("Updated %s (%s)\n", path, key)
+	}
 }

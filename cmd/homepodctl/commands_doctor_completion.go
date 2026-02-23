@@ -61,7 +61,9 @@ func cmdCompletionInstall(args []string) {
 	if err != nil {
 		die(err)
 	}
-	fmt.Printf("Installed %s completion: %s\n", shell, installedPath)
+	if !quiet {
+		fmt.Printf("Installed %s completion: %s\n", shell, installedPath)
+	}
 }
 
 func completionInstallPath(shell string, override string) (string, error) {
@@ -251,7 +253,7 @@ _homepodctl_completion() {
   local presets="morning focus winddown party reset"
   local cmds="help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "$cmds --help --version --verbose" -- "$cur") )
+    COMPREPLY=( $(compgen -W "$cmds --help --version --verbose --quiet" -- "$cur") )
     return 0
   fi
   if [[ "${COMP_WORDS[1]}" == "run" && $COMP_CWORD -eq 2 ]]; then
@@ -274,7 +276,7 @@ _homepodctl_completion() {
     COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
     return 0
   fi
-  COMPREPLY=( $(compgen -W "--json --plain --help --version --verbose --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
+  COMPREPLY=( $(compgen -W "--json --plain --help --version --verbose --quiet --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
 }
 complete -F _homepodctl_completion homepodctl
 `, aliasBash, roomBash, playlistBash), nil
@@ -322,6 +324,7 @@ _homepodctl() {
     '--json[output JSON]'
     '--plain[plain output]'
     '--verbose[verbose diagnostics]'
+    '--quiet[suppress non-essential success output]'
     '--dry-run[preview without side effects]'
     '--backend[backend]:backend:(airplay native)'
     '--room[room name]'
@@ -370,6 +373,7 @@ complete -c homepodctl -l version
 complete -c homepodctl -l json
 complete -c homepodctl -l plain
 complete -c homepodctl -l verbose
+complete -c homepodctl -l quiet
 complete -c homepodctl -l backend
 complete -c homepodctl -l room
 complete -c homepodctl -l playlist

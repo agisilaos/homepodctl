@@ -147,7 +147,7 @@ func TestCmdCompletionDispatch_Direct(t *testing.T) {
 
 func TestUsageOutputContainsCoreCommands(t *testing.T) {
 	out := captureStderr(t, usage)
-	if !strings.Contains(out, "homepodctl [--verbose] <command> [args]") {
+	if !strings.Contains(out, "homepodctl [--verbose] [--quiet] <command> [args]") {
 		t.Fatalf("usage output=%q", out)
 	}
 	if !strings.Contains(out, "automation") || !strings.Contains(out, "config") {

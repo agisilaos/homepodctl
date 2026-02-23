@@ -11,9 +11,9 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `homepodctl - control Apple Music + HomePods (macOS)
 
 Usage:
-  homepodctl [--verbose] --help
-  homepodctl [--verbose] --version
-  homepodctl [--verbose] <command> [args]
+  homepodctl [--verbose] [--quiet] --help
+  homepodctl [--verbose] [--quiet] --version
+  homepodctl [--verbose] [--quiet] <command> [args]
   homepodctl --help
   homepodctl --version
   homepodctl help [<command>]
@@ -50,6 +50,7 @@ Notes:
   - defaults come from config.json (run homepodctl config-init); commands use defaults when flags/args are omitted.
   - if no rooms are provided and defaults.rooms is empty, airplay commands fall back to Music.app’s currently selected AirPlay outputs (when possible).
   - --verbose (or HOMEPODCTL_VERBOSE=1) prints backend diagnostics to stderr.
+  - --quiet suppresses non-essential human-readable success output.
   - exit codes: 2 usage/flag errors, 3 config errors, 4 backend command failures.
 `)
 }

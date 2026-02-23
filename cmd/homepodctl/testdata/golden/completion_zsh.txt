@@ -41,6 +41,7 @@ _homepodctl() {
     '--json[output JSON]'
     '--plain[plain output]'
     '--verbose[verbose diagnostics]'
+    '--quiet[suppress non-essential success output]'
     '--dry-run[preview without side effects]'
     '--backend[backend]:backend:(airplay native)'
     '--room[room name]'

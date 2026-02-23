@@ -266,6 +266,9 @@ func emitAutomationResult(result automationCommandResult, jsonOut bool) {
 		writeJSON(result)
 		return
 	}
+	if quiet {
+		return
+	}
 	fmt.Printf("automation name=%q mode=%s ok=%t steps=%d\n", result.Name, result.Mode, result.OK, len(result.Steps))
 	for _, st := range result.Steps {
 		fmt.Printf("%d/%d %s ok=%t\n", st.Index+1, len(result.Steps), st.Type, st.OK)

@@ -177,6 +177,7 @@ CLI help:
 homepodctl --help
 homepodctl --version
 homepodctl --verbose status
+homepodctl --quiet out set --room "Bedroom" --dry-run
 homepodctl help play
 ```
 

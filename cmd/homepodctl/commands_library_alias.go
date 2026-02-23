@@ -272,7 +272,7 @@ func cmdNativeRun(ctx context.Context, args []string) {
 			DryRun:   *dryRun,
 			Shortcut: *shortcutName,
 		})
-	} else if *dryRun {
+	} else if *dryRun && !quiet {
 		fmt.Printf("dry-run action=native-run shortcut=%q\n", *shortcutName)
 	}
 }
@@ -282,5 +282,7 @@ func cmdConfigInit() {
 	if err != nil {
 		die(err)
 	}
-	fmt.Printf("Wrote %s\n", path)
+	if !quiet {
+		fmt.Printf("Wrote %s\n", path)
+	}
 }

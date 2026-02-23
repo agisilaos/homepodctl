@@ -4,6 +4,7 @@ complete -c homepodctl -l version
 complete -c homepodctl -l json
 complete -c homepodctl -l plain
 complete -c homepodctl -l verbose
+complete -c homepodctl -l quiet
 complete -c homepodctl -l backend
 complete -c homepodctl -l room
 complete -c homepodctl -l playlist

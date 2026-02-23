@@ -33,6 +33,7 @@ var (
 	newStatusTicker      = func(d time.Duration) statusTicker { return realStatusTicker{ticker: time.NewTicker(d)} }
 	sleepFn              = time.Sleep
 	verbose              bool
+	quiet                bool
 	jsonErrorOut         bool
 )
 
@@ -64,6 +65,7 @@ type globalOptions struct {
 	help    bool
 	version bool
 	verbose bool
+	quiet   bool
 }
 
 func parseGlobalOptions(args []string) (globalOptions, string, []string, error) {
@@ -83,6 +85,8 @@ func parseGlobalOptions(args []string) (globalOptions, string, []string, error) 
 			opts.version = true
 		case "-v", "--verbose":
 			opts.verbose = true
+		case "-q", "--quiet":
+			opts.quiet = true
 		default:
 			return globalOptions{}, "", nil, usageErrf("unknown global flag: %s (tip: run `homepodctl --help`)", a)
 		}
@@ -118,6 +122,7 @@ func main() {
 		die(err)
 	}
 	verbose = opts.verbose || envTruthy(os.Getenv("HOMEPODCTL_VERBOSE"))
+	quiet = opts.quiet
 	debugf("command=%q args=%q", cmd, args)
 
 	if opts.version {

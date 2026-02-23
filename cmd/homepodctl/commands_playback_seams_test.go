@@ -79,12 +79,16 @@ func TestCmdOutSetFallsBackToPositionalRooms(t *testing.T) {
 	}
 
 	cfg := &native.Config{Defaults: native.DefaultsConfig{Backend: "airplay"}}
-	cmdOut(context.Background(), cfg, []string{"set", "Bedroom", "--dry-run"})
+	_ = captureStdout(t, func() {
+		cmdOut(context.Background(), cfg, []string{"set", "Bedroom", "--dry-run"})
+	})
 	if len(got) != 0 {
 		t.Fatalf("dry-run should not call backend, got=%v", got)
 	}
 
-	cmdOut(context.Background(), cfg, []string{"set", "Bedroom"})
+	_ = captureStdout(t, func() {
+		cmdOut(context.Background(), cfg, []string{"set", "Bedroom"})
+	})
 	if len(got) != 1 || got[0] != "Bedroom" {
 		t.Fatalf("expected positional room fallback, got=%v", got)
 	}

@@ -76,6 +76,38 @@ func TestCLIGlobalVersionFlag(t *testing.T) {
 	}
 }
 
+func TestCLIQuietSuppressesDryRunOutput(t *testing.T) {
+	bin := buildCLIBinary(t)
+
+	home := t.TempDir()
+	run := func(args ...string) (int, string) {
+		t.Helper()
+		cmd := exec.Command(bin, args...)
+		cmd.Env = append(os.Environ(), "HOME="+home)
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), string(out)
+		}
+		t.Fatalf("run %v: %v", args, err)
+		return 1, ""
+	}
+
+	if code, out := run("config-init"); code != 0 {
+		t.Fatalf("config-init exit=%d out=%s", code, out)
+	}
+	code, out := run("--quiet", "out", "set", "--room", "Bedroom", "--dry-run")
+	if code != 0 {
+		t.Fatalf("quiet out set dry-run exit=%d out=%s", code, out)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Fatalf("expected quiet output to be empty, got: %q", out)
+	}
+}
+
 func TestCLIDryRunErrorPaths(t *testing.T) {
 	bin := buildCLIBinary(t)
 

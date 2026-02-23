@@ -88,6 +88,9 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOut
 		return
 	}
 	if out.NowPlaying != nil {
+		if quiet && !plainOut {
+			return
+		}
 		if plainOut {
 			printNowPlayingPlain(*out.NowPlaying)
 		} else {
@@ -96,6 +99,9 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOut
 		return
 	}
 	if out.DryRun {
+		if quiet {
+			return
+		}
 		fmt.Printf("dry-run action=%s backend=%s rooms=%s playlist=%q playlist_id=%q shortcut=%q\n",
 			action,
 			out.Backend,
