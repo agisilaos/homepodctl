@@ -384,3 +384,12 @@ func TestCmdStatus_JSONIncludesConnectionState(t *testing.T) {
 		t.Fatalf("connection=%+v", payload.Connection)
 	}
 }
+
+func TestFormatStatusSnapshotHeader(t *testing.T) {
+	at := time.Date(2026, 2, 23, 8, 0, 0, 0, time.UTC)
+	got := formatStatusSnapshotHeader(at, 2)
+	want := "--- status snapshot 2 @ 2026-02-23T08:00:00Z ---"
+	if got != want {
+		t.Fatalf("header=%q want=%q", got, want)
+	}
+}

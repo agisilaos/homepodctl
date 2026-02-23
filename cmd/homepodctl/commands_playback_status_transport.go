@@ -222,6 +222,7 @@ func cmdStatus(ctx context.Context, args []string) {
 		watch = parsed
 	}
 	debugf("status: json=%t plain=%t watch=%s", jsonOut, plain, watch.String())
+	snapshots := 0
 	printOnce := func() error {
 		res, err := collectStatus(ctx)
 		if jsonOut {
@@ -229,6 +230,13 @@ func cmdStatus(ctx context.Context, args []string) {
 		} else if plain {
 			printStatusPlain(res)
 		} else {
+			if watch > 0 {
+				if snapshots > 0 {
+					fmt.Println()
+				}
+				snapshots++
+				fmt.Println(formatStatusSnapshotHeader(time.Now(), snapshots))
+			}
 			printStatus(res)
 		}
 		return err
@@ -254,6 +262,10 @@ func runStatusLoop(ctx context.Context, watch time.Duration, printOnce func() er
 		case <-ticker.Chan():
 		}
 	}
+}
+
+func formatStatusSnapshotHeader(now time.Time, sequence int) string {
+	return fmt.Sprintf("--- status snapshot %d @ %s ---", sequence, now.Format(time.RFC3339))
 }
 
 func cmdTransport(ctx context.Context, args []string, action string, fn func(context.Context) error) {
