@@ -8,6 +8,6 @@ Usage:
 
 Notes:
   - run executes steps sequentially and stops on first failed step.
-  - automation run is non-interactive by default (no confirmation prompt).
+  - automation run never prompts for input.
   - Use --dry-run to preview resolved actions without executing.
   - Use --json --no-input for agent-safe usage.

@@ -52,6 +52,24 @@ func TestParseArgs(t *testing.T) {
 	}
 }
 
+func TestParseArgs_ShortFileFlag(t *testing.T) {
+	t.Parallel()
+
+	flags, pos, err := parseArgs([]string{"-f", "routine.yaml", "--json"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+	if got := flags.string("f"); got != "routine.yaml" {
+		t.Fatalf("f=%q, want %q", got, "routine.yaml")
+	}
+	if got, ok, err := flags.boolStrict("json"); err != nil || !ok || !got {
+		t.Fatalf("json=%v ok=%v err=%v, want true true nil", got, ok, err)
+	}
+	if len(pos) != 0 {
+		t.Fatalf("pos=%v, want empty", pos)
+	}
+}
+
 func TestParseArgs_UnknownFlag(t *testing.T) {
 	t.Parallel()
 
@@ -79,6 +97,24 @@ func TestParseGlobalOptions(t *testing.T) {
 	}
 	if len(args) != 1 || args[0] != "--json" {
 		t.Fatalf("args=%v, want [--json]", args)
+	}
+}
+
+func TestParseGlobalOptions_Version(t *testing.T) {
+	t.Parallel()
+
+	opts, cmd, args, err := parseGlobalOptions([]string{"--version"})
+	if err != nil {
+		t.Fatalf("parseGlobalOptions: %v", err)
+	}
+	if !opts.version {
+		t.Fatalf("version=false, want true")
+	}
+	if cmd != "" {
+		t.Fatalf("cmd=%q, want empty", cmd)
+	}
+	if len(args) != 0 {
+		t.Fatalf("args=%v, want empty", args)
 	}
 }
 

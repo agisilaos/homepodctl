@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -84,20 +82,21 @@ func cmdAutomation(ctx context.Context, cfg *native.Config, args []string) {
 }
 
 func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
-	fs := flag.NewFlagSet("automation run", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	filePath := fs.String("file", "", "automation file path or - for stdin")
-	fs.StringVar(filePath, "f", "", "automation file path or - for stdin")
-	dryRun := fs.Bool("dry-run", false, "resolve and print without executing")
-	jsonOut := fs.Bool("json", false, "output JSON")
-	noInput := fs.Bool("no-input", false, "disable prompts (no-op: automation is non-interactive by default)")
-	if err := fs.Parse(args); err != nil {
+	flags, positionals, err := parseArgs(args)
+	if err != nil {
 		die(usageErrf("usage: homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]"))
 	}
-	if strings.TrimSpace(*filePath) == "" {
+	if len(positionals) != 0 {
+		die(usageErrf("usage: homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]"))
+	}
+	filePath, err := parseAutomationFileFlag(flags)
+	if err != nil {
+		die(err)
+	}
+	if strings.TrimSpace(filePath) == "" {
 		die(usageErrf("--file is required"))
 	}
-	doc, err := loadAutomationFile(*filePath)
+	doc, err := loadAutomationFile(filePath)
 	if err != nil {
 		die(err)
 	}
@@ -107,38 +106,51 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 
 	mode := "run"
 	steps := resolveAutomationSteps(cfg, doc)
-	if *dryRun {
+	dryRun, _, err := flags.boolStrict("dry-run")
+	if err != nil {
+		die(err)
+	}
+	jsonOut, _, err := flags.boolStrict("json")
+	if err != nil {
+		die(err)
+	}
+	if dryRun {
 		mode = "dry-run"
 		result := buildAutomationResult(mode, doc, steps)
-		emitAutomationResult(result, *jsonOut)
+		emitAutomationResult(result, jsonOut)
 		return
 	}
-	_ = noInput // accepted for compatibility; automation runs are non-interactive.
+	if _, _, err := flags.boolStrict("no-input"); err != nil {
+		die(err)
+	}
 	// automation runs can include waits; use a longer timeout than one-off commands.
 	runCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 	executed, ok := executeAutomationSteps(runCtx, cfg, doc)
 	result := buildAutomationResult(mode, doc, executed)
 	result.OK = ok
-	emitAutomationResult(result, *jsonOut)
+	emitAutomationResult(result, jsonOut)
 	if !result.OK {
 		exitCode(exitGeneric)
 	}
 }
 
 func cmdAutomationValidate(_ *native.Config, args []string) {
-	fs := flag.NewFlagSet("automation validate", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	filePath := fs.String("file", "", "automation file path or - for stdin")
-	fs.StringVar(filePath, "f", "", "automation file path or - for stdin")
-	jsonOut := fs.Bool("json", false, "output JSON")
-	if err := fs.Parse(args); err != nil {
+	flags, positionals, err := parseArgs(args)
+	if err != nil {
 		die(usageErrf("usage: homepodctl automation validate -f <file|-> [--json]"))
 	}
-	if strings.TrimSpace(*filePath) == "" {
+	if len(positionals) != 0 {
+		die(usageErrf("usage: homepodctl automation validate -f <file|-> [--json]"))
+	}
+	filePath, err := parseAutomationFileFlag(flags)
+	if err != nil {
+		die(err)
+	}
+	if strings.TrimSpace(filePath) == "" {
 		die(usageErrf("--file is required"))
 	}
-	doc, err := loadAutomationFile(*filePath)
+	doc, err := loadAutomationFile(filePath)
 	if err != nil {
 		die(err)
 	}
@@ -146,22 +158,29 @@ func cmdAutomationValidate(_ *native.Config, args []string) {
 		die(err)
 	}
 	result := buildAutomationResult("validate", doc, resolveAutomationSteps(nil, doc))
-	emitAutomationResult(result, *jsonOut)
+	jsonOut, _, err := flags.boolStrict("json")
+	if err != nil {
+		die(err)
+	}
+	emitAutomationResult(result, jsonOut)
 }
 
 func cmdAutomationPlan(cfg *native.Config, args []string) {
-	fs := flag.NewFlagSet("automation plan", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	filePath := fs.String("file", "", "automation file path or - for stdin")
-	fs.StringVar(filePath, "f", "", "automation file path or - for stdin")
-	jsonOut := fs.Bool("json", false, "output JSON")
-	if err := fs.Parse(args); err != nil {
+	flags, positionals, err := parseArgs(args)
+	if err != nil {
 		die(usageErrf("usage: homepodctl automation plan -f <file|-> [--json]"))
 	}
-	if strings.TrimSpace(*filePath) == "" {
+	if len(positionals) != 0 {
+		die(usageErrf("usage: homepodctl automation plan -f <file|-> [--json]"))
+	}
+	filePath, err := parseAutomationFileFlag(flags)
+	if err != nil {
+		die(err)
+	}
+	if strings.TrimSpace(filePath) == "" {
 		die(usageErrf("--file is required"))
 	}
-	doc, err := loadAutomationFile(*filePath)
+	doc, err := loadAutomationFile(filePath)
 	if err != nil {
 		die(err)
 	}
@@ -169,37 +188,62 @@ func cmdAutomationPlan(cfg *native.Config, args []string) {
 		die(err)
 	}
 	result := buildAutomationResult("plan", doc, resolveAutomationSteps(cfg, doc))
-	emitAutomationResult(result, *jsonOut)
-}
-
-func cmdAutomationInit(args []string) {
-	fs := flag.NewFlagSet("automation init", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	preset := fs.String("preset", "", "preset name: morning|focus|winddown|party|reset")
-	name := fs.String("name", "", "override routine name")
-	jsonOut := fs.Bool("json", false, "output JSON metadata")
-	if err := fs.Parse(args); err != nil {
-		die(usageErrf("usage: homepodctl automation init --preset <name> [--name <string>] [--json]"))
-	}
-	if strings.TrimSpace(*preset) == "" {
-		die(usageErrf("--preset is required"))
-	}
-	doc, err := automationPreset(*preset)
+	jsonOut, _, err := flags.boolStrict("json")
 	if err != nil {
 		die(err)
 	}
-	if strings.TrimSpace(*name) != "" {
-		doc.Name = strings.TrimSpace(*name)
+	emitAutomationResult(result, jsonOut)
+}
+
+func cmdAutomationInit(args []string) {
+	flags, positionals, err := parseArgs(args)
+	if err != nil {
+		die(usageErrf("usage: homepodctl automation init --preset <name> [--name <string>] [--json]"))
+	}
+	if len(positionals) != 0 {
+		die(usageErrf("usage: homepodctl automation init --preset <name> [--name <string>] [--json]"))
+	}
+	preset := strings.TrimSpace(flags.string("preset"))
+	if preset == "" {
+		die(usageErrf("--preset is required"))
+	}
+	doc, err := automationPreset(preset)
+	if err != nil {
+		die(err)
+	}
+	name := strings.TrimSpace(flags.string("name"))
+	if name != "" {
+		doc.Name = name
 	}
 	b, err := yaml.Marshal(doc)
 	if err != nil {
 		die(fmt.Errorf("encode preset: %w", err))
 	}
-	if *jsonOut {
-		writeJSON(automationInitResult{Preset: strings.TrimSpace(*preset), Name: doc.Name, Content: string(b)})
+	jsonOut, _, err := flags.boolStrict("json")
+	if err != nil {
+		die(err)
+	}
+	if jsonOut {
+		writeJSON(automationInitResult{Preset: preset, Name: doc.Name, Content: string(b)})
 		return
 	}
 	fmt.Print(string(b))
+}
+
+func parseAutomationFileFlag(flags parsedArgs) (string, error) {
+	path := strings.TrimSpace(flags.string("file"))
+	if path != "" {
+		return path, nil
+	}
+	short := flags.strings("f")
+	if len(short) == 0 {
+		return "", nil
+	}
+	path = strings.TrimSpace(short[len(short)-1])
+	if path == "" {
+		return "", usageErrf("--file is required")
+	}
+	return path, nil
 }
 
 func buildAutomationResult(mode string, doc *automationFile, steps []automationStepResult) automationCommandResult {

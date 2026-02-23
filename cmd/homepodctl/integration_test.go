@@ -63,6 +63,18 @@ func TestCLIDryRunCommands(t *testing.T) {
 	}
 }
 
+func TestCLIGlobalVersionFlag(t *testing.T) {
+	bin := buildCLIBinary(t)
+	cmd := exec.Command(bin, "--version")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("--version failed: %v output=%s", err, string(out))
+	}
+	if !strings.Contains(string(out), "homepodctl ") {
+		t.Fatalf("unexpected --version output: %s", string(out))
+	}
+}
+
 func TestCLIDryRunErrorPaths(t *testing.T) {
 	bin := buildCLIBinary(t)
 

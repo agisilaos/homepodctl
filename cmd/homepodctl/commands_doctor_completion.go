@@ -251,7 +251,7 @@ _homepodctl_completion() {
   local presets="morning focus winddown party reset"
   local cmds="help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "$cmds --help --verbose" -- "$cur") )
+    COMPREPLY=( $(compgen -W "$cmds --help --version --verbose" -- "$cur") )
     return 0
   fi
   if [[ "${COMP_WORDS[1]}" == "run" && $COMP_CWORD -eq 2 ]]; then
@@ -274,7 +274,7 @@ _homepodctl_completion() {
     COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
     return 0
   fi
-  COMPREPLY=( $(compgen -W "--json --plain --help --verbose --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
+  COMPREPLY=( $(compgen -W "--json --plain --help --version --verbose --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
 }
 complete -F _homepodctl_completion homepodctl
 `, aliasBash, roomBash, playlistBash), nil
@@ -318,6 +318,7 @@ _homepodctl() {
   playlists=(%s)
   presets=('morning' 'focus' 'winddown' 'party' 'reset')
   opts=(
+    '--version[show version]'
     '--json[output JSON]'
     '--plain[plain output]'
     '--verbose[verbose diagnostics]'
@@ -365,6 +366,7 @@ _homepodctl "$@"
 		var fish strings.Builder
 		fish.WriteString(`# fish completion for homepodctl
 complete -c homepodctl -f -a "help version config automation plan schema completion doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+complete -c homepodctl -l version
 complete -c homepodctl -l json
 complete -c homepodctl -l plain
 complete -c homepodctl -l verbose

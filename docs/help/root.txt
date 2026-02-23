@@ -2,8 +2,10 @@ homepodctl - control Apple Music + HomePods (macOS)
 
 Usage:
   homepodctl [--verbose] --help
+  homepodctl [--verbose] --version
   homepodctl [--verbose] <command> [args]
   homepodctl --help
+  homepodctl --version
   homepodctl help [<command>]
   homepodctl version
   homepodctl config <validate|get|set> [args]
@@ -25,8 +27,8 @@ Usage:
   homepodctl stop [--json] [--plain]
   homepodctl next [--json] [--plain]
   homepodctl prev [--json] [--plain]
-  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--json] [--plain] [--dry-run]
-  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--json] [--plain] [--dry-run]
+  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
+  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
   homepodctl volume <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
   homepodctl vol <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
   homepodctl native-run --shortcut <name> [--json] [--dry-run]

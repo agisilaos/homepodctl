@@ -37,6 +37,7 @@ _homepodctl() {
   playlists=()
   presets=('morning' 'focus' 'winddown' 'party' 'reset')
   opts=(
+    '--version[show version]'
     '--json[output JSON]'
     '--plain[plain output]'
     '--verbose[verbose diagnostics]'

@@ -67,9 +67,15 @@ func formatClock(seconds float64) string {
 	return fmt.Sprintf("%d:%02d", m, sec)
 }
 
-func choosePlaylist(matches []music.UserPlaylist) (music.UserPlaylist, error) {
+func choosePlaylist(matches []music.UserPlaylist, allowPrompt bool) (music.UserPlaylist, error) {
 	if len(matches) == 1 {
 		return matches[0], nil
+	}
+	if !allowPrompt {
+		return music.UserPlaylist{}, usageErrf("multiple playlists match; non-interactive mode cannot prompt (use --playlist-id or remove --no-input)")
+	}
+	if !isInteractiveStdin() {
+		return music.UserPlaylist{}, usageErrf("multiple playlists match; --choose requires interactive stdin (use --playlist-id or omit --choose)")
 	}
 	fmt.Fprintln(os.Stderr, "Multiple playlists match. Choose one:")
 	for i, p := range matches {
@@ -84,6 +90,14 @@ func choosePlaylist(matches []music.UserPlaylist) (music.UserPlaylist, error) {
 		return music.UserPlaylist{}, fmt.Errorf("invalid selection %d", n)
 	}
 	return matches[n-1], nil
+}
+
+func isInteractiveStdin() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (info.Mode() & os.ModeCharDevice) != 0
 }
 
 func printDevicesTable(w io.Writer, devs []music.AirPlayDevice, plain bool) {

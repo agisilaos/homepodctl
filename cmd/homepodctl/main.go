@@ -62,6 +62,7 @@ const (
 
 type globalOptions struct {
 	help    bool
+	version bool
 	verbose bool
 }
 
@@ -78,6 +79,8 @@ func parseGlobalOptions(args []string) (globalOptions, string, []string, error) 
 		switch a {
 		case "-h", "--help":
 			opts.help = true
+		case "--version":
+			opts.version = true
 		case "-v", "--verbose":
 			opts.verbose = true
 		default:
@@ -116,6 +119,11 @@ func main() {
 	}
 	verbose = opts.verbose || envTruthy(os.Getenv("HOMEPODCTL_VERBOSE"))
 	debugf("command=%q args=%q", cmd, args)
+
+	if opts.version {
+		fmt.Printf("homepodctl %s (%s) %s\n", version, commit, date)
+		return
+	}
 
 	if opts.help || cmd == "" {
 		usage()

@@ -12,8 +12,10 @@ func usage() {
 
 Usage:
   homepodctl [--verbose] --help
+  homepodctl [--verbose] --version
   homepodctl [--verbose] <command> [args]
   homepodctl --help
+  homepodctl --version
   homepodctl help [<command>]
   homepodctl version
   homepodctl config <validate|get|set> [args]
@@ -35,8 +37,8 @@ Usage:
   homepodctl stop [--json] [--plain]
   homepodctl next [--json] [--plain]
   homepodctl prev [--json] [--plain]
-  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--json] [--plain] [--dry-run]
-  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--json] [--plain] [--dry-run]
+  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
+  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
   homepodctl volume <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
   homepodctl vol <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
   homepodctl native-run --shortcut <name> [--json] [--dry-run]
@@ -62,12 +64,13 @@ func cmdHelp(args []string) {
 		fmt.Fprint(os.Stdout, `homepodctl play - play an Apple Music playlist
 
 Usage:
-  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--json] [--plain] [--dry-run]
-  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--json] [--plain] [--dry-run]
+  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
+  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
 
 Notes:
   - <playlist-query> is a fuzzy search against your Music.app user playlists.
   - If --room is omitted, homepodctl uses defaults.rooms from config.json; if that is empty it falls back to Music.app’s currently selected AirPlay outputs (airplay backend).
+  - --choose requires interactive stdin unless --no-input=false.
 
 Examples:
   homepodctl play chill
@@ -159,7 +162,7 @@ Usage:
 
 Notes:
   - run executes steps sequentially and stops on first failed step.
-  - automation run is non-interactive by default (no confirmation prompt).
+  - automation run never prompts for input.
   - Use --dry-run to preview resolved actions without executing.
   - Use --json --no-input for agent-safe usage.
 `)

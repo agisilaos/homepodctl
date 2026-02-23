@@ -175,6 +175,7 @@ CLI help:
 
 ```sh
 homepodctl --help
+homepodctl --version
 homepodctl --verbose status
 homepodctl help play
 ```

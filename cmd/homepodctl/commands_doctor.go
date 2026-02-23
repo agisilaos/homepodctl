@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"time"
 )
 
@@ -22,18 +20,26 @@ type doctorReport struct {
 }
 
 func cmdDoctor(ctx context.Context, args []string) {
-	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	jsonOut := fs.Bool("json", false, "output JSON")
-	plain := fs.Bool("plain", false, "plain output")
-	if err := fs.Parse(args); err != nil {
-		exitCode(exitUsage)
+	flags, positionals, err := parseArgs(args)
+	if err != nil {
+		die(usageErrf("usage: homepodctl doctor [--json] [--plain]"))
+	}
+	if len(positionals) != 0 {
+		die(usageErrf("usage: homepodctl doctor [--json] [--plain]"))
+	}
+	jsonOut, _, err := flags.boolStrict("json")
+	if err != nil {
+		die(err)
+	}
+	plain, _, err := flags.boolStrict("plain")
+	if err != nil {
+		die(err)
 	}
 	report := runDoctorChecks(ctx)
-	if *jsonOut {
+	if jsonOut {
 		writeJSON(report)
 	} else {
-		printDoctorReport(report, *plain)
+		printDoctorReport(report, plain)
 	}
 	if !report.OK {
 		exitCode(exitGeneric)

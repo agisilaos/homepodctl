@@ -51,6 +51,10 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
+	noInput, _, err := flags.boolStrict("no-input")
+	if err != nil {
+		die(err)
+	}
 
 	playlistID := strings.TrimSpace(flags.string("playlist-id"))
 	playlistName := strings.TrimSpace(flags.string("playlist"))
@@ -91,7 +95,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 				die(fmt.Errorf("no playlists match %q (tip: run `homepodctl playlists --query %q`)", query, query))
 			}
 			if choose {
-				selected, err := choosePlaylist(matches)
+				selected, err := choosePlaylist(matches, !noInput)
 				if err != nil {
 					die(err)
 				}

@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -200,27 +198,42 @@ func printStatusPlain(res statusResult) {
 }
 
 func cmdStatus(ctx context.Context, args []string) {
-	fs := flag.NewFlagSet("status", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	jsonOut := fs.Bool("json", false, "output JSON")
-	plain := fs.Bool("plain", false, "plain output")
-	watch := fs.Duration("watch", 0, "poll interval (e.g. 1s); 0 prints once")
-	if err := fs.Parse(args); err != nil {
-		exitCode(exitUsage)
+	flags, positionals, err := parseArgs(args)
+	if err != nil {
+		die(usageErrf("usage: homepodctl status [--json] [--plain] [--watch <duration>]"))
 	}
-	debugf("status: json=%t plain=%t watch=%s", *jsonOut, *plain, watch.String())
+	if len(positionals) != 0 {
+		die(usageErrf("usage: homepodctl status [--json] [--plain] [--watch <duration>]"))
+	}
+	jsonOut, _, err := flags.boolStrict("json")
+	if err != nil {
+		die(err)
+	}
+	plain, _, err := flags.boolStrict("plain")
+	if err != nil {
+		die(err)
+	}
+	watch := time.Duration(0)
+	if watchRaw := strings.TrimSpace(flags.string("watch")); watchRaw != "" {
+		parsed, parseErr := time.ParseDuration(watchRaw)
+		if parseErr != nil {
+			die(usageErrf("invalid --watch %q (expected duration like 1s)", watchRaw))
+		}
+		watch = parsed
+	}
+	debugf("status: json=%t plain=%t watch=%s", jsonOut, plain, watch.String())
 	printOnce := func() error {
 		res, err := collectStatus(ctx)
-		if *jsonOut {
+		if jsonOut {
 			writeJSON(res)
-		} else if *plain {
+		} else if plain {
 			printStatusPlain(res)
 		} else {
 			printStatus(res)
 		}
 		return err
 	}
-	if err := runStatusLoop(ctx, *watch, printOnce); err != nil {
+	if err := runStatusLoop(ctx, watch, printOnce); err != nil {
 		die(err)
 	}
 }

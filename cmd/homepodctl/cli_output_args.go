@@ -228,6 +228,15 @@ func parseArgs(args []string) (parsedArgs, []string, error) {
 			continue
 		}
 
+		if a == "-f" {
+			if i+1 >= len(args) {
+				return parsedArgs{}, nil, usageErrf("-f requires a value")
+			}
+			i++
+			push("f", args[i])
+			continue
+		}
+
 		if strings.HasPrefix(a, "--") {
 			key := strings.TrimPrefix(a, "--")
 			val := ""
@@ -237,7 +246,7 @@ func parseArgs(args []string) (parsedArgs, []string, error) {
 			}
 
 			switch key {
-			case "backend", "playlist", "playlist-id", "volume", "value", "room":
+			case "backend", "playlist", "playlist-id", "volume", "value", "room", "query", "limit", "shortcut", "file", "preset", "name", "path", "watch":
 				if key == "room" {
 					if val == "" {
 						if i+1 >= len(args) {
@@ -257,7 +266,7 @@ func parseArgs(args []string) (parsedArgs, []string, error) {
 					val = args[i]
 				}
 				push(key, val)
-			case "shuffle", "choose", "json", "plain", "dry-run":
+			case "shuffle", "choose", "json", "plain", "dry-run", "no-input", "include-network":
 				if val == "" && i+1 < len(args) && isBoolWord(args[i+1]) {
 					i++
 					val = args[i]

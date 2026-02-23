@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -64,5 +65,41 @@ func TestCmdOutSetUsesSetCurrentOutputsSeam(t *testing.T) {
 	}
 	if !strings.Contains(out, `"action": "out.set"`) {
 		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
+func TestChoosePlaylist_NoInput(t *testing.T) {
+	t.Parallel()
+
+	_, err := choosePlaylist([]music.UserPlaylist{
+		{Name: "Focus", PersistentID: "A"},
+		{Name: "Focus Mix", PersistentID: "B"},
+	}, false)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "non-interactive") {
+		t.Fatalf("expected non-interactive error, got: %v", err)
+	}
+}
+
+func TestChoosePlaylist_RequiresInteractiveStdin(t *testing.T) {
+	t.Parallel()
+
+	orig := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	_ = w.Close()
+	os.Stdin = r
+	t.Cleanup(func() {
+		os.Stdin = orig
+		_ = r.Close()
+	})
+
+	_, err = choosePlaylist([]music.UserPlaylist{
+		{Name: "Focus", PersistentID: "A"},
+		{Name: "Focus Mix", PersistentID: "B"},
+	}, true)
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "interactive stdin") {
+		t.Fatalf("expected interactive stdin error, got: %v", err)
 	}
 }
