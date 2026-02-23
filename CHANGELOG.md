@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on *Keep a Changelog*, and this project adheres to *Semantic Versioning*.
 
+## [v0.2.0] - 2026-02-23
+
+### Added
+
+- Added `homepodctl setup` for first-run onboarding.
+
+### Changed
+
+- Added global `--quiet` mode to suppress non-essential success output in automation flows.
+- Preferred `--room` for `out set` while retaining positional argument compatibility.
+- Improved `status --watch` readability with timestamped snapshots.
+- Improved CLI/global `--version` behavior for consistent non-interactive usage.
+- Expanded integration and command-surface coverage while continuing command handler refactors.
+- Standardized release-check/help-snapshot/docs workflow contracts and repository docs structure.
+
+### Fixed
+
+- Fixed `out set` backend defaulting so it resolves to `airplay` when unset.
+- Removed non-portable `rg` dependency from release checks.
+
 ## [v0.1.4] - 2026-02-14
 
 - feat: improve automation docs, completion UX, and backend resilience (2705777)
