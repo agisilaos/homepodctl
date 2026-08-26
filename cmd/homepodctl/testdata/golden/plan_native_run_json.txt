@@ -2,10 +2,10 @@
   "ok": true,
   "command": "native-run",
   "args": [
+    "--dry-run=true",
+    "--json=true",
     "--shortcut",
-    "Example",
-    "--dry-run",
-    "--json"
+    "Example"
   ],
   "plan": {
     "action": "native-run",

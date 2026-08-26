@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -72,7 +73,8 @@ func TestParsePlanArgsAndNormalizeTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalizePlanTarget: %v", err)
 	}
-	if cmd != "play" || !hasLongFlag(args, "dry-run") || !hasLongFlag(args, "json") {
+	want := []string{"--dry-run=true", "--json=true", "focus"}
+	if cmd != "play" || !slices.Equal(args, want) {
 		t.Fatalf("cmd=%q args=%v", cmd, args)
 	}
 }

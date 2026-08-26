@@ -9,7 +9,7 @@
 | `shortcuts run "<name>" failed` | Shortcut missing or runtime failure | `homepodctl doctor --json` and `shortcuts list` | Fix or recreate shortcut, then retry |
 | `no rooms provided` | Defaults missing and no room flags | `homepodctl config get defaults.rooms` | Set defaults: `homepodctl config set defaults.rooms "Bedroom"` |
 | Automation validation error (e.g. `steps[1].play.query`) | YAML shape/type error | `homepodctl automation validate -f routine.yaml --json` | Correct the reported path/field and re-run validation |
-| `plan target did not return valid JSON` | Target command not run in JSON mode | `homepodctl plan ... --json` | Keep `--json` at the end of `plan` command |
+| `plan target did not return valid JSON` | Target command broke its internal JSON contract | `homepodctl plan ... --json` | Retry with the current version; if it persists, report the target command and arguments |
 
 Use this preflight when uncertain:
 
