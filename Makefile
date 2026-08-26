@@ -1,4 +1,4 @@
-.PHONY: build test vet fmt fmt-check check-help docs-check release-check release release-dry-run
+.PHONY: build test vet fmt fmt-check check-help docs-check verify release-check release release-dry-run
 
 build:
 	go build -o homepodctl ./cmd/homepodctl
@@ -20,6 +20,10 @@ check-help:
 
 docs-check:
 	./scripts/docs-check.sh
+
+verify:
+	./scripts/release-check.sh
+	./scripts/release-check-test.sh
 
 release-check:
 	@if [ -z "$(VERSION)" ]; then echo "VERSION is required (e.g. make release-check VERSION=v0.1.0)"; exit 2; fi
