@@ -341,15 +341,15 @@ func TestCompletionData(t *testing.T) {
 			},
 		},
 	}
-	aliases, rooms, playlists := completionData(cfg)
-	if len(aliases) != 2 || aliases[0] != "bed" || aliases[1] != "lr" {
-		t.Fatalf("aliases=%v", aliases)
+	values := completionData(cfg)
+	if len(values.aliases) != 2 || values.aliases[0] != "bed" || values.aliases[1] != "lr" {
+		t.Fatalf("aliases=%v", values.aliases)
 	}
-	if len(rooms) != 3 {
-		t.Fatalf("rooms=%v", rooms)
+	if len(values.rooms) != 3 {
+		t.Fatalf("rooms=%v", values.rooms)
 	}
-	if len(playlists) != 2 || playlists[0] != "Focus" || playlists[1] != "Morning Chill" {
-		t.Fatalf("playlists=%v", playlists)
+	if len(values.playlists) != 2 || values.playlists[0] != "Focus" || values.playlists[1] != "Morning Chill" {
+		t.Fatalf("playlists=%v", values.playlists)
 	}
 }
 

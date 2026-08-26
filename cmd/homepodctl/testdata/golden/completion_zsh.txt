@@ -6,6 +6,7 @@ _homepodctl() {
   local -a rooms
   local -a playlists
   local -a presets
+  local -a expl
   commands=(
     'help:Show help'
     'version:Show version'
@@ -61,15 +62,18 @@ _homepodctl() {
     '--name[routine name]'
   )
   if [[ $CURRENT -eq 3 && ${words[2]} == run ]]; then
-    _describe -t aliases "alias" aliases
+    _description aliases expl "alias"
+    compadd "$expl[@]" -a aliases
     return
   fi
   if [[ ${words[CURRENT-1]} == --room ]]; then
-    _describe -t rooms "room" rooms
+    _description rooms expl "room"
+    compadd "$expl[@]" -a rooms
     return
   fi
   if [[ ${words[CURRENT-1]} == --playlist || ( ${words[2]} == play && $CURRENT -eq 3 ) ]]; then
-    _describe -t playlists "playlist" playlists
+    _description playlists expl "playlist"
+    compadd "$expl[@]" -a playlists
     return
   fi
   if [[ ${words[CURRENT-1]} == --preset ]]; then

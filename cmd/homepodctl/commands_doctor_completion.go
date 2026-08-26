@@ -154,12 +154,18 @@ func expandHomePath(path string) string {
 	return filepath.Join(home, strings.TrimPrefix(path, prefix))
 }
 
-func completionData(cfg *native.Config) (aliases []string, rooms []string, playlists []string) {
+type completionValues struct {
+	aliases   []string
+	rooms     []string
+	playlists []string
+}
+
+func completionData(cfg *native.Config) completionValues {
 	aliasSet := map[string]bool{}
 	roomSet := map[string]bool{}
 	playlistSet := map[string]bool{}
 	if cfg == nil {
-		return nil, nil, nil
+		return completionValues{}
 	}
 	for name, a := range cfg.Aliases {
 		if strings.TrimSpace(name) != "" {
@@ -198,90 +204,167 @@ func completionData(cfg *native.Config) (aliases []string, rooms []string, playl
 			roomSet[room] = true
 		}
 	}
-	for a := range aliasSet {
-		aliases = append(aliases, a)
+	values := completionValues{
+		aliases:   make([]string, 0, len(aliasSet)),
+		rooms:     make([]string, 0, len(roomSet)),
+		playlists: make([]string, 0, len(playlistSet)),
 	}
-	for r := range roomSet {
-		rooms = append(rooms, r)
+	for alias := range aliasSet {
+		values.aliases = append(values.aliases, alias)
 	}
-	for p := range playlistSet {
-		playlists = append(playlists, p)
+	for room := range roomSet {
+		values.rooms = append(values.rooms, room)
 	}
-	sort.Strings(aliases)
-	sort.Strings(rooms)
-	sort.Strings(playlists)
-	return aliases, rooms, playlists
+	for playlist := range playlistSet {
+		values.playlists = append(values.playlists, playlist)
+	}
+	sort.Strings(values.aliases)
+	sort.Strings(values.rooms)
+	sort.Strings(values.playlists)
+	return values
 }
 
-func joinBashWords(words []string) string {
-	escaped := make([]string, 0, len(words))
-	for _, w := range words {
-		escaped = append(escaped, strings.ReplaceAll(w, " ", `\ `))
+func validateCompletionCandidates(kind string, candidates []string) error {
+	for _, candidate := range candidates {
+		if strings.ContainsRune(candidate, '\x00') {
+			return fmt.Errorf("%s completion candidate %q contains a NUL byte", kind, candidate)
+		}
 	}
-	return strings.Join(escaped, " ")
+	return nil
 }
 
-func joinZshWords(words []string) string {
-	quoted := make([]string, 0, len(words))
-	for _, w := range words {
-		quoted = append(quoted, "'"+strings.ReplaceAll(w, "'", `'\''`)+"'")
+func (values completionValues) validate() error {
+	if err := validateCompletionCandidates("alias", values.aliases); err != nil {
+		return err
 	}
-	return strings.Join(quoted, " ")
+	if err := validateCompletionCandidates("room", values.rooms); err != nil {
+		return err
+	}
+	return validateCompletionCandidates("playlist", values.playlists)
+}
+
+func validateFishCompletionCandidates(kind string, candidates []string) error {
+	for _, candidate := range candidates {
+		if strings.ContainsRune(candidate, '\t') {
+			return fmt.Errorf("%s completion candidate %q contains a tab, which Fish reserves for descriptions", kind, candidate)
+		}
+	}
+	return nil
+}
+
+func (values completionValues) validateFish() error {
+	if err := validateFishCompletionCandidates("alias", values.aliases); err != nil {
+		return err
+	}
+	if err := validateFishCompletionCandidates("room", values.rooms); err != nil {
+		return err
+	}
+	return validateFishCompletionCandidates("playlist", values.playlists)
 }
 
 func completionScript(shell string) (string, error) {
-	cfg, _ := native.LoadConfigOptional()
-	aliases, rooms, playlists := completionData(cfg)
-	aliasBash := joinBashWords(aliases)
-	roomBash := joinBashWords(rooms)
-	playlistBash := joinBashWords(playlists)
-	aliasZsh := joinZshWords(aliases)
-	roomZsh := joinZshWords(rooms)
-	playlistZsh := joinZshWords(playlists)
+	cfg, err := native.LoadConfigOptional()
+	if err != nil {
+		return "", err
+	}
+	return renderCompletion(shell, completionData(cfg))
+}
+
+func renderCompletion(shell string, values completionValues) (string, error) {
+	if err := values.validate(); err != nil {
+		return "", err
+	}
 
 	switch shell {
 	case "bash":
-		return fmt.Sprintf(`# bash completion for homepodctl
+		return renderBashCompletion(values), nil
+	case "zsh":
+		return renderZshCompletion(values), nil
+	case "fish":
+		if err := values.validateFish(); err != nil {
+			return "", err
+		}
+		return renderFishCompletion(values), nil
+	default:
+		return "", usageErrf("unknown shell %q (expected bash, zsh, or fish)", shell)
+	}
+}
+
+func bashArrayLiteral(values []string) string {
+	literals := make([]string, 0, len(values))
+	for _, value := range values {
+		literals = append(literals, "'"+strings.ReplaceAll(value, "'", `'\''`)+"'")
+	}
+	return strings.Join(literals, " ")
+}
+
+// Bash completion values stay in arrays and go straight to COMPREPLY. Using
+// compgen -W here would parse and expand config-derived values a second time.
+func renderBashCompletion(values completionValues) string {
+	return fmt.Sprintf(`# bash completion for homepodctl
+_homepodctl_complete_values() {
+  local current="$1"
+  shift
+  local candidate
+  COMPREPLY=()
+  for candidate in "$@"; do
+    if [[ "$candidate" == "$current"* ]]; then
+      COMPREPLY+=("$candidate")
+    fi
+  done
+}
+
 _homepodctl_completion() {
   local cur prev
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  local aliases="%s"
-  local rooms="%s"
-  local playlists="%s"
-  local presets="morning focus winddown party reset"
-  local cmds="help version config automation plan schema completion setup doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+  local -a aliases=(%s)
+  local -a rooms=(%s)
+  local -a playlists=(%s)
+  local -a presets=('morning' 'focus' 'winddown' 'party' 'reset')
+  local -a commands=('help' 'version' 'config' 'automation' 'plan' 'schema' 'completion' 'setup' 'doctor' 'devices' 'out' 'playlists' 'status' 'now' 'aliases' 'run' 'pause' 'stop' 'next' 'prev' 'play' 'volume' 'vol' 'native-run' 'config-init' '--help' '--version' '--verbose' '--quiet')
+  local -a options=('--json' '--plain' '--help' '--version' '--verbose' '--quiet' '--backend' '--room' '--playlist' '--playlist-id' '--shuffle' '--volume' '--watch' '--query' '--limit' '--shortcut' '--include-network' '--file' '--dry-run' '--no-input' '--preset' '--name')
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "$cmds --help --version --verbose --quiet" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${commands[@]}"
     return 0
   fi
   if [[ "${COMP_WORDS[1]}" == "run" && $COMP_CWORD -eq 2 ]]; then
-    COMPREPLY=( $(compgen -W "$aliases" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${aliases[@]}"
     return 0
   fi
   if [[ "$prev" == "--room" ]]; then
-    COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${rooms[@]}"
     return 0
   fi
   if [[ "$prev" == "--playlist" || ( "${COMP_WORDS[1]}" == "play" && $COMP_CWORD -eq 2 ) ]]; then
-    COMPREPLY=( $(compgen -W "$playlists" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${playlists[@]}"
     return 0
   fi
   if [[ "$prev" == "--preset" ]]; then
-    COMPREPLY=( $(compgen -W "$presets" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${presets[@]}"
     return 0
   fi
   if [[ "${COMP_WORDS[1]}" == "out" && "${COMP_WORDS[2]}" == "set" ]]; then
-    COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${rooms[@]}"
     return 0
   fi
-  COMPREPLY=( $(compgen -W "--json --plain --help --version --verbose --quiet --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
+  _homepodctl_complete_values "$cur" "${options[@]}"
 }
 complete -F _homepodctl_completion homepodctl
-`, aliasBash, roomBash, playlistBash), nil
-	case "zsh":
-		return fmt.Sprintf(`#compdef homepodctl
+`, bashArrayLiteral(values.aliases), bashArrayLiteral(values.rooms), bashArrayLiteral(values.playlists))
+}
+
+func zshArrayLiteral(values []string) string {
+	literals := make([]string, 0, len(values))
+	for _, value := range values {
+		literals = append(literals, "'"+strings.ReplaceAll(value, "'", `'\''`)+"'")
+	}
+	return strings.Join(literals, " ")
+}
+
+func renderZshCompletion(values completionValues) string {
+	return fmt.Sprintf(`#compdef homepodctl
 _homepodctl() {
   local -a commands
   local -a opts
@@ -289,6 +372,7 @@ _homepodctl() {
   local -a rooms
   local -a playlists
   local -a presets
+  local -a expl
   commands=(
     'help:Show help'
     'version:Show version'
@@ -344,15 +428,18 @@ _homepodctl() {
     '--name[routine name]'
   )
   if [[ $CURRENT -eq 3 && ${words[2]} == run ]]; then
-    _describe -t aliases "alias" aliases
+    _description aliases expl "alias"
+    compadd "$expl[@]" -a aliases
     return
   fi
   if [[ ${words[CURRENT-1]} == --room ]]; then
-    _describe -t rooms "room" rooms
+    _description rooms expl "room"
+    compadd "$expl[@]" -a rooms
     return
   fi
   if [[ ${words[CURRENT-1]} == --playlist || ( ${words[2]} == play && $CURRENT -eq 3 ) ]]; then
-    _describe -t playlists "playlist" playlists
+    _description playlists expl "playlist"
+    compadd "$expl[@]" -a playlists
     return
   fi
   if [[ ${words[CURRENT-1]} == --preset ]]; then
@@ -365,10 +452,39 @@ _homepodctl() {
   esac
 }
 _homepodctl "$@"
-`, aliasZsh, roomZsh, playlistZsh), nil
-	case "fish":
-		var fish strings.Builder
-		fish.WriteString(`# fish completion for homepodctl
+`, zshArrayLiteral(values.aliases), zshArrayLiteral(values.rooms), zshArrayLiteral(values.playlists))
+}
+
+func fishStringLiteral(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `'`, `\'`)
+	return "'" + value + "'"
+}
+
+// fishCompletionArguments quotes twice because complete -a parses and expands
+// its argument again when Fish computes completion candidates.
+func fishCompletionArguments(values []string) string {
+	literals := make([]string, 0, len(values))
+	for _, value := range values {
+		literals = append(literals, fishStringLiteral(value))
+	}
+	return fishStringLiteral(strings.Join(literals, " "))
+}
+
+func appendFishCompletion(fish *strings.Builder, condition string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	fish.WriteString("complete -c homepodctl -n ")
+	fish.WriteString(fishStringLiteral(condition))
+	fish.WriteString(" -a ")
+	fish.WriteString(fishCompletionArguments(values))
+	fish.WriteByte('\n')
+}
+
+func renderFishCompletion(values completionValues) string {
+	var fish strings.Builder
+	fish.WriteString(`# fish completion for homepodctl
 complete -c homepodctl -f -a "help version config automation plan schema completion setup doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
 complete -c homepodctl -l version
 complete -c homepodctl -l json
@@ -393,19 +509,10 @@ complete -c homepodctl -l preset
 complete -c homepodctl -l name
 complete -c homepodctl -n '__fish_seen_argument --preset' -a "morning focus winddown party reset"
 `)
-		for _, a := range aliases {
-			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_subcommand_from run' -a %q\n", a))
-		}
-		for _, r := range rooms {
-			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_argument --room' -a %q\n", r))
-			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_subcommand_from out; and __fish_seen_subcommand_from set' -a %q\n", r))
-		}
-		for _, p := range playlists {
-			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_subcommand_from play' -a %q\n", p))
-			fish.WriteString(fmt.Sprintf("complete -c homepodctl -n '__fish_seen_argument --playlist' -a %q\n", p))
-		}
-		return fish.String(), nil
-	default:
-		return "", usageErrf("unknown shell %q (expected bash, zsh, or fish)", shell)
-	}
+	appendFishCompletion(&fish, "__fish_seen_subcommand_from run", values.aliases)
+	appendFishCompletion(&fish, "__fish_seen_argument --room", values.rooms)
+	appendFishCompletion(&fish, "__fish_seen_subcommand_from out; and __fish_seen_subcommand_from set", values.rooms)
+	appendFishCompletion(&fish, "__fish_seen_subcommand_from play", values.playlists)
+	appendFishCompletion(&fish, "__fish_seen_argument --playlist", values.playlists)
+	return fish.String()
 }
