@@ -104,7 +104,11 @@ func parsePlanArgs(args []string) (bool, []string, error) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
-			pos = append(pos, args[i+1:]...)
+			if len(pos) == 0 {
+				pos = append(pos, args[i+1:]...)
+			} else {
+				pos = append(pos, args[i:]...)
+			}
 			break
 		}
 		if a == "-h" || a == "--help" {
@@ -112,13 +116,23 @@ func parsePlanArgs(args []string) (bool, []string, error) {
 		}
 		if a == "--json" {
 			jsonOut = true
+			if i+1 < len(args) {
+				if value, ok := parseBoolWord(args[i+1]); ok {
+					i++
+					jsonOut = value
+				}
+			}
 			continue
 		}
 		if strings.HasPrefix(a, "--json=") {
 			v := strings.TrimSpace(strings.TrimPrefix(a, "--json="))
-			b, err := strconv.ParseBool(v)
-			if err != nil {
-				return false, nil, usageErrf("invalid boolean for --json: %q", v)
+			b, ok := parseBoolWord(v)
+			if !ok {
+				var err error
+				b, err = strconv.ParseBool(v)
+				if err != nil {
+					return false, nil, usageErrf("invalid boolean for --json: %q", v)
+				}
 			}
 			jsonOut = b
 			continue
@@ -127,52 +141,79 @@ func parsePlanArgs(args []string) (bool, []string, error) {
 	}
 	return jsonOut, pos, nil
 }
-
 func normalizePlanTarget(cmd string, args []string) (string, []string, error) {
-	targetArgs := append([]string(nil), args...)
-	addDryRun := func() {
-		if !hasLongFlag(targetArgs, "dry-run") {
-			targetArgs = append(targetArgs, "--dry-run")
-		}
-	}
-	addJSON := func() {
-		if !hasLongFlag(targetArgs, "json") {
-			targetArgs = append(targetArgs, "--json")
-		}
-	}
-
+	prefixLen := 0
 	switch cmd {
 	case "run", "play", "volume", "vol", "native-run":
-		addDryRun()
-		addJSON()
-		return cmd, targetArgs, nil
 	case "out":
-		if len(targetArgs) == 0 || strings.TrimSpace(targetArgs[0]) != "set" {
+		if len(args) == 0 || strings.TrimSpace(args[0]) != "set" {
 			return "", nil, usageErrf("plan only supports `out set` (usage: homepodctl plan out set --room <name> ...)")
 		}
-		addDryRun()
-		addJSON()
-		return cmd, targetArgs, nil
+		prefixLen = 1
 	case "automation":
-		if len(targetArgs) == 0 || strings.TrimSpace(targetArgs[0]) != "run" {
+		if len(args) == 0 || strings.TrimSpace(args[0]) != "run" {
 			return "", nil, usageErrf("plan only supports `automation run` (usage: homepodctl plan automation run -f <file>)")
 		}
-		addDryRun()
-		addJSON()
-		return cmd, targetArgs, nil
+		prefixLen = 1
 	default:
 		return "", nil, usageErrf("plan only supports run, play, volume, vol, native-run, out set, and automation run")
 	}
+	targetArgs, err := canonicalPlanTargetArgs(args, prefixLen)
+	return cmd, targetArgs, err
 }
 
-func hasLongFlag(args []string, name string) bool {
-	needle := "--" + name
-	for _, a := range args {
-		if a == needle || strings.HasPrefix(a, needle+"=") {
-			return true
+// plan owns the child dry-run and JSON flags. Keep them ahead of user arguments
+// because target parsers handle positionals differently, while preserving a
+// target delimiter and its literal suffix exactly.
+func canonicalPlanTargetArgs(args []string, prefixLen int) ([]string, error) {
+	targetArgs := make([]string, 0, len(args)+2)
+	targetArgs = append(targetArgs, args[:prefixLen]...)
+	targetArgs = append(targetArgs, "--dry-run=true", "--json=true")
+
+	for i := prefixLen; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			return append(targetArgs, args[i:]...), nil
+		}
+
+		name, value, hasValue := splitPlanTargetFlag(arg)
+		if name == "" {
+			targetArgs = append(targetArgs, arg)
+			continue
+		}
+		if hasValue {
+			if _, ok := parseBoolWord(value); !ok {
+				return nil, usageErrf("invalid boolean for --%s: %q", name, strings.TrimSpace(value))
+			}
+			continue
+		}
+		if i+1 < len(args) {
+			if _, ok := parseBoolWord(args[i+1]); ok {
+				i++
+			}
 		}
 	}
-	return false
+	return targetArgs, nil
+}
+
+func splitPlanTargetFlag(arg string) (name string, value string, hasValue bool) {
+	const (
+		dryRunFlag = "--dry-run"
+		jsonFlag   = "--json"
+	)
+
+	switch {
+	case arg == dryRunFlag:
+		return "dry-run", "", false
+	case strings.HasPrefix(arg, dryRunFlag+"="):
+		return "dry-run", strings.TrimPrefix(arg, dryRunFlag+"="), true
+	case arg == jsonFlag:
+		return "json", "", false
+	case strings.HasPrefix(arg, jsonFlag+"="):
+		return "json", strings.TrimPrefix(arg, jsonFlag+"="), true
+	default:
+		return "", "", false
+	}
 }
 
 func runPlanTarget(cmd string, args []string) (map[string]any, error) {

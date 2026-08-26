@@ -21,6 +21,7 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
+- Ensured `plan` cannot be overridden by target `--dry-run` or `--json` values and preserves literal arguments after `--`.
 - Fixed `out set` backend defaulting so it resolves to `airplay` when unset.
 - Removed non-portable `rg` dependency from release checks.
 

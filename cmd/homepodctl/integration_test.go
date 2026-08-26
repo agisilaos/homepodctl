@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -605,6 +606,26 @@ func TestCLIPlanCommand(t *testing.T) {
 	}
 	if payload.Plan["dryRun"] != true {
 		t.Fatalf("plan dryRun=%v", payload.Plan["dryRun"])
+	}
+
+	missingShortcut := "__homepodctl_plan_safety_missing_7f5fd198__"
+	code, out = run("plan", "native-run", "--shortcut", missingShortcut, "--dry-run=false", "--json")
+	if code != 0 {
+		t.Fatalf("plan canonical dry-run exit=%d out=%s", code, out)
+	}
+	var canonical struct {
+		Args []string       `json:"args"`
+		Plan map[string]any `json:"plan"`
+	}
+	if err := json.Unmarshal([]byte(out), &canonical); err != nil {
+		t.Fatalf("parse canonical plan json: %v: %s", err, out)
+	}
+	wantArgs := []string{"--dry-run=true", "--json=true", "--shortcut", missingShortcut}
+	if !slices.Equal(canonical.Args, wantArgs) {
+		t.Fatalf("canonical args=%v want=%v", canonical.Args, wantArgs)
+	}
+	if canonical.Plan["dryRun"] != true {
+		t.Fatalf("canonical plan dryRun=%v", canonical.Plan["dryRun"])
 	}
 
 	routinePath := filepath.Join(t.TempDir(), "plan-routine.yaml")
