@@ -104,7 +104,11 @@ func parsePlanArgs(args []string) (bool, []string, error) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
-			pos = append(pos, args[i:]...)
+			if len(pos) == 0 {
+				pos = append(pos, args[i+1:]...)
+			} else {
+				pos = append(pos, args[i:]...)
+			}
 			break
 		}
 		if a == "-h" || a == "--help" {
@@ -113,7 +117,7 @@ func parsePlanArgs(args []string) (bool, []string, error) {
 		if a == "--json" {
 			jsonOut = true
 			if i+1 < len(args) {
-				if value, ok := parsePlanBool(args[i+1]); ok {
+				if value, ok := parseBoolWord(args[i+1]); ok {
 					i++
 					jsonOut = value
 				}
@@ -122,9 +126,13 @@ func parsePlanArgs(args []string) (bool, []string, error) {
 		}
 		if strings.HasPrefix(a, "--json=") {
 			v := strings.TrimSpace(strings.TrimPrefix(a, "--json="))
-			b, err := strconv.ParseBool(v)
-			if err != nil {
-				return false, nil, usageErrf("invalid boolean for --json: %q", v)
+			b, ok := parseBoolWord(v)
+			if !ok {
+				var err error
+				b, err = strconv.ParseBool(v)
+				if err != nil {
+					return false, nil, usageErrf("invalid boolean for --json: %q", v)
+				}
 			}
 			jsonOut = b
 			continue
@@ -133,18 +141,6 @@ func parsePlanArgs(args []string) (bool, []string, error) {
 	}
 	return jsonOut, pos, nil
 }
-
-func parsePlanBool(value string) (bool, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "true", "1", "yes", "y", "on":
-		return true, true
-	case "false", "0", "no", "n", "off":
-		return false, true
-	default:
-		return false, false
-	}
-}
-
 func normalizePlanTarget(cmd string, args []string) (string, []string, error) {
 	prefixLen := 0
 	switch cmd {
@@ -186,13 +182,13 @@ func canonicalPlanTargetArgs(args []string, prefixLen int) ([]string, error) {
 			continue
 		}
 		if hasValue {
-			if _, ok := parsePlanBool(value); !ok {
+			if _, ok := parseBoolWord(value); !ok {
 				return nil, usageErrf("invalid boolean for --%s: %q", name, strings.TrimSpace(value))
 			}
 			continue
 		}
 		if i+1 < len(args) {
-			if _, ok := parsePlanBool(args[i+1]); ok {
+			if _, ok := parseBoolWord(args[i+1]); ok {
 				i++
 			}
 		}

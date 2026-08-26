@@ -20,6 +20,14 @@ func TestParsePlanArgsConsumesSeparateJSONBoolean(t *testing.T) {
 	if !slices.Equal(pos, want) {
 		t.Fatalf("pos=%v want=%v", pos, want)
 	}
+
+	jsonOut, pos, err = parsePlanArgs([]string{"play", "focus", "--json=no"})
+	if err != nil {
+		t.Fatalf("parsePlanArgs equals value: %v", err)
+	}
+	if jsonOut || !slices.Equal(pos, []string{"play", "focus"}) {
+		t.Fatalf("equals value jsonOut=%t pos=%v", jsonOut, pos)
+	}
 }
 
 func TestParseAndNormalizePlanTargetPreservesDelimiterSuffix(t *testing.T) {
@@ -36,6 +44,19 @@ func TestParseAndNormalizePlanTargetPreservesDelimiterSuffix(t *testing.T) {
 	want := []string{"--dry-run=true", "--json=true", "--", "--dry-run=false", "--json=maybe"}
 	if cmd != "native-run" || !slices.Equal(got, want) {
 		t.Fatalf("cmd=%q args=%v want=%v", cmd, got, want)
+	}
+}
+
+func TestParsePlanArgsStripsDelimiterBeforeTarget(t *testing.T) {
+	t.Parallel()
+
+	_, pos, err := parsePlanArgs([]string{"--", "native-run", "--shortcut", "Example"})
+	if err != nil {
+		t.Fatalf("parsePlanArgs: %v", err)
+	}
+	want := []string{"native-run", "--shortcut", "Example"}
+	if !slices.Equal(pos, want) {
+		t.Fatalf("pos=%v want=%v", pos, want)
 	}
 }
 

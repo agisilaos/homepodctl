@@ -269,7 +269,7 @@ homepodctl run bed --dry-run --json
 - `homepodctl setup [--backend ...] [--room ...]`: bootstrap config + diagnostics + device discovery
 - `homepodctl doctor`: diagnostics checklist
 - `homepodctl completion <bash|zsh|fish>`: generate completion script
-- `homepodctl plan <command> ...`: preview resolved dry-run execution for core actions
+- `homepodctl plan <command> ...`: preview resolved execution; target `--dry-run`/`--json` flags are canonicalized to safe values, while arguments after a target `--` stay literal
 - `homepodctl schema [<name>] [--json]`: inspect JSON output contracts
 - `homepodctl automation validate|plan|run|init ...`: routine workflows (non-interactive by default; add `--dry-run` to preview)
 - `homepodctl version`: version info
