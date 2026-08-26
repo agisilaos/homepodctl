@@ -284,7 +284,8 @@ homepodctl run bed --dry-run --json
 
 This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `shortcuts`).
 
-- **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` validates changelog/test/vet/docs and produces a version-stamped local binary.
+- **Continuous verification:** `make verify` runs tests, vet, docs, module metadata, formatting, and a development-stamped build without requiring a release version.
+- **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` runs the same continuous verification and additionally validates that the release version is unpublished and matches the top changelog entry.
 - **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds release artifacts only (no changelog/tag/push/release/tap writes).
 - **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.
 - **Release scripts:** `scripts/release-check.sh` and `scripts/release.sh`
