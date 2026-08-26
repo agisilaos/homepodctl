@@ -1,38 +1,51 @@
 # bash completion for homepodctl
+_homepodctl_complete_values() {
+  local current="$1"
+  shift
+  local candidate
+  COMPREPLY=()
+  for candidate in "$@"; do
+    if [[ "$candidate" == "$current"* ]]; then
+      COMPREPLY+=("$candidate")
+    fi
+  done
+}
+
 _homepodctl_completion() {
   local cur prev
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  local aliases=""
-  local rooms=""
-  local playlists=""
-  local presets="morning focus winddown party reset"
-  local cmds="help version config automation plan schema completion setup doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
+  local -a aliases=()
+  local -a rooms=()
+  local -a playlists=()
+  local -a presets=('morning' 'focus' 'winddown' 'party' 'reset')
+  local -a commands=('help' 'version' 'config' 'automation' 'plan' 'schema' 'completion' 'setup' 'doctor' 'devices' 'out' 'playlists' 'status' 'now' 'aliases' 'run' 'pause' 'stop' 'next' 'prev' 'play' 'volume' 'vol' 'native-run' 'config-init' '--help' '--version' '--verbose' '--quiet')
+  local -a options=('--json' '--plain' '--help' '--version' '--verbose' '--quiet' '--backend' '--room' '--playlist' '--playlist-id' '--shuffle' '--volume' '--watch' '--query' '--limit' '--shortcut' '--include-network' '--file' '--dry-run' '--no-input' '--preset' '--name')
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "$cmds --help --version --verbose --quiet" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${commands[@]}"
     return 0
   fi
   if [[ "${COMP_WORDS[1]}" == "run" && $COMP_CWORD -eq 2 ]]; then
-    COMPREPLY=( $(compgen -W "$aliases" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${aliases[@]}"
     return 0
   fi
   if [[ "$prev" == "--room" ]]; then
-    COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${rooms[@]}"
     return 0
   fi
   if [[ "$prev" == "--playlist" || ( "${COMP_WORDS[1]}" == "play" && $COMP_CWORD -eq 2 ) ]]; then
-    COMPREPLY=( $(compgen -W "$playlists" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${playlists[@]}"
     return 0
   fi
   if [[ "$prev" == "--preset" ]]; then
-    COMPREPLY=( $(compgen -W "$presets" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${presets[@]}"
     return 0
   fi
   if [[ "${COMP_WORDS[1]}" == "out" && "${COMP_WORDS[2]}" == "set" ]]; then
-    COMPREPLY=( $(compgen -W "$rooms" -- "$cur") )
+    _homepodctl_complete_values "$cur" "${rooms[@]}"
     return 0
   fi
-  COMPREPLY=( $(compgen -W "--json --plain --help --version --verbose --quiet --backend --room --playlist --playlist-id --shuffle --volume --watch --query --limit --shortcut --include-network --file --dry-run --no-input --preset --name" -- "$cur") )
+  _homepodctl_complete_values "$cur" "${options[@]}"
 }
 complete -F _homepodctl_completion homepodctl

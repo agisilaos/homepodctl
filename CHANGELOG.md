@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on *Keep a Changelog*, and this project adheres to *Semantic Versioning*.
 
+## [v0.2.1] - 2026-08-26
+
+### Fixed
+
+- Serialized config-derived Bash, Zsh, and Fish completion candidates as shell-specific data so special characters cannot corrupt or execute generated scripts.
+- Completion generation now reports malformed config and values that the target shell cannot represent instead of silently producing incomplete scripts.
+
 ## [v0.2.0] - 2026-02-23
 
 ### Added
