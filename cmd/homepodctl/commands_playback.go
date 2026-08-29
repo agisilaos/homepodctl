@@ -53,12 +53,19 @@ func resolveNativeVolumeShortcut(cfg *native.Config, room string, value int) (st
 	return shortcut, nil
 }
 
-func runNativePlaylistShortcuts(ctx context.Context, cfg *native.Config, rooms []string, playlist string) error {
-	for _, room := range rooms {
-		shortcut, err := resolveNativePlaylistShortcut(cfg, room, playlist)
+func resolveAndRunNativeShortcuts(ctx context.Context, rooms []string, resolve func(string) (string, error)) error {
+	shortcuts := make([]string, len(rooms))
+	for i, room := range rooms {
+		shortcut, err := resolve(room)
 		if err != nil {
 			return err
 		}
+		shortcuts[i] = shortcut
+	}
+
+	// Resolve every mapping before execution; runtime failures can still leave
+	// earlier Shortcuts applied.
+	for _, shortcut := range shortcuts {
 		if err := runNativeShortcut(ctx, shortcut); err != nil {
 			return err
 		}
@@ -66,17 +73,16 @@ func runNativePlaylistShortcuts(ctx context.Context, cfg *native.Config, rooms [
 	return nil
 }
 
+func runNativePlaylistShortcuts(ctx context.Context, cfg *native.Config, rooms []string, playlist string) error {
+	return resolveAndRunNativeShortcuts(ctx, rooms, func(room string) (string, error) {
+		return resolveNativePlaylistShortcut(cfg, room, playlist)
+	})
+}
+
 func runNativeVolumeShortcuts(ctx context.Context, cfg *native.Config, rooms []string, value int) error {
-	for _, room := range rooms {
-		shortcut, err := resolveNativeVolumeShortcut(cfg, room, value)
-		if err != nil {
-			return err
-		}
-		if err := runNativeShortcut(ctx, shortcut); err != nil {
-			return err
-		}
-	}
-	return nil
+	return resolveAndRunNativeShortcuts(ctx, rooms, func(room string) (string, error) {
+		return resolveNativeVolumeShortcut(cfg, room, value)
+	})
 }
 
 func validateAirplayVolumeSelection(volumeExplicit bool, volume int, rooms []string) error {
