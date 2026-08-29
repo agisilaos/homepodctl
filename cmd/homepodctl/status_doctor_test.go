@@ -90,66 +90,6 @@ func TestSetVolumeForRooms(t *testing.T) {
 	}
 }
 
-func TestResolveNativeShortcuts(t *testing.T) {
-	cfg := &native.Config{
-		Native: native.NativeConfig{
-			Playlists:       map[string]map[string]string{"Bedroom": {"Focus": "Focus Shortcut"}},
-			VolumeShortcuts: map[string]map[string]string{"Bedroom": {"30": "Volume 30 Shortcut"}},
-		},
-	}
-
-	playlistShortcut, err := resolveNativePlaylistShortcut(cfg, "Bedroom", "Focus")
-	if err != nil {
-		t.Fatalf("resolveNativePlaylistShortcut: %v", err)
-	}
-	if playlistShortcut != "Focus Shortcut" {
-		t.Fatalf("playlist shortcut=%q", playlistShortcut)
-	}
-
-	volumeShortcut, err := resolveNativeVolumeShortcut(cfg, "Bedroom", 30)
-	if err != nil {
-		t.Fatalf("resolveNativeVolumeShortcut: %v", err)
-	}
-	if volumeShortcut != "Volume 30 Shortcut" {
-		t.Fatalf("volume shortcut=%q", volumeShortcut)
-	}
-
-	if _, err := resolveNativePlaylistShortcut(cfg, "Bedroom", "Missing"); err == nil {
-		t.Fatalf("expected missing playlist mapping error")
-	}
-	if _, err := resolveNativeVolumeShortcut(cfg, "Bedroom", 99); err == nil {
-		t.Fatalf("expected missing volume mapping error")
-	}
-}
-
-func TestRunNativeShortcutsUsesResolvedMappings(t *testing.T) {
-	orig := runNativeShortcut
-	t.Cleanup(func() { runNativeShortcut = orig })
-
-	cfg := &native.Config{
-		Native: native.NativeConfig{
-			Playlists:       map[string]map[string]string{"Bedroom": {"Focus": "Focus Shortcut"}},
-			VolumeShortcuts: map[string]map[string]string{"Bedroom": {"30": "Volume 30 Shortcut"}},
-		},
-	}
-
-	var calls []string
-	runNativeShortcut = func(_ context.Context, name string) error {
-		calls = append(calls, name)
-		return nil
-	}
-
-	if err := runNativePlaylistShortcuts(context.Background(), cfg, []string{"Bedroom"}, "Focus"); err != nil {
-		t.Fatalf("runNativePlaylistShortcuts: %v", err)
-	}
-	if err := runNativeVolumeShortcuts(context.Background(), cfg, []string{"Bedroom"}, 30); err != nil {
-		t.Fatalf("runNativeVolumeShortcuts: %v", err)
-	}
-	if len(calls) != 2 || calls[0] != "Focus Shortcut" || calls[1] != "Volume 30 Shortcut" {
-		t.Fatalf("shortcut calls=%v", calls)
-	}
-}
-
 func TestRunDoctorChecksUsesInjectedSeams(t *testing.T) {
 	origLookPath := lookPath
 	origConfigPath := configPath

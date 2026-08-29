@@ -175,6 +175,8 @@ Edit `config.json`, map `room -> playlist -> shortcut name`, and run:
 homepodctl play --backend native --room "Bedroom" --playlist "Example Playlist"
 ```
 
+Before a multi-room native playlist or volume action runs, `homepodctl` resolves the Shortcut mapping for every requested room. A missing mapping prevents all Shortcut executions. This is not transactional: if a Shortcut fails at runtime, earlier Shortcuts may already have succeeded.
+
 ## Help
 
 CLI help:
