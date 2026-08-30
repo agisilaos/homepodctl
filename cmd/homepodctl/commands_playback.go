@@ -85,13 +85,6 @@ func runNativeVolumeShortcuts(ctx context.Context, cfg *native.Config, rooms []s
 	})
 }
 
-func validateAirplayVolumeSelection(volumeExplicit bool, volume int, rooms []string) error {
-	if volumeExplicit && volume >= 0 && len(rooms) == 0 {
-		return usageErrf("cannot set volume without rooms (pass --room <name> or select outputs first via `homepodctl out set`)")
-	}
-	return nil
-}
-
 func inferSelectedOutputs(ctx context.Context) []string {
 	np, err := getNowPlaying(ctx)
 	if err != nil {

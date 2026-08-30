@@ -44,30 +44,6 @@ func TestInferSelectedOutputs(t *testing.T) {
 	})
 }
 
-func TestValidateAirplayVolumeSelection(t *testing.T) {
-	tests := []struct {
-		name           string
-		volumeExplicit bool
-		volume         int
-		rooms          []string
-		wantErr        bool
-	}{
-		{name: "explicit volume with no rooms errors", volumeExplicit: true, volume: 30, rooms: nil, wantErr: true},
-		{name: "explicit volume with rooms passes", volumeExplicit: true, volume: 30, rooms: []string{"Bedroom"}, wantErr: false},
-		{name: "implicit default volume with no rooms passes", volumeExplicit: false, volume: 30, rooms: nil, wantErr: false},
-		{name: "negative volume bypasses check", volumeExplicit: true, volume: -1, rooms: nil, wantErr: false},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateAirplayVolumeSelection(tc.volumeExplicit, tc.volume, tc.rooms)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("validateAirplayVolumeSelection() err=%v, wantErr=%t", err, tc.wantErr)
-			}
-		})
-	}
-}
-
 func TestSetVolumeForRooms(t *testing.T) {
 	orig := setDeviceVolume
 	t.Cleanup(func() { setDeviceVolume = orig })

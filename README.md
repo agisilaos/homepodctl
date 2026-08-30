@@ -127,6 +127,21 @@ homepodctl playlists --query autumn
 homepodctl play --playlist-id <PERSISTENT_ID>
 ```
 
+Supply exactly one playlist target: positional query words, `--playlist <name>`, or
+`--playlist-id <id>`. Combining these forms is a usage error, including during
+`--dry-run`.
+
+For AirPlay playback, `--volume` accepts 0–100 and overrides `defaults.volume`.
+With neither, playback leaves volume unchanged. An explicit volume requires
+resolved rooms; a configured default is skipped when no rooms can be resolved.
+Invalid volume values fail before playback changes any outputs.
+
+`play --dry-run` resolves the backend, rooms, options, and target using the same
+validation as execution. It may read Music.app's selected outputs to infer rooms,
+but does not search playlists, prompt for a selection, or check native mappings.
+A preview therefore does not guarantee that a playlist exists or uniquely matches.
+ID targets appear in the JSON `playlistId` field on both backends.
+
 Set volume (if rooms are omitted, uses `defaults.rooms`; if that’s empty, uses the currently selected outputs in Music.app):
 
 ```sh
@@ -179,6 +194,12 @@ Edit `config.json`, map `room -> playlist -> shortcut name`, and run:
 ```sh
 homepodctl play --backend native --room "Bedroom" --playlist "Example Playlist"
 ```
+
+Native playback uses playlist text as an exact configured name. With
+`--playlist-id`, execution looks up the name in Music.app before selecting the
+configured Shortcut. Native `play` does not apply volume or shuffle options and
+does not use `--choose`; those options affect AirPlay playback only. Supplied
+option values are still validated on both backends.
 
 Before a multi-room native playlist or volume action runs, `homepodctl` resolves the Shortcut mapping for every requested room. A missing mapping prevents all Shortcut executions. This is not transactional: if a Shortcut fails at runtime, earlier Shortcuts may already have succeeded.
 
