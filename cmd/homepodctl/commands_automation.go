@@ -114,7 +114,7 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 		die(err)
 	}
 	if dryRun {
-		result := buildAutomationResult("dry-run", plan)
+		result := previewAutomationPlan("dry-run", plan)
 		emitAutomationResult(result, jsonOut)
 		return
 	}
@@ -154,7 +154,7 @@ func cmdAutomationValidate(_ *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
-	result := buildAutomationResult("validate", plan)
+	result := previewAutomationPlan("validate", plan)
 	jsonOut, _, err := flags.boolStrict("json")
 	if err != nil {
 		die(err)
@@ -185,7 +185,7 @@ func cmdAutomationPlan(cfg *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
-	result := buildAutomationResult("plan", plan)
+	result := previewAutomationPlan("plan", plan)
 	jsonOut, _, err := flags.boolStrict("json")
 	if err != nil {
 		die(err)
@@ -258,7 +258,7 @@ func automationResultFromPlan(mode string, plan resolvedAutomationPlan) automati
 }
 
 // Previews describe no execution, so their duration remains zero.
-func buildAutomationResult(mode string, plan resolvedAutomationPlan) automationCommandResult {
+func previewAutomationPlan(mode string, plan resolvedAutomationPlan) automationCommandResult {
 	result := automationResultFromPlan(mode, plan)
 	now := time.Now()
 	setAutomationTiming(&result, now, now)

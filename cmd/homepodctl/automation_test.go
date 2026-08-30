@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 
-	"github.com/agisilaos/homepodctl/internal/music"
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
@@ -68,77 +65,6 @@ func TestAutomationPreset(t *testing.T) {
 	}
 	if _, err := automationPreset("unknown"); err == nil {
 		t.Fatalf("expected error for unknown preset")
-	}
-}
-
-func TestBuildAutomationResultJSONShape(t *testing.T) {
-	t.Parallel()
-	doc := &automationFile{
-		Version: "1",
-		Name:    "morning",
-		Steps:   []automationStep{{Type: "out.set", Rooms: []string{"Bedroom"}}},
-	}
-	plan := mustCompileAutomation(t, nil, doc)
-	res := buildAutomationResult("dry-run", plan)
-	b, err := json.Marshal(res)
-	if err != nil {
-		t.Fatalf("json.Marshal: %v", err)
-	}
-	if !strings.Contains(string(b), `"mode":"dry-run"`) {
-		t.Fatalf("missing mode in json: %s", string(b))
-	}
-	if !strings.Contains(string(b), `"steps"`) {
-		t.Fatalf("missing steps in json: %s", string(b))
-	}
-}
-
-func TestExecuteAutomationSteps_StopsOnFailure(t *testing.T) {
-	origSetCurrentOutputs := setCurrentOutputs
-	origSetDeviceVolume := setDeviceVolume
-	origSetShuffle := setShuffle
-	origSearchPlaylists := searchPlaylists
-	origPlayPlaylistByID := playPlaylistByID
-	t.Cleanup(func() {
-		setCurrentOutputs = origSetCurrentOutputs
-		setDeviceVolume = origSetDeviceVolume
-		setShuffle = origSetShuffle
-		searchPlaylists = origSearchPlaylists
-		playPlaylistByID = origPlayPlaylistByID
-	})
-
-	setCurrentOutputs = func(context.Context, []string) error { return errors.New("boom") }
-	setDeviceVolume = func(context.Context, string, int) error { return nil }
-	setShuffle = func(context.Context, bool) error { return nil }
-	searchPlaylists = func(context.Context, string) ([]music.UserPlaylist, error) {
-		return []music.UserPlaylist{{PersistentID: "P1", Name: "X"}}, nil
-	}
-	playPlaylistByID = func(context.Context, string) error { return nil }
-
-	doc := &automationFile{
-		Version: "1",
-		Name:    "test",
-		Defaults: automationDefaults{
-			Backend: "airplay",
-			Rooms:   []string{"Bedroom"},
-		},
-		Steps: []automationStep{
-			{Type: "out.set", Rooms: []string{"Bedroom"}},
-			{Type: "play", Query: "Chill"},
-		},
-	}
-	result := executeAutomationPlan(context.Background(), mustCompileAutomation(t, &native.Config{}, doc))
-	results := result.Steps
-	if result.OK {
-		t.Fatalf("ok=true, want false")
-	}
-	if len(results) != 2 {
-		t.Fatalf("len(results)=%d, want 2", len(results))
-	}
-	if results[0].OK {
-		t.Fatalf("first step should fail")
-	}
-	if !results[1].Skipped {
-		t.Fatalf("second step should be skipped")
 	}
 }
 

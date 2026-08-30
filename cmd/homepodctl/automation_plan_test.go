@@ -225,7 +225,7 @@ func TestExecuteAutomationPlanFailurePositions(t *testing.T) {
 		Version: "1", Name: "failure",
 		Steps: []automationStep{{Type: "transport", Action: "stop"}, {Type: "transport", Action: "stop"}, {Type: "transport", Action: "stop"}},
 	})
-	preview := buildAutomationResult("plan", plan)
+	preview := previewAutomationPlan("plan", plan)
 	for _, failAt := range []int{-1, 0, 1, 2} {
 		t.Run(fmt.Sprintf("failure_%d", failAt), func(t *testing.T) {
 			calls := 0
@@ -267,7 +267,7 @@ func TestExecuteAutomationPlanFailurePositions(t *testing.T) {
 					t.Fatalf("step %d lost its plan: %+v", i, step)
 				}
 			}
-			if after := buildAutomationResult("plan", plan); !reflect.DeepEqual(after.Steps, preview.Steps) {
+			if after := previewAutomationPlan("plan", plan); !reflect.DeepEqual(after.Steps, preview.Steps) {
 				t.Fatal("execution mutated the plan")
 			}
 		})
@@ -330,7 +330,7 @@ func TestAutomationPlanSnapshotsInputsAndDefaults(t *testing.T) {
 		Steps: []automationStep{{Type: "play", PlaylistID: "P1"}, {Type: "volume.set", Rooms: []string{"Kitchen"}, Value: intPtr(30)}},
 	}
 	plan := mustCompileAutomation(t, cfg, doc)
-	before, err := json.Marshal(buildAutomationResult("plan", plan).Steps)
+	before, err := json.Marshal(previewAutomationPlan("plan", plan).Steps)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func TestAutomationPlanSnapshotsInputsAndDefaults(t *testing.T) {
 		t.Fatalf("result=%+v calls=%v want=%v", result, calls, want)
 	}
 	plan.Steps[0].Input.PlaylistID = "P1"
-	after, err := json.Marshal(buildAutomationResult("plan", plan).Steps)
+	after, err := json.Marshal(previewAutomationPlan("plan", plan).Steps)
 	if err != nil {
 		t.Fatal(err)
 	}
