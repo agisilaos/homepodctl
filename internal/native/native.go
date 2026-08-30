@@ -97,15 +97,6 @@ func LoadConfig() (*Config, error) {
 		return nil, &ConfigError{Op: "parse", Path: path, Err: err}
 	}
 	normalizeConfig(&cfg)
-	if cfg.Native.Playlists == nil {
-		cfg.Native.Playlists = map[string]map[string]string{}
-	}
-	if cfg.Native.VolumeShortcuts == nil {
-		cfg.Native.VolumeShortcuts = map[string]map[string]string{}
-	}
-	if cfg.Aliases == nil {
-		cfg.Aliases = map[string]Alias{}
-	}
 	return &cfg, nil
 }
 
