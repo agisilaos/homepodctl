@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 
-	"github.com/agisilaos/homepodctl/internal/music"
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
@@ -71,76 +68,6 @@ func TestAutomationPreset(t *testing.T) {
 	}
 }
 
-func TestBuildAutomationResultJSONShape(t *testing.T) {
-	t.Parallel()
-	doc := &automationFile{
-		Version: "1",
-		Name:    "morning",
-		Steps:   []automationStep{{Type: "out.set", Rooms: []string{"Bedroom"}}},
-	}
-	steps := resolveAutomationSteps(nil, doc)
-	res := buildAutomationResult("dry-run", doc, steps)
-	b, err := json.Marshal(res)
-	if err != nil {
-		t.Fatalf("json.Marshal: %v", err)
-	}
-	if !strings.Contains(string(b), `"mode":"dry-run"`) {
-		t.Fatalf("missing mode in json: %s", string(b))
-	}
-	if !strings.Contains(string(b), `"steps"`) {
-		t.Fatalf("missing steps in json: %s", string(b))
-	}
-}
-
-func TestExecuteAutomationSteps_StopsOnFailure(t *testing.T) {
-	origSetCurrentOutputs := setCurrentOutputs
-	origSetDeviceVolume := setDeviceVolume
-	origSetShuffle := setShuffle
-	origSearchPlaylists := searchPlaylists
-	origPlayPlaylistByID := playPlaylistByID
-	t.Cleanup(func() {
-		setCurrentOutputs = origSetCurrentOutputs
-		setDeviceVolume = origSetDeviceVolume
-		setShuffle = origSetShuffle
-		searchPlaylists = origSearchPlaylists
-		playPlaylistByID = origPlayPlaylistByID
-	})
-
-	setCurrentOutputs = func(context.Context, []string) error { return errors.New("boom") }
-	setDeviceVolume = func(context.Context, string, int) error { return nil }
-	setShuffle = func(context.Context, bool) error { return nil }
-	searchPlaylists = func(context.Context, string) ([]music.UserPlaylist, error) {
-		return []music.UserPlaylist{{PersistentID: "P1", Name: "X"}}, nil
-	}
-	playPlaylistByID = func(context.Context, string) error { return nil }
-
-	doc := &automationFile{
-		Version: "1",
-		Name:    "test",
-		Defaults: automationDefaults{
-			Backend: "airplay",
-			Rooms:   []string{"Bedroom"},
-		},
-		Steps: []automationStep{
-			{Type: "out.set", Rooms: []string{"Bedroom"}},
-			{Type: "play", Query: "Chill"},
-		},
-	}
-	results, ok := executeAutomationSteps(context.Background(), &native.Config{}, doc)
-	if ok {
-		t.Fatalf("ok=true, want false")
-	}
-	if len(results) != 2 {
-		t.Fatalf("len(results)=%d, want 2", len(results))
-	}
-	if results[0].OK {
-		t.Fatalf("first step should fail")
-	}
-	if !results[1].Skipped {
-		t.Fatalf("second step should be skipped")
-	}
-}
-
 func TestExecuteAutomationPlayNative(t *testing.T) {
 	origRunShortcut := runNativeShortcut
 	t.Cleanup(func() { runNativeShortcut = origRunShortcut })
@@ -157,12 +84,14 @@ func TestExecuteAutomationPlayNative(t *testing.T) {
 			},
 		},
 	}
-	err := executeAutomationPlay(context.Background(), cfg, "native", automationDefaults{Backend: "native", Rooms: []string{"Bedroom"}}, automationStep{
-		Type:  "play",
-		Query: "Focus",
+	plan := mustCompileAutomation(t, cfg, &automationFile{
+		Version: "1", Name: "native",
+		Defaults: automationDefaults{Backend: "native", Rooms: []string{"Bedroom"}},
+		Steps:    []automationStep{{Type: "play", Query: "Focus"}},
 	})
-	if err != nil {
-		t.Fatalf("executeAutomationPlay: %v", err)
+	result := executeAutomationPlan(context.Background(), plan)
+	if !result.OK {
+		t.Fatalf("executeAutomationPlan: %+v", result)
 	}
 	if called != 1 {
 		t.Fatalf("runNativeShortcut calls=%d, want 1", called)

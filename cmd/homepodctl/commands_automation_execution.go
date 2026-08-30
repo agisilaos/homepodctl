@@ -10,170 +10,64 @@ import (
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
-func resolveAutomationSteps(cfg *native.Config, doc *automationFile) []automationStepResult {
-	resolvedDefaults := resolveAutomationDefaults(cfg, doc.Defaults)
-
-	out := make([]automationStepResult, 0, len(doc.Steps))
-	for i, st := range doc.Steps {
-		resolved := map[string]any{"backend": resolvedDefaults.Backend}
-		switch st.Type {
-		case "out.set":
-			resolved["rooms"] = st.Rooms
-		case "play":
-			if strings.TrimSpace(st.Query) != "" {
-				resolved["query"] = st.Query
-			}
-			if strings.TrimSpace(st.PlaylistID) != "" {
-				resolved["playlistId"] = st.PlaylistID
-			}
-			if resolvedDefaults.Shuffle != nil {
-				resolved["shuffle"] = *resolvedDefaults.Shuffle
-			}
-			if resolvedDefaults.Volume != nil {
-				resolved["volume"] = *resolvedDefaults.Volume
-			}
-			if len(resolvedDefaults.Rooms) > 0 {
-				resolved["rooms"] = resolvedDefaults.Rooms
-			}
-		case "volume.set":
-			if st.Value != nil {
-				resolved["value"] = *st.Value
-			}
-			if len(st.Rooms) > 0 {
-				resolved["rooms"] = st.Rooms
-			} else if len(resolvedDefaults.Rooms) > 0 {
-				resolved["rooms"] = resolvedDefaults.Rooms
-			}
-		case "wait":
-			resolved["state"] = st.State
-			resolved["timeout"] = st.Timeout
-		case "transport":
-			resolved["action"] = st.Action
+func executeAutomationPlan(ctx context.Context, plan resolvedAutomationPlan) automationCommandResult {
+	started := time.Now()
+	result := automationResultFromPlan("run", plan)
+	for i, st := range plan.Steps {
+		res := &result.Steps[i]
+		if !result.OK {
+			res.OK = false
+			res.Skipped = true
+			res.Error = "skipped due to previous step failure"
+			continue
 		}
-		out = append(out, automationStepResult{
-			Index:      i,
-			Type:       st.Type,
-			Input:      st,
-			Resolved:   resolved,
-			OK:         true,
-			Skipped:    false,
-			DurationMS: 0,
-		})
-	}
-	return out
-}
-
-func resolveAutomationDefaults(cfg *native.Config, in automationDefaults) automationDefaults {
-	out := in
-	if cfg == nil {
-		return out
-	}
-	if strings.TrimSpace(out.Backend) == "" {
-		out.Backend = cfg.Defaults.Backend
-	}
-	if len(out.Rooms) == 0 {
-		out.Rooms = append([]string(nil), cfg.Defaults.Rooms...)
-	}
-	if out.Volume == nil && cfg.Defaults.Volume != nil {
-		v := *cfg.Defaults.Volume
-		out.Volume = &v
-	}
-	if out.Shuffle == nil {
-		v := cfg.Defaults.Shuffle
-		out.Shuffle = &v
-	}
-	return out
-}
-
-func executeAutomationSteps(ctx context.Context, cfg *native.Config, doc *automationFile) ([]automationStepResult, bool) {
-	defaults := resolveAutomationDefaults(cfg, doc.Defaults)
-	results := make([]automationStepResult, 0, len(doc.Steps))
-	ok := true
-
-	for i, st := range doc.Steps {
 		stepStart := time.Now()
-		res := automationStepResult{
-			Index: i,
-			Type:  st.Type,
-			Input: st,
+		err := ctx.Err()
+		if err == nil {
+			err = st.Payload.execute(ctx, plan.nativeConfig)
 		}
-		err := executeAutomationStep(ctx, cfg, defaults, st)
 		res.DurationMS = time.Since(stepStart).Milliseconds()
 		if err != nil {
 			res.OK = false
 			res.Error = err.Error()
-			ok = false
-			results = append(results, res)
-			// mark remaining steps as skipped so callers can inspect full plan shape.
-			for j := i + 1; j < len(doc.Steps); j++ {
-				results = append(results, automationStepResult{
-					Index:   j,
-					Type:    doc.Steps[j].Type,
-					Input:   doc.Steps[j],
-					OK:      false,
-					Skipped: true,
-					Error:   "skipped due to previous step failure",
-				})
-			}
-			break
+			result.OK = false
 		}
-		res.OK = true
-		results = append(results, res)
 	}
-	return results, ok
+	setAutomationTiming(&result, started, time.Now())
+	return result
 }
 
-func executeAutomationStep(ctx context.Context, cfg *native.Config, defaults automationDefaults, st automationStep) error {
-	backend := strings.TrimSpace(defaults.Backend)
-	if backend == "" {
-		backend = "airplay"
+func (st automationOutSet) execute(ctx context.Context, _ *native.Config) error {
+	if st.Backend != "airplay" {
+		return fmt.Errorf("out.set only supports backend=airplay")
 	}
-
-	switch st.Type {
-	case "out.set":
-		if backend != "airplay" {
-			return fmt.Errorf("out.set only supports backend=airplay")
-		}
-		return setCurrentOutputs(ctx, st.Rooms)
-	case "play":
-		return executeAutomationPlay(ctx, cfg, backend, defaults, st)
-	case "volume.set":
-		if st.Value == nil {
-			return fmt.Errorf("volume.set requires value")
-		}
-		return executeAutomationVolume(ctx, cfg, backend, defaults, *st.Value, st.Rooms)
-	case "wait":
-		return executeAutomationWait(ctx, st.State, st.Timeout)
-	case "transport":
-		if strings.TrimSpace(st.Action) != "stop" {
-			return fmt.Errorf("unsupported transport action %q", st.Action)
-		}
-		return stopPlayback(ctx)
-	default:
-		return fmt.Errorf("unsupported step type %q", st.Type)
-	}
+	return setCurrentOutputs(ctx, append([]string(nil), st.Rooms...))
 }
 
-func executeAutomationPlay(ctx context.Context, cfg *native.Config, backend string, defaults automationDefaults, st automationStep) error {
-	switch backend {
+func (st automationTransport) execute(ctx context.Context, _ *native.Config) error {
+	return stopPlayback(ctx)
+}
+
+func (st automationPlay) execute(ctx context.Context, cfg *native.Config) error {
+	switch st.Backend {
 	case "airplay":
-		rooms := append([]string(nil), defaults.Rooms...)
+		rooms := append([]string(nil), st.Rooms...)
 		if len(rooms) > 0 {
 			if err := setCurrentOutputs(ctx, rooms); err != nil {
 				return err
 			}
 		}
-		if defaults.Volume != nil && len(rooms) > 0 {
-			if err := setVolumeForRooms(ctx, rooms, *defaults.Volume); err != nil {
+		if st.Volume != nil && len(rooms) > 0 {
+			if err := setVolumeForRooms(ctx, rooms, *st.Volume); err != nil {
 				return err
 			}
 		}
-		if defaults.Shuffle != nil {
-			if err := setShuffle(ctx, *defaults.Shuffle); err != nil {
+		if st.Shuffle != nil {
+			if err := setShuffle(ctx, *st.Shuffle); err != nil {
 				return err
 			}
 		}
-		id := strings.TrimSpace(st.PlaylistID)
+		id := st.PlaylistID
 		if id == "" {
 			matches, err := searchPlaylists(ctx, st.Query)
 			if err != nil {
@@ -190,11 +84,11 @@ func executeAutomationPlay(ctx context.Context, cfg *native.Config, backend stri
 		if cfg == nil {
 			return fmt.Errorf("native backend requires config")
 		}
-		rooms := append([]string(nil), defaults.Rooms...)
+		rooms := append([]string(nil), st.Rooms...)
 		if len(rooms) == 0 {
 			return fmt.Errorf("native play requires rooms")
 		}
-		name := strings.TrimSpace(st.Query)
+		name := st.Query
 		if name == "" {
 			var err error
 			name, err = findPlaylistNameByID(ctx, st.PlaylistID)
@@ -204,16 +98,13 @@ func executeAutomationPlay(ctx context.Context, cfg *native.Config, backend stri
 		}
 		return runNativePlaylistShortcuts(ctx, cfg, rooms, name)
 	default:
-		return fmt.Errorf("unknown backend %q", backend)
+		return fmt.Errorf("unknown backend %q", st.Backend)
 	}
 }
 
-func executeAutomationVolume(ctx context.Context, cfg *native.Config, backend string, defaults automationDefaults, value int, overrideRooms []string) error {
-	rooms := append([]string(nil), overrideRooms...)
-	if len(rooms) == 0 {
-		rooms = append(rooms, defaults.Rooms...)
-	}
-	switch backend {
+func (st automationVolumeSet) execute(ctx context.Context, cfg *native.Config) error {
+	rooms := append([]string(nil), st.Rooms...)
+	switch st.Backend {
 	case "airplay":
 		if len(rooms) == 0 {
 			rooms = inferSelectedOutputs(ctx)
@@ -221,7 +112,7 @@ func executeAutomationVolume(ctx context.Context, cfg *native.Config, backend st
 		if len(rooms) == 0 {
 			return fmt.Errorf("no rooms available for volume.set")
 		}
-		return setVolumeForRooms(ctx, rooms, value)
+		return setVolumeForRooms(ctx, rooms, st.Value)
 	case "native":
 		if cfg == nil {
 			return fmt.Errorf("native backend requires config")
@@ -229,19 +120,15 @@ func executeAutomationVolume(ctx context.Context, cfg *native.Config, backend st
 		if len(rooms) == 0 {
 			return fmt.Errorf("native volume.set requires rooms")
 		}
-		return runNativeVolumeShortcuts(ctx, cfg, rooms, value)
+		return runNativeVolumeShortcuts(ctx, cfg, rooms, st.Value)
 	default:
-		return fmt.Errorf("unknown backend %q", backend)
+		return fmt.Errorf("unknown backend %q", st.Backend)
 	}
 }
 
-func executeAutomationWait(ctx context.Context, wantState string, timeoutRaw string) error {
-	timeout, err := time.ParseDuration(timeoutRaw)
-	if err != nil {
-		return err
-	}
-	deadline := time.Now().Add(timeout)
-	want := strings.ToLower(strings.TrimSpace(wantState))
+func (st automationWait) execute(ctx context.Context, _ *native.Config) error {
+	deadline := time.Now().Add(st.timeout)
+	want := st.State
 	for {
 		np, err := getNowPlaying(ctx)
 		if err != nil {
@@ -251,7 +138,7 @@ func executeAutomationWait(ctx context.Context, wantState string, timeoutRaw str
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("wait timeout after %s for state=%s", timeout.String(), want)
+			return fmt.Errorf("wait timeout after %s for state=%s", st.timeout.String(), want)
 		}
 		select {
 		case <-ctx.Done():

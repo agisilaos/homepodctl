@@ -36,14 +36,14 @@ type automationStep struct {
 }
 
 type automationStepResult struct {
-	Index      int            `json:"index"`
-	Type       string         `json:"type"`
-	Input      automationStep `json:"input"`
-	Resolved   any            `json:"resolved,omitempty"`
-	OK         bool           `json:"ok"`
-	Skipped    bool           `json:"skipped"`
-	Error      string         `json:"error,omitempty"`
-	DurationMS int64          `json:"durationMs"`
+	Index      int                   `json:"index"`
+	Type       string                `json:"type"`
+	Input      automationStep        `json:"input"`
+	Resolved   automationStepPayload `json:"resolved,omitempty"`
+	OK         bool                  `json:"ok"`
+	Skipped    bool                  `json:"skipped"`
+	Error      string                `json:"error,omitempty"`
+	DurationMS int64                 `json:"durationMs"`
 }
 
 type automationCommandResult struct {
@@ -100,12 +100,11 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
-	if err := validateAutomation(doc); err != nil {
+	plan, err := compileAutomationPlan(cfg, doc)
+	if err != nil {
 		die(err)
 	}
 
-	mode := "run"
-	steps := resolveAutomationSteps(cfg, doc)
 	dryRun, _, err := flags.boolStrict("dry-run")
 	if err != nil {
 		die(err)
@@ -115,8 +114,7 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 		die(err)
 	}
 	if dryRun {
-		mode = "dry-run"
-		result := buildAutomationResult(mode, doc, steps)
+		result := previewAutomationPlan("dry-run", plan)
 		emitAutomationResult(result, jsonOut)
 		return
 	}
@@ -126,9 +124,7 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 	// automation runs can include waits; use a longer timeout than one-off commands.
 	runCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
-	executed, ok := executeAutomationSteps(runCtx, cfg, doc)
-	result := buildAutomationResult(mode, doc, executed)
-	result.OK = ok
+	result := executeAutomationPlan(runCtx, plan)
 	emitAutomationResult(result, jsonOut)
 	if !result.OK {
 		exitCode(exitGeneric)
@@ -154,10 +150,11 @@ func cmdAutomationValidate(_ *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
-	if err := validateAutomation(doc); err != nil {
+	plan, err := compileAutomationPlan(nil, doc)
+	if err != nil {
 		die(err)
 	}
-	result := buildAutomationResult("validate", doc, resolveAutomationSteps(nil, doc))
+	result := previewAutomationPlan("validate", plan)
 	jsonOut, _, err := flags.boolStrict("json")
 	if err != nil {
 		die(err)
@@ -184,10 +181,11 @@ func cmdAutomationPlan(cfg *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
-	if err := validateAutomation(doc); err != nil {
+	plan, err := compileAutomationPlan(cfg, doc)
+	if err != nil {
 		die(err)
 	}
-	result := buildAutomationResult("plan", doc, resolveAutomationSteps(cfg, doc))
+	result := previewAutomationPlan("plan", plan)
 	jsonOut, _, err := flags.boolStrict("json")
 	if err != nil {
 		die(err)
@@ -246,19 +244,31 @@ func parseAutomationFileFlag(flags parsedArgs) (string, error) {
 	return path, nil
 }
 
-func buildAutomationResult(mode string, doc *automationFile, steps []automationStepResult) automationCommandResult {
-	started := time.Now().UTC()
-	ended := started
-	return automationCommandResult{
-		Name:       doc.Name,
-		Version:    doc.Version,
-		Mode:       mode,
-		OK:         true,
-		StartedAt:  started.Format(time.RFC3339),
-		EndedAt:    ended.Format(time.RFC3339),
-		DurationMS: ended.Sub(started).Milliseconds(),
-		Steps:      steps,
+func automationResultFromPlan(mode string, plan resolvedAutomationPlan) automationCommandResult {
+	steps := make([]automationStepResult, len(plan.Steps))
+	for i, st := range plan.Steps {
+		steps[i] = automationStepResult{
+			Index: i, Type: st.Payload.stepType(), Input: st.Input,
+			Resolved: st.Payload, OK: true,
+		}
 	}
+	return automationCommandResult{
+		Name: plan.Name, Version: plan.Version, Mode: mode, OK: true, Steps: steps,
+	}
+}
+
+// Previews describe no execution, so their duration remains zero.
+func previewAutomationPlan(mode string, plan resolvedAutomationPlan) automationCommandResult {
+	result := automationResultFromPlan(mode, plan)
+	now := time.Now()
+	setAutomationTiming(&result, now, now)
+	return result
+}
+
+func setAutomationTiming(result *automationCommandResult, started, ended time.Time) {
+	result.StartedAt = started.UTC().Format(time.RFC3339Nano)
+	result.EndedAt = ended.UTC().Format(time.RFC3339Nano)
+	result.DurationMS = ended.Sub(started).Milliseconds()
 }
 
 func emitAutomationResult(result automationCommandResult, jsonOut bool) {
