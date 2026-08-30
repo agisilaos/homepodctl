@@ -82,9 +82,9 @@ func cmdAutomation(ctx context.Context, cfg *native.Config, args []string) {
 }
 
 func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs("automation run", args)
 	if err != nil {
-		die(usageErrf("usage: homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]"))
+		die(err)
 	}
 	if len(positionals) != 0 {
 		die(usageErrf("usage: homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]"))
@@ -132,9 +132,9 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 }
 
 func cmdAutomationValidate(_ *native.Config, args []string) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs("automation validate", args)
 	if err != nil {
-		die(usageErrf("usage: homepodctl automation validate -f <file|-> [--json]"))
+		die(err)
 	}
 	if len(positionals) != 0 {
 		die(usageErrf("usage: homepodctl automation validate -f <file|-> [--json]"))
@@ -163,9 +163,9 @@ func cmdAutomationValidate(_ *native.Config, args []string) {
 }
 
 func cmdAutomationPlan(cfg *native.Config, args []string) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs("automation plan", args)
 	if err != nil {
-		die(usageErrf("usage: homepodctl automation plan -f <file|-> [--json]"))
+		die(err)
 	}
 	if len(positionals) != 0 {
 		die(usageErrf("usage: homepodctl automation plan -f <file|-> [--json]"))
@@ -194,9 +194,9 @@ func cmdAutomationPlan(cfg *native.Config, args []string) {
 }
 
 func cmdAutomationInit(args []string) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs("automation init", args)
 	if err != nil {
-		die(usageErrf("usage: homepodctl automation init --preset <name> [--name <string>] [--json]"))
+		die(err)
 	}
 	if len(positionals) != 0 {
 		die(usageErrf("usage: homepodctl automation init --preset <name> [--name <string>] [--json]"))

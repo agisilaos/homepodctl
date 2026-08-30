@@ -57,6 +57,14 @@ Notes:
 }
 
 func cmdHelp(args []string) {
+	_, pos, err := parseArgs("help", args)
+	if err != nil {
+		die(err)
+	}
+	if len(pos) > 1 {
+		die(usageErrf("usage: homepodctl help [<command>]"))
+	}
+	args = pos
 	if len(args) == 0 {
 		usage()
 		return

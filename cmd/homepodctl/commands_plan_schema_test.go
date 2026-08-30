@@ -182,3 +182,34 @@ func TestNormalizePlanTargetRejectsInvalidOwnedFlagValues(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanPreservesFlagLookingTargetValues(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"native-run", "--shortcut", "--json", "--json"}, []string{"--shortcut", "--json"}},
+		{[]string{"native-run", "--shortcut", "--dry-run=false", "--json"}, []string{"--shortcut", "--dry-run=false"}},
+		{[]string{"native-run", "-shortcut", "--json", "--json"}, []string{"-shortcut", "--json"}},
+	} {
+		jsonOut, pos, err := parsePlanArgs(tc.args)
+		if err != nil || !jsonOut {
+			t.Fatalf("parse %v: json=%t pos=%v err=%v", tc.args, jsonOut, pos, err)
+		}
+		_, target, err := normalizePlanTarget(pos[0], pos[1:])
+		want := append([]string{"--dry-run=true", "--json=true"}, tc.want...)
+		if err != nil || !slices.Equal(target, want) {
+			t.Errorf("normalize %v: target=%v want=%v err=%v", tc.args, target, want, err)
+		}
+	}
+}
+
+func TestPlanCanonicalizesLegacyOwnedFlags(t *testing.T) {
+	t.Parallel()
+	_, target, err := normalizePlanTarget("native-run", []string{"-shortcut=Example", "-dry-run=f", "-json=f"})
+	want := []string{"--dry-run=true", "--json=true", "-shortcut=Example"}
+	if err != nil || !slices.Equal(target, want) {
+		t.Fatalf("target=%v want=%v err=%v", target, want, err)
+	}
+}

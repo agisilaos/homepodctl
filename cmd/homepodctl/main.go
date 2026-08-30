@@ -161,6 +161,7 @@ func main() {
 	case "help":
 		cmdHelp(args)
 	case "version":
+		parseFlagOnlyArgs("version", args)
 		fmt.Printf("homepodctl %s (%s) %s\n", version, commit, date)
 	case "automation":
 		cmdAutomation(ctx, loadCfg(), args)
@@ -205,6 +206,7 @@ func main() {
 	case "native-run":
 		cmdNativeRun(ctx, args)
 	case "config-init":
+		parseFlagOnlyArgs("config-init", args)
 		cmdConfigInit()
 	case "setup":
 		cmdSetup(ctx, args)

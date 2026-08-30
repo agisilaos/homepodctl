@@ -28,8 +28,11 @@ type setupOptions struct {
 }
 
 func parseSetupOptions(args []string) (setupOptions, error) {
-	flags, positionals, err := parseArgs(args)
-	if err != nil || len(positionals) != 0 {
+	flags, positionals, err := parseArgs("setup", args)
+	if err != nil {
+		return setupOptions{}, err
+	}
+	if len(positionals) != 0 {
 		return setupOptions{}, usageErrf("usage: homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]")
 	}
 	jsonOut, _, err := flags.boolStrict("json")

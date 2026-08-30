@@ -1,0 +1,7 @@
+# Reject irrelevant command flags
+
+R11 rejects flags that do not belong to the selected command, trading accidental acceptance for explicit usage errors so user intent cannot silently disappear. This applies to all leaf commands, including former `flag.FlagSet` handlers and commands such as `version` and `config-init` that previously ignored trailing arguments. The setup test that accepted unrelated `--volume` and `--shuffle` flags intentionally becomes rejection coverage; it is not a compatibility requirement.
+
+Supported syntax remains a compatibility requirement, including documented options inactive in a particular mode: setup and automation run retain `--no-input`, and native play retains volume, shuffle, and choose. Repeated rooms, last-value behavior in the shared parser, flag-looking values, legacy single-dash names, and existing empty-equals behavior remain supported. `config set` continues to own literal value text after the setting name.
+
+Boolean value decoding is shared, while token consumption preserves syntax distinctions: `plan --json=f` uses the legacy attached boolean, but `plan --json f` leaves `f` positional. JSON-error detection follows the final `--json` occurrence, skips known flag values, and respects delimiters even when other arguments are invalid; unknown flags own no following value, and an invalid final JSON boolean selects human-readable errors. Invalid environment values still mean false, while the shared vocabulary makes `HOMEPODCTL_VERBOSE=y` true.

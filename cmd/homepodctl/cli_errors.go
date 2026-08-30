@@ -60,20 +60,70 @@ func emitAndExit(err error) {
 	os.Exit(code)
 }
 
+// Detect output intent even when argument validation will fail. Unknown options
+// own no following value; known options use exactly the command parser's rules.
 func wantsJSONErrors(args []string) bool {
-	for _, a := range args {
-		if a == "--json" {
-			return true
+	jsonOut := false
+	for i := 0; i < len(args); {
+		arg := args[i]
+		if arg == "--" {
+			return jsonOut
 		}
-		if strings.HasPrefix(a, "--json=") {
-			v := strings.TrimSpace(strings.TrimPrefix(a, "--json="))
-			switch strings.ToLower(v) {
-			case "1", "true", "yes", "on":
-				return true
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			command, tail := commandLeaf(arg, args[i+1:])
+			if command == "plan" {
+				jsonOut, _, _ = scanPlanArgs(tail, jsonOut, true)
+				return jsonOut
 			}
+			return commandJSONErrors(flagsForCommand(command), tail, jsonOut)
+		}
+		token, err := readErrorModeFlag(commandFlagSpec{}, args[i:])
+		jsonOut = errorModeFromFlag(token, err, jsonOut)
+		i += token.count
+	}
+	return jsonOut
+}
+
+func commandJSONErrors(spec commandFlagSpec, args []string, jsonOut bool) bool {
+	for i := 0; i < len(args); {
+		arg := args[i]
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			if spec.literalTail {
+				break
+			}
+			i++
+			continue
+		}
+		token, err := readErrorModeFlag(spec, args[i:])
+		jsonOut = errorModeFromFlag(token, err, jsonOut)
+		i += token.count
+	}
+	return jsonOut
+}
+
+func readErrorModeFlag(spec commandFlagSpec, args []string) (flagToken, error) {
+	// Even an unsupported --json can request a machine-readable usage error.
+	if _, supported := spec.flags["json"]; !supported {
+		name, _, _ := strings.Cut(args[0], "=")
+		if name == "--json" || (spec.legacySyntax && name == "-json") {
+			spec.flags = map[string]flagKind{"json": boolFlag}
 		}
 	}
-	return false
+	return readFlag(spec, args)
+}
+
+func errorModeFromFlag(token flagToken, err error, previous bool) bool {
+	if token.name != "json" {
+		return previous
+	}
+	if err != nil {
+		return false
+	}
+	value, ok := flagBoolValue(token.value)
+	return ok && value
 }
 
 func classifyErrorCode(err error) string {
@@ -180,10 +230,6 @@ func debugf(format string, args ...any) {
 }
 
 func envTruthy(v string) bool {
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
+	value, ok := parseBoolWord(v)
+	return ok && value
 }

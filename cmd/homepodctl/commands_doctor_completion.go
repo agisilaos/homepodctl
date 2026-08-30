@@ -18,6 +18,11 @@ func cmdCompletion(args []string) {
 		cmdCompletionInstall(args[1:])
 		return
 	}
+	_, pos, err := parseArgs("completion", args)
+	if err != nil {
+		die(err)
+	}
+	args = pos
 	if len(args) != 1 {
 		die(usageErrf("usage: homepodctl completion <bash|zsh|fish>\n       homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
 	}
@@ -30,33 +35,15 @@ func cmdCompletion(args []string) {
 }
 
 func cmdCompletionInstall(args []string) {
-	var shell string
-	var path string
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if strings.HasPrefix(a, "--path=") {
-			path = strings.TrimSpace(strings.TrimPrefix(a, "--path="))
-			continue
-		}
-		if a == "--path" {
-			if i+1 >= len(args) {
-				die(usageErrf("usage: homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
-			}
-			i++
-			path = strings.TrimSpace(args[i])
-			continue
-		}
-		if strings.HasPrefix(a, "-") {
-			die(usageErrf("unknown flag: %s", a))
-		}
-		if shell != "" {
-			die(usageErrf("usage: homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
-		}
-		shell = strings.ToLower(strings.TrimSpace(a))
+	flags, pos, err := parseArgs("completion install", args)
+	if err != nil {
+		die(err)
 	}
-	if shell == "" {
+	if len(pos) != 1 || strings.TrimSpace(pos[0]) == "" {
 		die(usageErrf("usage: homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]"))
 	}
+	shell := strings.ToLower(strings.TrimSpace(pos[0]))
+	path := strings.TrimSpace(flags.string("path"))
 	installedPath, err := installCompletion(shell, path)
 	if err != nil {
 		die(err)

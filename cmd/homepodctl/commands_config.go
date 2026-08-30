@@ -1,9 +1,7 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/agisilaos/homepodctl/internal/native"
@@ -32,12 +30,8 @@ func cmdConfig(args []string) {
 }
 
 func cmdConfigValidate(args []string) {
-	fs := flag.NewFlagSet("config validate", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	jsonOut := fs.Bool("json", false, "output JSON")
-	if err := fs.Parse(args); err != nil {
-		die(usageErrf("usage: homepodctl config validate [--json]"))
-	}
+	flags := parseFlagOnlyArgs("config validate", args)
+	jsonOut := flags.boolDefault("json", false)
 	cfg, err := loadConfigOptional()
 	if err != nil {
 		die(err)
@@ -49,7 +43,7 @@ func cmdConfigValidate(args []string) {
 		Path:   path,
 		Errors: issues,
 	}
-	if *jsonOut {
+	if jsonOut {
 		writeJSON(res)
 		return
 	}
@@ -67,7 +61,7 @@ func cmdConfigValidate(args []string) {
 }
 
 func cmdConfigGet(args []string) {
-	flags, pos, err := parseArgs(args)
+	flags, pos, err := parseArgs("config get", args)
 	if err != nil {
 		die(err)
 	}
@@ -100,16 +94,15 @@ func cmdConfigGet(args []string) {
 }
 
 func cmdConfigSet(args []string) {
-	fs := flag.NewFlagSet("config set", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	_, pos, err := parseArgs("config set", args)
+	if err != nil {
+		die(err)
+	}
+	if len(pos) < 2 {
 		die(usageErrf("usage: homepodctl config set <path> <value...>"))
 	}
-	if fs.NArg() < 2 {
-		die(usageErrf("usage: homepodctl config set <path> <value...>"))
-	}
-	key := strings.TrimSpace(fs.Arg(0))
-	values := fs.Args()[1:]
+	key := strings.TrimSpace(pos[0])
+	values := pos[1:]
 
 	cfg, err := loadConfigOptional()
 	if err != nil {

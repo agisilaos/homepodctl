@@ -304,6 +304,8 @@ homepodctl run bed --dry-run --json
 
 ## Common gotchas
 
+- **Flags belong to commands:** unrelated flags now produce a usage error. For example, `setup --volume 30` is rejected; use `play --volume 30` or `volume 30` instead.
+- **Boolean values:** command boolean flags accept `true/false`, `1/0`, `yes/no`, `y/n`, and `on/off`, including separate values such as `--json false`. JSON errors follow the last `--json` value and ignore flag-looking values and arguments after `--`.
 - **You built it but it still behaves “old”:** if you run `make build`, the binary is `./homepodctl`. Running `homepodctl ...` might be a different binary on your PATH.
 - **Rooms are not flags:** use `--room "Bedroom"` (repeatable), not `--bedroom` / `--Bedroom`.
 - **`out set` doesn’t edit config:** it only changes Music.app’s current outputs. Use `config-init` + edit `defaults.rooms` if you want persistent defaults.

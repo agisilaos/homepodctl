@@ -163,14 +163,11 @@ func setConfigPathValue(cfg *native.Config, key string, values []string) error {
 		if len(values) != 1 {
 			return usageErrf("%s expects exactly 1 value", key)
 		}
-		switch strings.ToLower(strings.TrimSpace(values[0])) {
-		case "true", "1", "yes", "on":
-			cfg.Defaults.Shuffle = true
-		case "false", "0", "no", "off":
-			cfg.Defaults.Shuffle = false
-		default:
+		value, ok := parseBoolWord(values[0])
+		if !ok {
 			return usageErrf("%s expects boolean true|false", key)
 		}
+		cfg.Defaults.Shuffle = value
 		return nil
 	case "defaults.volume":
 		if len(values) != 1 {
@@ -254,13 +251,8 @@ func setConfigPathValue(cfg *native.Config, key string, values []string) error {
 				cfg.Aliases[aliasName] = a
 				return nil
 			}
-			var b bool
-			switch v {
-			case "true", "1", "yes", "on":
-				b = true
-			case "false", "0", "no", "off":
-				b = false
-			default:
+			b, ok := parseBoolWord(v)
+			if !ok {
 				return usageErrf("%s expects boolean true|false or null", key)
 			}
 			a.Shuffle = &b

@@ -8,6 +8,9 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
+- Commands now reject unrelated flags instead of silently ignoring them, including setup options that were previously accepted without effect.
+- Boolean decoding is shared across command flags, config edits, and environment values. JSON errors respect explicit false values, repeated flags, literal flag values, and `--` delimiters.
+- Plan previews preserve flag-looking shortcut and playlist values and keep legacy single-dash output options from overriding safe preview settings.
 - Config writes from `setup` and `config set` now use the same persistence path as `config-init` and consistently report failures as config errors (exit code 3).
 - `play` now rejects competing positional, `--playlist`, and `--playlist-id` targets on both backends instead of silently choosing one.
 - Playback previews and execution share request validation, including volume bounds and AirPlay's requirement for rooms with an explicit volume. Negative volumes no longer act as an omitted value.
