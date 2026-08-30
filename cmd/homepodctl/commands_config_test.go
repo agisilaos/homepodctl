@@ -320,7 +320,7 @@ func TestExecuteAutomationVolume_AirplayUsesGivenRooms(t *testing.T) {
 		return nil
 	}
 
-	err := executeAutomationVolume(context.Background(), nil, "airplay", automationDefaults{}, 35, []string{"Bedroom"})
+	err := (automationVolumeSet{Backend: "airplay", Value: 35, Rooms: []string{"Bedroom"}}).execute(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("executeAutomationVolume: %v", err)
 	}
@@ -341,14 +341,14 @@ func TestExecuteAutomationWait_SuccessAndTimeout(t *testing.T) {
 		return music.NowPlaying{PlayerState: "playing"}, nil
 	}
 	sleepFn = func(time.Duration) {}
-	if err := executeAutomationWait(context.Background(), "playing", "50ms"); err != nil {
+	if err := (automationWait{State: "playing", timeout: 50 * time.Millisecond}).execute(context.Background(), nil); err != nil {
 		t.Fatalf("executeAutomationWait success: %v", err)
 	}
 
 	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{PlayerState: "paused"}, nil
 	}
-	err := executeAutomationWait(context.Background(), "playing", "20ms")
+	err := (automationWait{State: "playing", timeout: 20 * time.Millisecond}).execute(context.Background(), nil)
 	if err == nil || !strings.Contains(err.Error(), "wait timeout") {
 		t.Fatalf("expected timeout error, got %v", err)
 	}
