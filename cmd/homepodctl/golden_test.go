@@ -11,9 +11,20 @@ func TestGoldenHelpRun(t *testing.T) {
 	assertGolden(t, "help_run.txt", got)
 }
 
-func TestGoldenHelpAutomation(t *testing.T) {
-	got := captureStdout(t, func() { cmdHelp([]string{"automation"}) })
-	assertGolden(t, "help_automation.txt", got)
+func TestHelpDocumentationSnapshots(t *testing.T) {
+	for _, command := range []string{"automation", "plan"} {
+		t.Run(command, func(t *testing.T) {
+			got := captureStdout(t, func() { cmdHelp([]string{command}) })
+			path := filepath.Join("..", "..", "docs", "help", command+".txt")
+			want, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != string(want) {
+				t.Fatalf("help differs from %s; run: scripts/update-help.sh\ngot:\n%s", path, got)
+			}
+		})
+	}
 }
 
 func TestGoldenCompletionBash(t *testing.T) {

@@ -1,0 +1,11 @@
+homepodctl plan - preview resolved command execution
+
+Usage:
+  homepodctl plan <run|play|volume|vol|native-run|out set|automation run> [args] [--json]
+
+Notes:
+  - plan executes the target command in dry-run JSON mode.
+  - automation planning supports only automation run in this mode.
+  - plan automation run compiles an offline recipe; live lookups and preconditions are deferred until execution.
+  - the automation result appears under plan in the envelope, with mode=dry-run.
+  - use --json for a machine-friendly envelope containing the planned action.

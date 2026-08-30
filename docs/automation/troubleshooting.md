@@ -13,6 +13,11 @@
 
 Use this preflight when uncertain:
 
+Planning and dry-run are offline checks; they do not verify live devices,
+playlists, permissions, or native mappings. A failed execution exits `1`, including
+precondition failures and wait timeouts. With `--json`, inspect the failed step's
+`error` on stdout; earlier changes are not rolled back and later steps are skipped.
+
 ```sh
 homepodctl doctor --json
 homepodctl automation validate -f routine.yaml --json

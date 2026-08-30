@@ -52,7 +52,8 @@ Notes:
   - if no rooms are provided and defaults.rooms is empty, airplay commands fall back to Music.app’s currently selected AirPlay outputs (when possible).
   - --verbose (or HOMEPODCTL_VERBOSE=1) prints backend diagnostics to stderr.
   - --quiet suppresses non-essential human-readable success output.
-  - exit codes: 2 usage/flag errors, 3 config errors, 4 backend command failures.
+  - exit codes: 0 success, 1 runtime failures, 2 usage/flag errors, 3 config/automation validation errors, 4 backend command failures outside automation execution.
+  - automation execution failures always exit 1, including backend errors, missing preconditions, and timeouts.
 `)
 }
 
@@ -178,11 +179,30 @@ Usage:
   homepodctl automation plan -f <file|-> [--json]
   homepodctl automation run -f <file|-> [--dry-run] [--json] [--no-input]
 
+Flags:
+  -f, --file <file|->  Read YAML/JSON from a file or stdin (required except for init).
+      --dry-run        Preview run without backend calls; no short alias.
+      --json           Emit one result object on stdout; pre-execution errors go to stderr.
+      --no-input       Explicit non-interactive mode (run never prompts).
+      --preset <name>  Select an init preset (required for init).
+      --name <string>  Override the generated routine name.
+
 Notes:
-  - run executes steps sequentially and stops on first failed step.
-  - automation run never prompts for input.
-  - Use --dry-run to preview resolved actions without executing.
-  - Use --json --no-input for agent-safe usage.
+  - validate checks the file without applying config defaults or checking live state.
+  - plan and run --dry-run compile the same offline recipe using file/config defaults.
+  - Use --json to inspect resolved steps; human output shows a summary and step outcomes.
+  - Playlist searches, native playlist-ID lookups, current-output inference, and native mapping checks happen only when the relevant step executes.
+  - A successful preview does not guarantee devices, playlists, permissions, or Shortcuts are available.
+  - run executes sequentially, stops on the first failed step, and marks later steps skipped.
+  - resolved fields remain the offline recipe even after execution-time lookups.
+  - init prints YAML; init --json returns preset, name, and YAML content (it does not write a file).
+
+Exit codes:
+  0  Success (including validation and previews).
+  1  Runtime failure, including file read errors and any failed execution step.
+  2  Usage/argument error.
+  3  Config or automation file validation error.
+  Backend errors, missing preconditions, and wait timeouts during execution exit 1, not 4.
 `)
 	case "plan":
 		fmt.Fprint(os.Stdout, `homepodctl plan - preview resolved command execution
@@ -193,6 +213,8 @@ Usage:
 Notes:
   - plan executes the target command in dry-run JSON mode.
   - automation planning supports only automation run in this mode.
+  - plan automation run compiles an offline recipe; live lookups and preconditions are deferred until execution.
+  - the automation result appears under plan in the envelope, with mode=dry-run.
   - use --json for a machine-friendly envelope containing the planned action.
 `)
 	case "schema":

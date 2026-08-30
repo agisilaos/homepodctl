@@ -42,4 +42,5 @@ Notes:
   - if no rooms are provided and defaults.rooms is empty, airplay commands fall back to Music.app’s currently selected AirPlay outputs (when possible).
   - --verbose (or HOMEPODCTL_VERBOSE=1) prints backend diagnostics to stderr.
   - --quiet suppresses non-essential human-readable success output.
-  - exit codes: 2 usage/flag errors, 3 config errors, 4 backend command failures.
+  - exit codes: 0 success, 1 runtime failures, 2 usage/flag errors, 3 config/automation validation errors, 4 backend command failures outside automation execution.
+  - automation execution failures always exit 1, including backend errors, missing preconditions, and timeouts.
