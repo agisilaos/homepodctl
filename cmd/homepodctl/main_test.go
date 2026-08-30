@@ -16,7 +16,7 @@ import (
 func TestParseArgs(t *testing.T) {
 	t.Parallel()
 
-	flags, pos, err := parseArgs([]string{
+	flags, pos, err := parseArgs("play", []string{
 		"chill",
 		"--backend", "airplay",
 		"--room", "Living Room",
@@ -55,7 +55,7 @@ func TestParseArgs(t *testing.T) {
 func TestParseArgs_ShortFileFlag(t *testing.T) {
 	t.Parallel()
 
-	flags, pos, err := parseArgs([]string{"-f", "routine.yaml", "--json"})
+	flags, pos, err := parseArgs("automation run", []string{"-f", "routine.yaml", "--json"})
 	if err != nil {
 		t.Fatalf("parseArgs: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestParseArgs_ShortFileFlag(t *testing.T) {
 func TestParseArgs_UnknownFlag(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := parseArgs([]string{"--nope"})
+	_, _, err := parseArgs("play", []string{"--nope"})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -227,7 +227,7 @@ func TestBuildAliasRows_Empty(t *testing.T) {
 func TestParsedArgs_IntStrict(t *testing.T) {
 	t.Parallel()
 
-	flags, _, err := parseArgs([]string{"--volume", "50"})
+	flags, _, err := parseArgs("play", []string{"--volume", "50"})
 	if err != nil {
 		t.Fatalf("parseArgs: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestParsedArgs_IntStrict(t *testing.T) {
 func TestParseOutputFlags(t *testing.T) {
 	t.Parallel()
 
-	flags, _, err := parseArgs([]string{"--json", "--plain=false"})
+	flags, _, err := parseArgs("play", []string{"--json", "--plain=false"})
 	if err != nil {
 		t.Fatalf("parseArgs: %v", err)
 	}

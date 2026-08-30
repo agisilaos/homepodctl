@@ -54,7 +54,7 @@ type playRequest struct {
 }
 
 func resolvePlayRequest(ctx context.Context, cfg *native.Config, args []string) (playRequest, error) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs("play", args)
 	if err != nil {
 		return playRequest{}, err
 	}

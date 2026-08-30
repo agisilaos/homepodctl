@@ -10,7 +10,7 @@ import (
 )
 
 func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []string) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs(name, args)
 	if err != nil {
 		die(err)
 	}

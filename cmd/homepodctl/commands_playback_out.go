@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 	"strings"
 
@@ -16,20 +15,16 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 	}
 	switch args[0] {
 	case "list":
-		fs := flag.NewFlagSet("out list", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		jsonOut := fs.Bool("json", false, "output JSON")
-		includeNetwork := fs.Bool("include-network", false, "include network address (MAC) in JSON output")
-		plain := fs.Bool("plain", false, "plain (no header) output")
-		if err := fs.Parse(args[1:]); err != nil {
-			exitCode(exitUsage)
-		}
+		flags := parseFlagOnlyArgs("out list", args[1:])
+		jsonOut := flags.boolDefault("json", false)
+		includeNetwork := flags.boolDefault("include-network", false)
+		plain := flags.boolDefault("plain", false)
 		devs, err := music.ListAirPlayDevices(ctx)
 		if err != nil {
 			die(err)
 		}
-		if *jsonOut {
-			if !*includeNetwork {
+		if jsonOut {
+			if !includeNetwork {
 				for i := range devs {
 					devs[i].NetworkAddress = ""
 				}
@@ -37,9 +32,9 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 			writeJSON(devs)
 			return
 		}
-		printDevicesTable(os.Stdout, devs, *plain)
+		printDevicesTable(os.Stdout, devs, plain)
 	case "set":
-		flags, positionals, err := parseArgs(args[1:])
+		flags, positionals, err := parseArgs("out set", args[1:])
 		if err != nil {
 			die(err)
 		}

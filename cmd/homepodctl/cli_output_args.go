@@ -150,6 +150,10 @@ func (p parsedArgs) int(key string, def int) int {
 }
 
 func (p parsedArgs) intStrict(key string) (int, bool, error) {
+	return p.intStrictBase(key, 10)
+}
+
+func (p parsedArgs) intStrictBase(key string, base int) (int, bool, error) {
 	if !p.has(key) {
 		return 0, false, nil
 	}
@@ -157,11 +161,11 @@ func (p parsedArgs) intStrict(key string) (int, bool, error) {
 	if s == "" {
 		return 0, true, usageErrf("--%s requires a value", key)
 	}
-	n, err := strconv.Atoi(s)
+	n, err := strconv.ParseInt(s, base, strconv.IntSize)
 	if err != nil {
 		return 0, true, usageErrf("invalid --%s %q", key, s)
 	}
-	return n, true, nil
+	return int(n), true, nil
 }
 
 func (p parsedArgs) bool(key string) (bool, bool) {
@@ -169,7 +173,11 @@ func (p parsedArgs) bool(key string) (bool, bool) {
 	if len(v) == 0 {
 		return false, false
 	}
-	s := strings.TrimSpace(v[len(v)-1])
+	return flagBoolValue(v[len(v)-1])
+}
+
+func flagBoolValue(value string) (bool, bool) {
+	s := strings.TrimSpace(value)
 	if s == "" {
 		return true, true
 	}
@@ -177,14 +185,23 @@ func (p parsedArgs) bool(key string) (bool, bool) {
 }
 
 func parseBoolWord(value string) (bool, bool) {
+	return decodeBool(value, false)
+}
+
+// Short words are a legacy attached-value syntax. They must not cause a
+// following positional such as the playlist "f" to be consumed as a boolean.
+func decodeBool(value string, allowShort bool) (bool, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "true", "1", "yes", "y", "on":
 		return true, true
 	case "false", "0", "no", "n", "off":
 		return false, true
-	default:
-		return false, false
+	case "t", "f":
+		if allowShort {
+			return strings.EqualFold(strings.TrimSpace(value), "t"), true
+		}
 	}
+	return false, false
 }
 
 func (p parsedArgs) boolStrict(key string) (bool, bool, error) {
@@ -204,87 +221,4 @@ func (p parsedArgs) boolDefault(key string, def bool) bool {
 		return def
 	}
 	return b
-}
-
-func parseArgs(args []string) (parsedArgs, []string, error) {
-	out := parsedArgs{kv: map[string][]string{}}
-	var positionals []string
-
-	push := func(k, v string) {
-		out.kv[k] = append(out.kv[k], v)
-	}
-
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if a == "--" {
-			positionals = append(positionals, args[i+1:]...)
-			break
-		}
-		if a == "-h" || a == "--help" {
-			usage()
-			exitCode(0)
-		}
-		if !strings.HasPrefix(a, "-") || a == "-" {
-			positionals = append(positionals, a)
-			continue
-		}
-
-		if a == "-f" {
-			if i+1 >= len(args) {
-				return parsedArgs{}, nil, usageErrf("-f requires a value")
-			}
-			i++
-			push("f", args[i])
-			continue
-		}
-
-		if strings.HasPrefix(a, "--") {
-			key := strings.TrimPrefix(a, "--")
-			val := ""
-			if eq := strings.IndexByte(key, '='); eq >= 0 {
-				val = key[eq+1:]
-				key = key[:eq]
-			}
-
-			switch key {
-			case "backend", "playlist", "playlist-id", "volume", "value", "room", "query", "limit", "shortcut", "file", "preset", "name", "path", "watch":
-				if key == "room" {
-					if val == "" {
-						if i+1 >= len(args) {
-							return parsedArgs{}, nil, usageErrf("--room requires a value")
-						}
-						i++
-						val = args[i]
-					}
-					push("room", val)
-					continue
-				}
-				if val == "" {
-					if i+1 >= len(args) {
-						return parsedArgs{}, nil, usageErrf("--%s requires a value", key)
-					}
-					i++
-					val = args[i]
-				}
-				push(key, val)
-			case "shuffle", "choose", "json", "plain", "dry-run", "no-input", "include-network":
-				if val == "" && i+1 < len(args) {
-					if _, ok := parseBoolWord(args[i+1]); ok {
-						i++
-						val = args[i]
-					}
-				}
-				if val == "" {
-					val = "true"
-				}
-				push(key, val)
-			default:
-				return parsedArgs{}, nil, usageErrf("unknown flag: %s (tip: rooms use --room <name>; run `homepodctl help`)", a)
-			}
-			continue
-		}
-
-		return parsedArgs{}, nil, usageErrf("unknown flag: %s (tip: run `homepodctl help`)", a)
-	}
-	return out, positionals, nil
 }

@@ -30,7 +30,6 @@ func TestParseSetupOptionsPreservesAcceptedInputs(t *testing.T) {
 		{"bare booleans", []string{"--json", "--no-input"}, setupOptions{jsonOut: true}},
 		{"boolean aliases", []string{"--json=YES", "--no-input=off"}, setupOptions{jsonOut: true}},
 		{"last boolean", []string{"--json=invalid", "--json=false", "--no-input=0"}, setupOptions{}},
-		{"ignored flags", []string{"--volume", "invalid", "--shuffle=invalid"}, setupOptions{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := parseSetupOptions(tc.args)
@@ -59,9 +58,12 @@ func TestSetupRejectsInvalidInputBeforeConfigAccess(t *testing.T) {
 		{"empty room", []string{"--room", ""}, "defaults.rooms[0] must be non-empty"},
 		{"blank room", []string{"--room", " \t "}, "defaults.rooms[0] must be non-empty"},
 		{"later room", []string{"--room", "Bedroom", "--room", ""}, "defaults.rooms[1] must be non-empty"},
-		{"missing value", []string{"--room"}, "usage: homepodctl setup"},
+		{"missing value", []string{"--room"}, "--room requires a value"},
 		{"positional", []string{"Bedroom"}, "usage: homepodctl setup"},
-		{"unknown flag", []string{"--unknown"}, "usage: homepodctl setup"},
+		{"unknown flag", []string{"--unknown"}, "unknown flag: --unknown"},
+		{"formerly ignored flags", []string{"--volume", "invalid", "--shuffle=invalid"}, "unknown flag: --volume"},
+		{"unrelated boolean", []string{"--shuffle=invalid"}, "unknown flag: --shuffle"},
+		{"unsupported output", []string{"--plain"}, "unknown flag: --plain"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			origInit, origLoad := initConfig, loadConfigOptional

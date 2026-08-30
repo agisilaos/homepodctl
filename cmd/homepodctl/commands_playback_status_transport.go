@@ -198,9 +198,9 @@ func printStatusPlain(res statusResult) {
 }
 
 func cmdStatus(ctx context.Context, args []string) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs("status", args)
 	if err != nil {
-		die(usageErrf("usage: homepodctl status [--json] [--plain] [--watch <duration>]"))
+		die(err)
 	}
 	if len(positionals) != 0 {
 		die(usageErrf("usage: homepodctl status [--json] [--plain] [--watch <duration>]"))
@@ -269,7 +269,7 @@ func formatStatusSnapshotHeader(now time.Time, sequence int) string {
 }
 
 func cmdTransport(ctx context.Context, args []string, action string, fn func(context.Context) error) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs(action, args)
 	if err != nil {
 		die(err)
 	}

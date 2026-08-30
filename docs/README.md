@@ -8,6 +8,7 @@
 - Agent quickstart: `automation/quickstart-agent.md`
 - Troubleshooting: `automation/troubleshooting.md`
 - Config persistence design: `config-persistence-design.md`
+- R11 flag compatibility decision: [Reject irrelevant command flags](adr/0001-reject-irrelevant-command-flags.md)
 
 ## Presets
 

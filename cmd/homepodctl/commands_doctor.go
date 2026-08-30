@@ -20,9 +20,9 @@ type doctorReport struct {
 }
 
 func cmdDoctor(ctx context.Context, args []string) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs("doctor", args)
 	if err != nil {
-		die(usageErrf("usage: homepodctl doctor [--json] [--plain]"))
+		die(err)
 	}
 	if len(positionals) != 0 {
 		die(usageErrf("usage: homepodctl doctor [--json] [--plain]"))

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -12,21 +11,17 @@ import (
 )
 
 func cmdDevices(ctx context.Context, args []string) {
-	fs := flag.NewFlagSet("devices", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	jsonOut := fs.Bool("json", false, "output JSON")
-	includeNetwork := fs.Bool("include-network", false, "include network address (MAC) in JSON output")
-	plain := fs.Bool("plain", false, "plain (no header) output")
-	if err := fs.Parse(args); err != nil {
-		exitCode(exitUsage)
-	}
+	flags := parseFlagOnlyArgs("devices", args)
+	jsonOut := flags.boolDefault("json", false)
+	includeNetwork := flags.boolDefault("include-network", false)
+	plain := flags.boolDefault("plain", false)
 
 	devs, err := music.ListAirPlayDevices(ctx)
 	if err != nil {
 		die(err)
 	}
-	if *jsonOut {
-		if !*includeNetwork {
+	if jsonOut {
+		if !includeNetwork {
 			for i := range devs {
 				devs[i].NetworkAddress = ""
 			}
@@ -34,29 +29,31 @@ func cmdDevices(ctx context.Context, args []string) {
 		writeJSON(devs)
 		return
 	}
-	printDevicesTable(os.Stdout, devs, *plain)
+	printDevicesTable(os.Stdout, devs, plain)
 }
 
 func cmdPlaylists(ctx context.Context, args []string) {
-	fs := flag.NewFlagSet("playlists", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	query := fs.String("query", "", "filter playlists by substring (case-insensitive)")
-	limit := fs.Int("limit", 50, "max playlists to return (0 = no limit)")
-	jsonOut := fs.Bool("json", false, "output JSON")
-	plain := fs.Bool("plain", false, "plain (no header) output")
-	if err := fs.Parse(args); err != nil {
-		exitCode(exitUsage)
+	flags := parseFlagOnlyArgs("playlists", args)
+	query := flags.string("query")
+	limit := 50
+	// flag.FlagSet accepted Go integer prefixes for this option.
+	if n, present, err := flags.intStrictBase("limit", 0); err != nil {
+		die(err)
+	} else if present {
+		limit = n
 	}
+	jsonOut := flags.boolDefault("json", false)
+	plain := flags.boolDefault("plain", false)
 
-	playlists, err := music.ListUserPlaylists(ctx, *query, *limit)
+	playlists, err := music.ListUserPlaylists(ctx, query, limit)
 	if err != nil {
 		die(err)
 	}
-	if *jsonOut {
+	if jsonOut {
 		writeJSON(playlists)
 		return
 	}
-	if !*plain {
+	if !plain {
 		fmt.Println("PERSISTENT_ID\tNAME")
 	}
 	for _, p := range playlists {
@@ -65,16 +62,12 @@ func cmdPlaylists(ctx context.Context, args []string) {
 }
 
 func cmdAliases(cfg *native.Config, args []string) {
-	fs := flag.NewFlagSet("aliases", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	jsonOut := fs.Bool("json", false, "output JSON")
-	plain := fs.Bool("plain", false, "plain (no header) output")
-	if err := fs.Parse(args); err != nil {
-		exitCode(exitUsage)
-	}
+	flags := parseFlagOnlyArgs("aliases", args)
+	jsonOut := flags.boolDefault("json", false)
+	plain := flags.boolDefault("plain", false)
 	rows := buildAliasRows(cfg)
 	if len(rows) == 0 {
-		if *jsonOut {
+		if jsonOut {
 			writeJSON([]aliasRow{})
 			return
 		}
@@ -88,15 +81,15 @@ func cmdAliases(cfg *native.Config, args []string) {
 		fmt.Println("No aliases configured in config.json")
 		return
 	}
-	if *jsonOut {
+	if jsonOut {
 		writeJSON(rows)
 		return
 	}
-	printAliasesTable(os.Stdout, rows, *plain)
+	printAliasesTable(os.Stdout, rows, plain)
 }
 
 func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
-	flags, positionals, err := parseArgs(args)
+	flags, positionals, err := parseArgs("run", args)
 	if err != nil {
 		die(err)
 	}
@@ -248,32 +241,28 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 }
 
 func cmdNativeRun(ctx context.Context, args []string) {
-	fs := flag.NewFlagSet("native-run", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	shortcutName := fs.String("shortcut", "", "Shortcut name to run")
-	jsonOut := fs.Bool("json", false, "output JSON")
-	dryRun := fs.Bool("dry-run", false, "resolve and print action without running")
-	if err := fs.Parse(args); err != nil {
-		exitCode(exitUsage)
-	}
+	flags := parseFlagOnlyArgs("native-run", args)
+	shortcutName := flags.string("shortcut")
+	jsonOut := flags.boolDefault("json", false)
+	dryRun := flags.boolDefault("dry-run", false)
 
-	if strings.TrimSpace(*shortcutName) == "" {
+	if strings.TrimSpace(shortcutName) == "" {
 		die(usageErrf("--shortcut is required"))
 	}
-	if !*dryRun {
-		if err := runNativeShortcut(ctx, *shortcutName); err != nil {
+	if !dryRun {
+		if err := runNativeShortcut(ctx, shortcutName); err != nil {
 			die(err)
 		}
 	}
-	if *jsonOut {
+	if jsonOut {
 		writeJSON(actionResult{
 			OK:       true,
 			Action:   "native-run",
-			DryRun:   *dryRun,
-			Shortcut: *shortcutName,
+			DryRun:   dryRun,
+			Shortcut: shortcutName,
 		})
-	} else if *dryRun && !quiet {
-		fmt.Printf("dry-run action=native-run shortcut=%q\n", *shortcutName)
+	} else if dryRun && !quiet {
+		fmt.Printf("dry-run action=native-run shortcut=%q\n", shortcutName)
 	}
 }
 
