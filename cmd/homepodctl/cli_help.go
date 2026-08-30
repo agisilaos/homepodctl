@@ -70,9 +70,13 @@ Usage:
   homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
 
 Notes:
-  - <playlist-query> is a fuzzy search against your Music.app user playlists.
+  - Supply exactly one target: positional query words, --playlist, or --playlist-id.
+  - AirPlay searches Music.app user playlists; native uses an exact configured name (or looks up a name by ID).
   - If --room is omitted, homepodctl uses defaults.rooms from config.json; if that is empty it falls back to Music.app’s currently selected AirPlay outputs (airplay backend).
-  - --choose requires interactive stdin unless --no-input=false.
+  - AirPlay --choose prompts only for multiple matches and requires interactive stdin without --no-input; direct IDs bypass selection.
+  - --volume must be 0-100. AirPlay requires resolved rooms for explicit volume; a default volume without rooms is skipped.
+  - Native play ignores volume, shuffle, and --choose after validating option values.
+  - --dry-run shares argument/default validation and room inference, but skips playlist lookup, prompting, and native mapping checks.
 
 Examples:
   homepodctl play chill
