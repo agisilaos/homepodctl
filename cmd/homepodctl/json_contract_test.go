@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -78,18 +76,17 @@ func TestGoldenDoctorReportJSON(t *testing.T) {
 }
 
 func TestGoldenPlanNativeRunJSON(t *testing.T) {
-	bin := buildCLIBinary(t)
-	code, out := runCLI(t, bin, t.TempDir(), "plan", "native-run", "--shortcut", "Example", "--json")
-	if code != 0 {
-		t.Fatalf("plan native-run exit=%d out=%s", code, out)
+	cli := newCLIHarness(t)
+	result := cli.run(t, "plan", "native-run", "--shortcut", "Example", "--json")
+	if result.ExitCode != 0 {
+		t.Fatalf("plan native-run exit=%d out=%s", result.ExitCode, result.Stdout)
 	}
-	assertGolden(t, "plan_native_run_json.txt", out)
+	assertGolden(t, "plan_native_run_json.txt", result.Stdout)
 }
 
 func TestCLIExitCodeContracts(t *testing.T) {
-	bin := buildCLIBinary(t)
-	home := t.TempDir()
-	bad := filepath.Join(home, "bad.yaml")
+	cli := newCLIHarness(t)
+	bad := filepath.Join(cli.home, "bad.yaml")
 	if err := os.WriteFile(bad, []byte("version: \"2\"\nname: bad\nsteps:\n  - type: wait\n    state: playing\n    timeout: 20s\n"), 0o644); err != nil {
 		t.Fatalf("write bad routine: %v", err)
 	}
@@ -107,28 +104,12 @@ func TestCLIExitCodeContracts(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			code, out := runCLI(t, bin, home, tc.args...)
-			if code != tc.want {
-				t.Fatalf("args=%v exit=%d want=%d out=%s", tc.args, code, tc.want, out)
+			result := cli.run(t, tc.args...)
+			if result.ExitCode != tc.want {
+				t.Fatalf("args=%v exit=%d want=%d stderr=%s", tc.args, result.ExitCode, tc.want, result.Stderr)
 			}
 		})
 	}
-}
-
-func runCLI(t *testing.T, bin, home string, args ...string) (int, string) {
-	t.Helper()
-	cmd := exec.Command(bin, args...)
-	cmd.Env = append(os.Environ(), "HOME="+home)
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return 0, string(out)
-	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		return exitErr.ExitCode(), string(out)
-	}
-	t.Fatalf("run %v: %v", args, err)
-	return 1, ""
 }
 
 func normalizeJSONFields(t *testing.T, raw string, fields map[string]any) string {
