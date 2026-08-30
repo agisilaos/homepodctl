@@ -8,6 +8,7 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
+- Config writes from `setup` and `config set` now use the same persistence path as `config-init` and consistently report failures as config errors (exit code 3).
 - Serialized config-derived Bash, Zsh, and Fish completion candidates as shell-specific data so special characters cannot corrupt or execute generated scripts.
 - Completion generation now reports malformed config and values that the target shell cannot represent instead of silently producing incomplete scripts.
 

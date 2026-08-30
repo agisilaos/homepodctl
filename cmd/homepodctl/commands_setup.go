@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/agisilaos/homepodctl/internal/music"
@@ -89,7 +87,7 @@ func cmdSetup(ctx context.Context, args []string) {
 		die(usageErrf("setup produced invalid config: %s", strings.Join(issues, "; ")))
 	}
 	if configUpdated {
-		if err := saveConfig(cfg); err != nil {
+		if err := native.SaveConfig(cfg); err != nil {
 			die(err)
 		}
 	}
@@ -133,24 +131,6 @@ func cmdSetup(ctx context.Context, args []string) {
 	for _, step := range res.Next {
 		fmt.Printf("- %s\n", step)
 	}
-}
-
-func saveConfig(cfg *native.Config) error {
-	path, err := configPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	b, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return err
-	}
-	return nil
 }
 
 func setupNextSteps(cfg *native.Config) []string {

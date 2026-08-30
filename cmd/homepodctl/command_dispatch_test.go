@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -34,17 +35,13 @@ func TestCmdConfigDispatch_ValidateJSON(t *testing.T) {
 }
 
 func TestCmdConfigDispatch_SetAndGet(t *testing.T) {
-	origLoad := loadConfigOptional
-	origPath := configPath
-	t.Cleanup(func() {
-		loadConfigOptional = origLoad
-		configPath = origPath
-	})
-
-	cfg := &native.Config{}
-	path := filepath.Join(t.TempDir(), "config.json")
-	loadConfigOptional = func() (*native.Config, error) { return cfg, nil }
-	configPath = func() (string, error) { return path, nil }
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	path, err := native.ConfigPath()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	out, recovered := captureStdoutAndRecover(t, func() {
 		cmdConfig([]string{"set", "defaults.backend", "native"})
@@ -67,6 +64,48 @@ func TestCmdConfigDispatch_SetAndGet(t *testing.T) {
 	}
 	if strings.TrimSpace(out) != "native" {
 		t.Fatalf("get output=%q", out)
+	}
+}
+
+func TestConfigCommandsReportSaveErrors(t *testing.T) {
+	for _, command := range []string{"setup", "config set"} {
+		t.Run(command, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+			path, err := native.ConfigPath()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			// Bypass loading to exercise the save failure, not a read failure.
+			origLoad := loadConfigOptional
+			t.Cleanup(func() { loadConfigOptional = origLoad })
+			loadConfigOptional = func() (*native.Config, error) { return &native.Config{}, nil }
+			out, recovered := captureStdoutAndRecover(t, func() {
+				if command == "setup" {
+					cmdSetup(context.Background(), []string{"--backend", "native"})
+				} else {
+					cmdConfig([]string{"set", "defaults.backend", "native"})
+				}
+			})
+			fatal, ok := recovered.(cliFatal)
+			if !ok {
+				t.Fatalf("expected cliFatal, got %v", recovered)
+			}
+			var cfgErr *native.ConfigError
+			if !errors.As(fatal.err, &cfgErr) || cfgErr.Op != "write" || cfgErr.Path != path {
+				t.Fatalf("expected config write error for %s, got %v", path, fatal.err)
+			}
+			if classifyExitCode(fatal.err) != exitConfig || classifyErrorCode(fatal.err) != "CONFIG_ERROR" {
+				t.Fatalf("incorrect save failure classification: %v", fatal.err)
+			}
+			if out != "" {
+				t.Fatalf("unexpected success output: %q", out)
+			}
+		})
 	}
 }
 

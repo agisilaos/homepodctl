@@ -144,6 +144,11 @@ homepodctl config-init
 
 This writes `config.json` under your macOS user config dir (typically `~/Library/Application Support/homepodctl/config.json`).
 
+`config-init` leaves an existing config untouched. New config files are created with
+`0600` permissions; updates preserve existing file permissions. Config persistence
+failures from `config-init`, `setup`, and `config set` use exit code `3`
+(`CONFIG_ERROR` in JSON error output).
+
 Defaults are used when flags are omitted. For example, if you set:
 
 - `defaults.backend = "airplay"`
