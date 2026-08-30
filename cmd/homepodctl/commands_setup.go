@@ -23,19 +23,47 @@ type setupResult struct {
 	Next          []string              `json:"next"`
 }
 
-func cmdSetup(ctx context.Context, args []string) {
+type setupOptions struct {
+	backend string
+	rooms   []string
+	jsonOut bool
+}
+
+func parseSetupOptions(args []string) (setupOptions, error) {
 	flags, positionals, err := parseArgs(args)
-	if err != nil {
-		die(usageErrf("usage: homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]"))
-	}
-	if len(positionals) != 0 {
-		die(usageErrf("usage: homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]"))
+	if err != nil || len(positionals) != 0 {
+		return setupOptions{}, usageErrf("usage: homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]")
 	}
 	jsonOut, _, err := flags.boolStrict("json")
 	if err != nil {
-		die(err)
+		return setupOptions{}, err
 	}
 	if _, _, err := flags.boolStrict("no-input"); err != nil {
+		return setupOptions{}, err
+	}
+	opts := setupOptions{
+		backend: strings.TrimSpace(flags.string("backend")),
+		rooms:   flags.strings("room"),
+		jsonOut: jsonOut,
+	}
+	if opts.backend != "" && opts.backend != "airplay" && opts.backend != "native" {
+		return setupOptions{}, usageErrf("unknown backend: %q", opts.backend)
+	}
+	var issues []string
+	for i, room := range opts.rooms {
+		if strings.TrimSpace(room) == "" {
+			issues = append(issues, fmt.Sprintf("defaults.rooms[%d] must be non-empty", i))
+		}
+	}
+	if len(issues) > 0 {
+		return setupOptions{}, usageErrf("setup produced invalid config: %s", strings.Join(issues, "; "))
+	}
+	return opts, nil
+}
+
+func cmdSetup(ctx context.Context, args []string) {
+	opts, err := parseSetupOptions(args)
+	if err != nil {
 		die(err)
 	}
 
@@ -49,15 +77,12 @@ func cmdSetup(ctx context.Context, args []string) {
 	}
 
 	configUpdated := false
-	if backend := strings.TrimSpace(flags.string("backend")); backend != "" {
-		if backend != "airplay" && backend != "native" {
-			die(usageErrf("unknown backend: %q", backend))
-		}
-		cfg.Defaults.Backend = backend
+	if opts.backend != "" {
+		cfg.Defaults.Backend = opts.backend
 		configUpdated = true
 	}
-	if rooms := flags.strings("room"); len(rooms) > 0 {
-		cfg.Defaults.Rooms = append([]string(nil), rooms...)
+	if len(opts.rooms) > 0 {
+		cfg.Defaults.Rooms = append([]string(nil), opts.rooms...)
 		configUpdated = true
 	}
 	if issues := validateConfigValues(cfg); len(issues) > 0 {
@@ -90,7 +115,7 @@ func cmdSetup(ctx context.Context, args []string) {
 		res.DeviceError = formatError(devErr)
 	}
 
-	if jsonOut {
+	if opts.jsonOut {
 		writeJSON(res)
 		return
 	}
