@@ -131,13 +131,33 @@ func LoadConfigOptional() (*Config, error) {
 	return &cfg, nil
 }
 
+// SaveConfig writes cfg without validating or normalizing its values.
+// New files are created with mode 0600; existing file permissions are unchanged.
+func SaveConfig(cfg *Config) error {
+	path, err := ConfigPath()
+	if err != nil {
+		return &ConfigError{Op: "resolve", Err: err}
+	}
+	if cfg == nil {
+		return &ConfigError{Op: "encode", Path: path, Err: errors.New("cannot save nil config")}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return &ConfigError{Op: "mkdir", Path: filepath.Dir(path), Err: err}
+	}
+	b, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return &ConfigError{Op: "encode", Path: path, Err: err}
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		return &ConfigError{Op: "write", Path: path, Err: err}
+	}
+	return nil
+}
+
 func InitConfig() (string, error) {
 	path, err := ConfigPath()
 	if err != nil {
 		return "", &ConfigError{Op: "resolve", Err: err}
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", &ConfigError{Op: "mkdir", Path: filepath.Dir(path), Err: err}
 	}
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
@@ -187,12 +207,8 @@ func InitConfig() (string, error) {
 		},
 	}
 
-	b, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return "", &ConfigError{Op: "encode", Path: path, Err: err}
-	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return "", &ConfigError{Op: "write", Path: path, Err: err}
+	if err := SaveConfig(&cfg); err != nil {
+		return "", err
 	}
 	return path, nil
 }

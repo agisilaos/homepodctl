@@ -1,12 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/agisilaos/homepodctl/internal/native"
 )
 
 type configValidateResult struct {
@@ -122,21 +122,11 @@ func cmdConfigSet(args []string) {
 	if len(issues) > 0 {
 		die(usageErrf("updated config is invalid: %s", strings.Join(issues, "; ")))
 	}
-	path, err := configPath()
-	if err != nil {
-		die(err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		die(err)
-	}
-	b, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		die(err)
-	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
+	if err := native.SaveConfig(cfg); err != nil {
 		die(err)
 	}
 	if !quiet {
+		path, _ := configPath()
 		fmt.Printf("Updated %s (%s)\n", path, key)
 	}
 }

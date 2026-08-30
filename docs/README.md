@@ -6,6 +6,7 @@
 - User quickstart: `automation/quickstart-user.md`
 - Agent quickstart: `automation/quickstart-agent.md`
 - Troubleshooting: `automation/troubleshooting.md`
+- Config persistence design: `config-persistence-design.md`
 
 ## Presets
 
