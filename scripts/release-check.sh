@@ -72,14 +72,53 @@ echo "[release-check] checking go module metadata"
 if go help mod tidy 2>/dev/null | grep -Fq -- "-diff"; then
   go mod tidy -diff
 else
-  before_mod="$(mktemp)"
-  before_sum="$(mktemp)"
+  module_backup_dir=""
+  snapshots_ready=0
   had_sum=0
+
+  restore_module_files() {
+    local restore_failed=0
+    # Finish restoration even if another termination signal arrives.
+    trap '' HUP INT TERM
+    trap - EXIT
+    if [[ "$snapshots_ready" -eq 1 ]]; then
+      if ! cp "$module_backup_dir/go.mod" go.mod; then
+        restore_failed=1
+      fi
+      if [[ "$had_sum" -eq 1 ]]; then
+        if ! cp "$module_backup_dir/go.sum" go.sum; then
+          restore_failed=1
+        fi
+      elif ! rm -f go.sum; then
+        restore_failed=1
+      fi
+    fi
+    if [[ "$restore_failed" -ne 0 ]]; then
+      echo "error: could not restore module files; backups retained at $module_backup_dir" >&2
+      return 1
+    fi
+    if [[ -n "$module_backup_dir" ]]; then
+      if ! rm -rf "$module_backup_dir"; then
+        echo "error: could not remove module backups at $module_backup_dir" >&2
+        return 1
+      fi
+    fi
+  }
+
+  trap restore_module_files EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  module_backup_dir="$(mktemp -d "${TMPDIR:-/tmp}/homepodctl-release-check.XXXXXX")"
+  before_mod="$module_backup_dir/go.mod"
+  before_sum="$module_backup_dir/go.sum"
   cp go.mod "$before_mod"
   if [[ -f go.sum ]]; then
     cp go.sum "$before_sum"
     had_sum=1
   fi
+  snapshots_ready=1
 
   go mod tidy
   if ! diff -u "$before_mod" go.mod >/dev/null || ( [[ "$had_sum" -eq 1 ]] && ! diff -u "$before_sum" go.sum >/dev/null ) || ( [[ "$had_sum" -eq 0 ]] && [[ -f go.sum ]] ); then
@@ -87,23 +126,11 @@ else
     if [[ "$had_sum" -eq 1 ]]; then
       diff -u "$before_sum" go.sum >&2 || true
     fi
-    cp "$before_mod" go.mod
-    if [[ "$had_sum" -eq 1 ]]; then
-      cp "$before_sum" go.sum
-    else
-      rm -f go.sum
-    fi
-    rm -f "$before_mod" "$before_sum"
     die "go.mod/go.sum drift detected; run go mod tidy"
   fi
 
-  cp "$before_mod" go.mod
-  if [[ "$had_sum" -eq 1 ]]; then
-    cp "$before_sum" go.sum
-  else
-    rm -f go.sum
-  fi
-  rm -f "$before_mod" "$before_sum"
+  restore_module_files
+  trap - EXIT HUP INT TERM
 fi
 
 echo "[release-check] checking format"
