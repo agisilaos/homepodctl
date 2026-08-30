@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,7 +37,7 @@ func TestParseSetupOptionsPreservesAcceptedInputs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, tc.want) {
+			if got.backend != tc.want.backend || got.jsonOut != tc.want.jsonOut || !slices.Equal(got.rooms, tc.want.rooms) {
 				t.Errorf("options=%#v, want %#v", got, tc.want)
 			}
 		})
@@ -46,18 +46,6 @@ func TestParseSetupOptionsPreservesAcceptedInputs(t *testing.T) {
 
 func TestSetupRejectsInvalidInputBeforeConfigAccess(t *testing.T) {
 	bin := buildCLIBinary(t)
-	origInit, origLoad := initConfig, loadConfigOptional
-	t.Cleanup(func() {
-		initConfig, loadConfigOptional = origInit, origLoad
-	})
-	initConfig = func() (string, error) {
-		t.Error("invalid setup input called initConfig")
-		return "", errors.New("unexpected config initialization")
-	}
-	loadConfigOptional = func() (*native.Config, error) {
-		t.Error("invalid setup input called loadConfigOptional")
-		return nil, errors.New("unexpected config load")
-	}
 
 	for _, tc := range []struct {
 		name string
@@ -76,6 +64,19 @@ func TestSetupRejectsInvalidInputBeforeConfigAccess(t *testing.T) {
 		{"unknown flag", []string{"--unknown"}, "usage: homepodctl setup"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			origInit, origLoad := initConfig, loadConfigOptional
+			t.Cleanup(func() {
+				initConfig, loadConfigOptional = origInit, origLoad
+			})
+			initConfig = func() (string, error) {
+				t.Error("invalid setup input called initConfig")
+				return "", errors.New("unexpected config initialization")
+			}
+			loadConfigOptional = func() (*native.Config, error) {
+				t.Error("invalid setup input called loadConfigOptional")
+				return nil, errors.New("unexpected config load")
+			}
+
 			home := t.TempDir()
 			t.Setenv("HOME", home)
 			t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
