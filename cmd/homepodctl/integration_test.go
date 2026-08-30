@@ -13,17 +13,17 @@ func TestCLIDryRunCommands(t *testing.T) {
 	cli := newCLIHarness(t)
 
 	if result := cli.run(t, "config-init"); result.ExitCode != 0 {
-		t.Fatalf("config-init exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config-init exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "set", "defaults.backend", "native"); result.ExitCode != 0 {
-		t.Fatalf("config set defaults.backend native exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config set defaults.backend native exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 
 	assertDryRun := func(args ...string) {
 		t.Helper()
 		result := cli.run(t, args...)
 		if result.ExitCode != 0 {
-			t.Fatalf("%v exit=%d out=%s", args, result.ExitCode, result.Stdout)
+			t.Fatalf("%v exit=%d stdout=%s", args, result.ExitCode, result.Stdout)
 		}
 		if !strings.Contains(result.Stdout, `"dryRun": true`) {
 			t.Fatalf("%v output missing dryRun=true: %s", args, result.Stdout)
@@ -39,10 +39,10 @@ func TestCLIDryRunCommands(t *testing.T) {
 
 	result := cli.run(t, "out", "set", "Bedroom", "--dry-run", "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("out set dry-run with defaults.backend=native exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("out set dry-run with defaults.backend=native exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if !strings.Contains(result.Stdout, `"backend": "airplay"`) {
-		t.Fatalf("out set backend should be airplay, output=%s", result.Stdout)
+		t.Fatalf("out set backend should be airplay, stdout=%s", result.Stdout)
 	}
 }
 
@@ -50,7 +50,7 @@ func TestCLIGlobalVersionFlag(t *testing.T) {
 	cli := newCLIHarness(t)
 	result := cli.run(t, "--version")
 	if result.ExitCode != 0 {
-		t.Fatalf("--version exit=%d output=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("--version exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if !strings.Contains(result.Stdout, "homepodctl ") {
 		t.Fatalf("unexpected --version output: %s", result.Stdout)
@@ -61,11 +61,11 @@ func TestCLIQuietSuppressesDryRunOutput(t *testing.T) {
 	cli := newCLIHarness(t)
 
 	if result := cli.run(t, "config-init"); result.ExitCode != 0 {
-		t.Fatalf("config-init exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config-init exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	result := cli.run(t, "--quiet", "out", "set", "--room", "Bedroom", "--dry-run")
 	if result.ExitCode != 0 {
-		t.Fatalf("quiet out set dry-run exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("quiet out set dry-run exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if strings.TrimSpace(result.Stdout) != "" || strings.TrimSpace(result.Stderr) != "" {
 		t.Fatalf("expected quiet output to be empty, stdout=%q stderr=%q", result.Stdout, result.Stderr)
@@ -77,11 +77,11 @@ func TestCLISetupJSON(t *testing.T) {
 
 	result := cli.run(t, "setup", "--json", "--no-input")
 	if result.ExitCode != 0 {
-		t.Fatalf("setup --json exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("setup --json exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(result.Stdout), &payload); err != nil {
-		t.Fatalf("setup json parse: %v out=%s", err, result.Stdout)
+		t.Fatalf("setup json parse: %v stdout=%s", err, result.Stdout)
 	}
 	if _, ok := payload["configPath"]; !ok {
 		t.Fatalf("setup payload missing configPath: %v", payload)
@@ -96,16 +96,16 @@ func TestCLISetupPersistsDefaults(t *testing.T) {
 
 	result := cli.run(t, "setup", "--backend", "native", "--room", "Bedroom", "--json", "--no-input")
 	if result.ExitCode != 0 {
-		t.Fatalf("setup persist defaults exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("setup persist defaults exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 
 	result = cli.run(t, "config", "get", "defaults.backend", "--json")
 	if result.ExitCode != 0 || !strings.Contains(result.Stdout, `"value": "native"`) {
-		t.Fatalf("defaults.backend not updated exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("defaults.backend not updated exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	result = cli.run(t, "config", "get", "defaults.rooms", "--json")
 	if result.ExitCode != 0 || !strings.Contains(result.Stdout, `"Bedroom"`) {
-		t.Fatalf("defaults.rooms not updated exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("defaults.rooms not updated exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 }
 
@@ -113,14 +113,14 @@ func TestCLIDryRunErrorPaths(t *testing.T) {
 	cli := newCLIHarness(t)
 
 	if result := cli.run(t, "config-init"); result.ExitCode != 0 {
-		t.Fatalf("config-init exit=%d out=%s", result.ExitCode, result.Stderr)
+		t.Fatalf("config-init exit=%d stderr=%s", result.ExitCode, result.Stderr)
 	}
 
 	assertUsage := func(args []string, contains string) {
 		t.Helper()
 		result := cli.run(t, args...)
 		if result.ExitCode != exitUsage {
-			t.Fatalf("%v exit=%d want=%d out=%s", args, result.ExitCode, exitUsage, result.Stderr)
+			t.Fatalf("%v exit=%d want=%d stderr=%s", args, result.ExitCode, exitUsage, result.Stderr)
 		}
 		if !strings.Contains(strings.ToLower(result.Stderr), strings.ToLower(contains)) {
 			t.Fatalf("%v output missing %q: %s", args, contains, result.Stderr)
@@ -139,7 +139,7 @@ func TestCLIExitBoundary_JSONAndUsagePaths(t *testing.T) {
 
 	result := cli.run(t)
 	if result.ExitCode != exitUsage {
-		t.Fatalf("empty args exit=%d want=%d out=%s", result.ExitCode, exitUsage, result.Stderr)
+		t.Fatalf("empty args exit=%d want=%d stderr=%s", result.ExitCode, exitUsage, result.Stderr)
 	}
 	if !strings.Contains(strings.ToLower(result.Stderr), "usage:") {
 		t.Fatalf("empty args output missing usage text: %s", result.Stderr)
@@ -147,7 +147,7 @@ func TestCLIExitBoundary_JSONAndUsagePaths(t *testing.T) {
 
 	result = cli.run(t, "unknown-command", "--json")
 	if result.ExitCode != exitUsage {
-		t.Fatalf("unknown command --json exit=%d want=%d out=%s", result.ExitCode, exitUsage, result.Stderr)
+		t.Fatalf("unknown command --json exit=%d want=%d stderr=%s", result.ExitCode, exitUsage, result.Stderr)
 	}
 	var usagePayload struct {
 		OK    bool `json:"ok"`
@@ -165,7 +165,7 @@ func TestCLIExitBoundary_JSONAndUsagePaths(t *testing.T) {
 
 	result = cli.run(t, "config", "validate", "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("initial config validate exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("initial config validate exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	var initialValidate struct {
 		OK   bool   `json:"ok"`
@@ -188,18 +188,19 @@ func TestCLIExitBoundary_JSONAndUsagePaths(t *testing.T) {
 
 	result = cli.run(t, "config", "validate")
 	if result.ExitCode != exitUsage {
-		t.Fatalf("config validate invalid exit=%d want=%d out=%s", result.ExitCode, exitUsage, result.Stdout)
+		t.Fatalf("config validate invalid exit=%d want=%d stdout=%s", result.ExitCode, exitUsage, result.Stdout)
 	}
 	if !strings.Contains(strings.ToLower(result.Stdout), "config invalid") || !strings.Contains(result.Stdout, "defaults.backend") {
 		t.Fatalf("validate plain output missing expected diagnostics: %s", result.Stdout)
 	}
 }
+
 func TestCLIAutomationCommands(t *testing.T) {
 	cli := newCLIHarness(t)
 
 	result := cli.run(t, "automation", "init", "--preset", "morning")
 	if result.ExitCode != 0 {
-		t.Fatalf("automation init exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("automation init exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if !strings.Contains(result.Stdout, `version: "1"`) || !strings.Contains(result.Stdout, "name: morning") {
 		t.Fatalf("automation init output unexpected: %s", result.Stdout)
@@ -212,7 +213,7 @@ func TestCLIAutomationCommands(t *testing.T) {
 
 	result = cli.run(t, "automation", "validate", "-f", routinePath, "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("automation validate exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("automation validate exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if !strings.Contains(result.Stdout, `"mode": "validate"`) || !strings.Contains(result.Stdout, `"ok": true`) {
 		t.Fatalf("automation validate json unexpected: %s", result.Stdout)
@@ -220,7 +221,7 @@ func TestCLIAutomationCommands(t *testing.T) {
 
 	result = cli.run(t, "automation", "plan", "-f", routinePath)
 	if result.ExitCode != 0 {
-		t.Fatalf("automation plan exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("automation plan exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if !strings.Contains(result.Stdout, `mode=plan`) || !strings.Contains(result.Stdout, `1/4 out.set ok=true`) {
 		t.Fatalf("automation plan output unexpected: %s", result.Stdout)
@@ -228,7 +229,7 @@ func TestCLIAutomationCommands(t *testing.T) {
 
 	result = cli.run(t, "automation", "run", "-f", routinePath, "--dry-run", "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("automation run --dry-run exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("automation run --dry-run exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if !strings.Contains(result.Stdout, `"mode": "dry-run"`) || !strings.Contains(result.Stdout, `"steps"`) {
 		t.Fatalf("automation dry-run json unexpected: %s", result.Stdout)
@@ -247,16 +248,17 @@ func TestCLIAutomationErrorPaths(t *testing.T) {
 		t.Helper()
 		result := cli.run(t, args...)
 		if result.ExitCode != exitUsage {
-			t.Fatalf("%v exit=%d want=%d out=%s", args, result.ExitCode, exitUsage, result.Stderr)
+			t.Fatalf("%v exit=%d want=%d stderr=%s", args, result.ExitCode, exitUsage, result.Stderr)
 		}
 		if !strings.Contains(strings.ToLower(result.Stderr), strings.ToLower(contains)) {
 			t.Fatalf("%v output missing %q: %s", args, contains, result.Stderr)
 		}
 	}
 
-	result := cli.run(t, "automation", "validate", "-f", "/tmp/does-not-exist.yaml")
+	missingFile := filepath.Join(cli.home, "does-not-exist.yaml")
+	result := cli.run(t, "automation", "validate", "-f", missingFile)
 	if result.ExitCode != exitGeneric {
-		t.Fatalf("missing file exit=%d want=%d out=%s", result.ExitCode, exitGeneric, result.Stderr)
+		t.Fatalf("missing file exit=%d want=%d stderr=%s", result.ExitCode, exitGeneric, result.Stderr)
 	}
 	if !strings.Contains(strings.ToLower(result.Stderr), "read automation file") {
 		t.Fatalf("missing file output unexpected: %s", result.Stderr)
@@ -266,7 +268,7 @@ func TestCLIAutomationErrorPaths(t *testing.T) {
 		t.Helper()
 		result := cli.run(t, args...)
 		if result.ExitCode != exitConfig {
-			t.Fatalf("%v exit=%d want=%d out=%s", args, result.ExitCode, exitConfig, result.Stderr)
+			t.Fatalf("%v exit=%d want=%d stderr=%s", args, result.ExitCode, exitConfig, result.Stderr)
 		}
 		if !strings.Contains(strings.ToLower(result.Stderr), strings.ToLower(contains)) {
 			t.Fatalf("%v output missing %q: %s", args, contains, result.Stderr)
@@ -305,52 +307,53 @@ steps:
 	}
 	assertValidation([]string{"automation", "plan", "-f", badStep}, "expected playing|paused|stopped")
 }
+
 func TestCLIConfigCommands(t *testing.T) {
 	cli := newCLIHarness(t)
 
 	if result := cli.run(t, "config", "validate", "--json"); result.ExitCode != 0 || !strings.Contains(result.Stdout, `"ok": true`) {
-		t.Fatalf("config validate exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config validate exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "set", "defaults.backend", "native"); result.ExitCode != 0 {
-		t.Fatalf("config set backend exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config set backend exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "get", "defaults.backend"); result.ExitCode != 0 || strings.TrimSpace(result.Stdout) != "native" {
-		t.Fatalf("config get backend exit=%d out=%q", result.ExitCode, result.Stdout)
+		t.Fatalf("config get backend exit=%d stdout=%q", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "set", "defaults.rooms", "Bedroom", "Living Room"); result.ExitCode != 0 {
-		t.Fatalf("config set rooms exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config set rooms exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "get", "defaults.rooms", "--json"); result.ExitCode != 0 || !strings.Contains(result.Stdout, "Living Room") {
-		t.Fatalf("config get rooms exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config get rooms exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "set", "defaults.backend", "invalid"); result.ExitCode != exitUsage {
 		t.Fatalf("invalid backend exit=%d want=%d stderr=%s", result.ExitCode, exitUsage, result.Stderr)
 	}
 	if result := cli.run(t, "config", "set", "aliases.night.backend", "native"); result.ExitCode != 0 {
-		t.Fatalf("config set alias backend exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config set alias backend exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "set", "aliases.night.rooms", "Bedroom"); result.ExitCode != 0 {
-		t.Fatalf("config set alias rooms exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config set alias rooms exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "set", "native.playlists.Bedroom.Focus", "BR Focus Shortcut"); result.ExitCode != 0 {
-		t.Fatalf("config set native playlist mapping exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config set native playlist mapping exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "set", "native.volumeShortcuts.Bedroom.30", "BR Volume 30"); result.ExitCode != 0 {
-		t.Fatalf("config set native volume mapping exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("config set native volume mapping exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "get", "aliases.night.backend"); result.ExitCode != 0 || strings.TrimSpace(result.Stdout) != "native" {
-		t.Fatalf("config get alias backend exit=%d out=%q", result.ExitCode, result.Stdout)
+		t.Fatalf("config get alias backend exit=%d stdout=%q", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "get", "native.playlists.Bedroom.Focus"); result.ExitCode != 0 || strings.TrimSpace(result.Stdout) != "BR Focus Shortcut" {
-		t.Fatalf("config get native playlist mapping exit=%d out=%q", result.ExitCode, result.Stdout)
+		t.Fatalf("config get native playlist mapping exit=%d stdout=%q", result.ExitCode, result.Stdout)
 	}
 	if result := cli.run(t, "config", "get", "native.volumeShortcuts.Bedroom.30"); result.ExitCode != 0 || strings.TrimSpace(result.Stdout) != "BR Volume 30" {
-		t.Fatalf("config get native volume mapping exit=%d out=%q", result.ExitCode, result.Stdout)
+		t.Fatalf("config get native volume mapping exit=%d stdout=%q", result.ExitCode, result.Stdout)
 	}
 
 	result := cli.run(t, "config", "get", "does.not.exist", "--json")
 	if result.ExitCode != exitUsage {
-		t.Fatalf("json error exit=%d want=%d out=%s", result.ExitCode, exitUsage, result.Stderr)
+		t.Fatalf("json error exit=%d want=%d stderr=%s", result.ExitCode, exitUsage, result.Stderr)
 	}
 	var payload struct {
 		OK    bool `json:"ok"`
@@ -383,7 +386,7 @@ func TestCLICompletionInstall(t *testing.T) {
 	targetDir := filepath.Join(cli.home, "custom-completions")
 	result := cli.run(t, "completion", "install", "bash", "--path", targetDir)
 	if result.ExitCode != 0 {
-		t.Fatalf("completion install exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("completion install exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	targetFile := filepath.Join(targetDir, "homepodctl")
 	b, err := os.ReadFile(targetFile)
@@ -400,7 +403,7 @@ func TestCLIPlanCommand(t *testing.T) {
 
 	result := cli.run(t, "plan", "native-run", "--shortcut", "Example", "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("plan native-run exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("plan native-run exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	var payload struct {
 		OK      bool           `json:"ok"`
@@ -423,7 +426,7 @@ func TestCLIPlanCommand(t *testing.T) {
 	missingShortcut := "__homepodctl_plan_safety_missing_7f5fd198__"
 	result = cli.run(t, "plan", "native-run", "--shortcut", missingShortcut, "--dry-run=false", "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("plan canonical dry-run exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("plan canonical dry-run exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	var canonical struct {
 		Args []string       `json:"args"`
@@ -458,7 +461,7 @@ steps:
 
 	result = cli.run(t, "plan", "automation", "run", "-f", routinePath, "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("plan automation run exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("plan automation run exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	var auto struct {
 		OK      bool           `json:"ok"`
@@ -480,7 +483,7 @@ steps:
 
 	result = cli.run(t, "plan", "automation", "validate", "-f", routinePath)
 	if result.ExitCode != exitUsage {
-		t.Fatalf("plan automation validate exit=%d want=%d out=%s", result.ExitCode, exitUsage, result.Stderr)
+		t.Fatalf("plan automation validate exit=%d want=%d stderr=%s", result.ExitCode, exitUsage, result.Stderr)
 	}
 	if !strings.Contains(strings.ToLower(result.Stderr), "automation run") {
 		t.Fatalf("unexpected automation non-run output: %s", result.Stderr)
@@ -488,7 +491,7 @@ steps:
 
 	result = cli.run(t, "plan", "pause")
 	if result.ExitCode != exitUsage {
-		t.Fatalf("plan unsupported exit=%d want=%d out=%s", result.ExitCode, exitUsage, result.Stderr)
+		t.Fatalf("plan unsupported exit=%d want=%d stderr=%s", result.ExitCode, exitUsage, result.Stderr)
 	}
 	if !strings.Contains(strings.ToLower(result.Stderr), "only supports") {
 		t.Fatalf("unexpected unsupported output: %s", result.Stderr)
@@ -500,7 +503,7 @@ func TestCLISchemaCommand(t *testing.T) {
 
 	result := cli.run(t, "schema", "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("schema list exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("schema list exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if !strings.Contains(result.Stdout, "action-result") || !strings.Contains(result.Stdout, "plan-response") {
 		t.Fatalf("schema list missing expected names: %s", result.Stdout)
@@ -508,7 +511,7 @@ func TestCLISchemaCommand(t *testing.T) {
 
 	result = cli.run(t, "schema", "action-result", "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("schema action-result exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("schema action-result exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	if !strings.Contains(result.Stdout, `"$schema"`) || !strings.Contains(result.Stdout, `"action"`) {
 		t.Fatalf("schema action-result output unexpected: %s", result.Stdout)

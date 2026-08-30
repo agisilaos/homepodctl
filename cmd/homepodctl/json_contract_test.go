@@ -79,7 +79,7 @@ func TestGoldenPlanNativeRunJSON(t *testing.T) {
 	cli := newCLIHarness(t)
 	result := cli.run(t, "plan", "native-run", "--shortcut", "Example", "--json")
 	if result.ExitCode != 0 {
-		t.Fatalf("plan native-run exit=%d out=%s", result.ExitCode, result.Stdout)
+		t.Fatalf("plan native-run exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 	assertGolden(t, "plan_native_run_json.txt", result.Stdout)
 }
