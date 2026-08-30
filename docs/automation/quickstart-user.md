@@ -31,8 +31,13 @@ homepodctl playlists --query chill
 
 ```sh
 homepodctl automation validate -f morning.yaml
-homepodctl automation plan -f morning.yaml
+homepodctl automation plan -f morning.yaml --json
 ```
+
+Validation checks the file. Planning applies file/config defaults without calling
+Music or Shortcuts; `--json` shows the resolved step fields. Playlist and current
+output lookups, along with native mapping checks, wait until execution. A preview
+can succeed even if a device, playlist, permission, or Shortcut is unavailable.
 
 ## 4) Run it
 
@@ -43,8 +48,11 @@ homepodctl automation run -f morning.yaml
 ## 5) Safe preview mode
 
 ```sh
-homepodctl automation run -f morning.yaml --dry-run
+homepodctl automation run -f morning.yaml --dry-run --json
 ```
+
+This produces the same offline recipe as `automation plan`. Use `--dry-run` in
+full; it has no short alias. See `homepodctl help automation` for supported flags.
 
 ## Troubleshooting
 

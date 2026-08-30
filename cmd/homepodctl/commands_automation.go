@@ -127,6 +127,7 @@ func cmdAutomationRun(ctx context.Context, cfg *native.Config, args []string) {
 	result := executeAutomationPlan(runCtx, plan)
 	emitAutomationResult(result, jsonOut)
 	if !result.OK {
+		// Step errors are reported in the result; all failed runs share exit 1.
 		exitCode(exitGeneric)
 	}
 }

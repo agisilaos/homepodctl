@@ -276,10 +276,15 @@ homepodctl run bed --dry-run --json
 ## Exit codes
 
 - `0`: success
-- `2`: usage/flag/validation error
+- `1`: runtime failures, including file read errors and all failed automation executions
+- `2`: usage/flag/argument validation error
 - `3`: config or automation validation error
-- `4`: backend command error (`osascript` / `shortcuts`)
-- `1`: other runtime failures
+- `4`: backend command error (`osascript` / `shortcuts`) outside automation execution
+
+Automation execution always returns `1` on failure, including backend errors,
+missing preconditions, and wait timeouts. With `--json`, the failed run result
+is on stdout with step error details; pre-execution errors use stderr instead.
+See the [automation exit and output contract](docs/automation-v1-cli-spec.md#exit-codes).
 
 ## Command cheat sheet
 
@@ -299,7 +304,7 @@ homepodctl run bed --dry-run --json
 - `homepodctl completion <bash|zsh|fish>`: generate completion script
 - `homepodctl plan <command> ...`: preview resolved execution; target `--dry-run`/`--json` flags are canonicalized to safe values, while arguments after a target `--` stay literal
 - `homepodctl schema [<name>] [--json]`: inspect JSON output contracts
-- `homepodctl automation validate|plan|run|init ...`: routine workflows (non-interactive by default; add `--dry-run` to preview)
+- `homepodctl automation validate|plan|run|init ...`: routine workflows (non-interactive; `plan` or `run --dry-run` compiles an offline recipe, with live lookups deferred until execution; add `--json` to inspect resolved steps)
 - `homepodctl version`: version info
 
 ## Common gotchas

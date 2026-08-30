@@ -1,2 +1,4 @@
 # output_file<TAB>command args
 root.txt	--help
+automation.txt	help automation
+plan.txt	help plan
