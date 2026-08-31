@@ -139,7 +139,7 @@ func TestBashCompletionCandidatesAreOpaque(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			harness := script + "\n" + tc.setup + "\n_homepodctl_completion\nprintf '%s\\0' \"${COMPREPLY[@]}\"\n"
+			harness := script + "\n" + tc.setup + "\n_homepodctl_completion\n" + decodeBashReplies("", "")
 			got := runShellScript(t, bash, []string{"--noprofile", "--norc"}, harness)
 			assertNULValues(t, got, tc.want)
 			assertNotCreated(t, sentinel)

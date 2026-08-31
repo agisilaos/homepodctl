@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -132,8 +135,12 @@ func completionCandidates(t *testing.T, shell string, values completionValues, w
 	var output []byte
 	switch shell {
 	case "bash":
+		prefix := ""
+		if current := words[len(words)-1]; strings.Contains(current, "=") {
+			prefix = current[:strings.LastIndex(current, "=")+1]
+		}
 		harness := script + fmt.Sprintf("\nCOMP_WORDS=(%s)\nCOMP_CWORD=%d\n_homepodctl_completion\n", bashArrayLiteral(words), len(words)-1) +
-			"if (( ${#COMPREPLY[@]} )); then printf '%s\\0' \"${COMPREPLY[@]}\"; fi\n"
+			decodeBashReplies(prefix, "")
 		output = runShellScript(t, requireShell(t, "bash"), []string{"--noprofile", "--norc"}, harness)
 	case "zsh":
 		harness := zshCompletionHarness("words=("+zshArrayLiteral(words)+")", len(words)) + script +
@@ -201,8 +208,13 @@ func TestCompletionRawShellWords(t *testing.T) {
 				}
 				var output []byte
 				if shell == "bash" {
-					harness := script + fmt.Sprintf("\nCOMP_LINE=%s\nCOMP_WORDS=(%s)\nCOMP_CWORD=%d\n_homepodctl_completion\nprintf '%%s\\0' \"${COMPREPLY[@]}\"\n",
+					quote := ""
+					if tc.name == "open quote" {
+						quote = "'"
+					}
+					harness := script + fmt.Sprintf("\nCOMP_LINE=%s\nCOMP_WORDS=(%s)\nCOMP_CWORD=%d\n_homepodctl_completion\n",
 						bashArrayLiteral([]string{tc.line}), bashArrayLiteral(tc.words), len(tc.words)-1)
+					harness += decodeBashReplies("", quote)
 					output = runShellScript(t, requireShell(t, shell), []string{"--noprofile", "--norc"}, harness)
 				} else {
 					harness := zshCompletionHarness("words=("+zshArrayLiteral(tc.words)+")", len(tc.words)) +
@@ -212,5 +224,43 @@ func TestCompletionRawShellWords(t *testing.T) {
 				assertNULValues(t, output, []string{tc.want})
 			}
 		})
+	}
+}
+
+// Only tests evaluate returned completion syntax: this simulates accepting a
+// candidate and executing the command. Hostile fixtures assert no substitution
+// runs and each decoded candidate remains exactly one argument.
+func decodeBashReplies(prefix, quote string) string {
+	return "decoded=()\nprefix=" + bashArrayLiteral([]string{prefix}) + "\nquote_marker=" + bashArrayLiteral([]string{quote}) + `
+for reply in "${COMPREPLY[@]}"; do
+  eval "set -- $quote_marker$reply$quote_marker"
+  for value in "$@"; do decoded+=("$prefix$value"); done
+done
+if (( ${#decoded[@]} )); then printf '%s\0' "${decoded[@]}"; fi
+`
+}
+
+func TestBashReadlinePreservesArguments(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal("python3 is required by repository verification and the Readline harness")
+	}
+	dir := t.TempDir()
+	values := completionValues{rooms: []string{"Living Room", "Danger$(printf SENTINEL)", "single'quote", "double\"quote", `back\slash`}}
+	script, err := renderCompletion("bash", values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scriptPath := filepath.Join(dir, "completion.bash")
+	if err := os.WriteFile(scriptPath, []byte(script), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// A room whose name is also a directory must not gain a trailing slash.
+	if err := os.Mkdir(filepath.Join(dir, "Living Room"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(python, "testdata/bash_readline.py", requireShell(t, "bash"), scriptPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Readline argument round trip: %v\n%s", err, output)
 	}
 }

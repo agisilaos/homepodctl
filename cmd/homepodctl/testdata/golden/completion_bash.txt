@@ -555,7 +555,7 @@ _homepodctl_values() {
 
 _homepodctl_unquote() {
   local raw="$1" quote='' char next
-  unquoted=''
+  unquoted='' word_prefix=''
   # Remove shell quoting without evaluating user text or substitutions.
   while [[ -n "$raw" ]]; do
     char="${raw:0:1}"; raw="${raw:1}"
@@ -575,12 +575,27 @@ _homepodctl_unquote() {
       quote="$char"
     else
       unquoted+="$char"
+      if [[ -z "$quote" && "${COMP_WORDBREAKS-}" == *"$char"* ]]; then word_prefix="$unquoted"; fi
     fi
   done
+  completion_quote="$quote"
+}
+
+_homepodctl_quote() {
+  local value="$1" single_quote_escape="'\\''"
+  case "$completion_quote" in
+    "'") quoted="${value//\'/$single_quote_escape}" ;;
+    '"')
+      quoted="${value//\\/\\\\}"
+      quoted="${quoted//\"/\\\"}"
+      quoted="${quoted//\$/\\\$}"
+      quoted="${quoted//$'\x60'/\\$'\x60'}" ;;
+    *) printf -v quoted '%q' "$value" ;;
+  esac
 }
 
 _homepodctl_completion() {
-  local group current candidate index=1 split_prefix='' word unquoted join_next=0 adjacent remaining
+  local group current candidate index=1 split_prefix='' word unquoted join_next=0 adjacent remaining word_prefix completion_quote quoted
   local -a candidates descriptions input decoded
   COMPREPLY=()
   remaining="${COMP_LINE#*"${COMP_WORDS[0]}"}"
@@ -609,12 +624,16 @@ _homepodctl_completion() {
     _homepodctl_unquote "$word"
     decoded+=("$unquoted")
   done
-  _homepodctl_unquote "$split_prefix"
-  split_prefix="$unquoted"
+  # Readline may replace only the suffix even when COMP_WORDS keeps the
+  # assignment intact (notably stock macOS Bash).
+  if [[ -n "$word_prefix" ]]; then split_prefix="$word_prefix"; fi
   _homepodctl_scan "${decoded[@]}"
   _homepodctl_values "$group"
   for candidate in "${candidates[@]}"; do
-    if [[ "$candidate" == "$current"* ]]; then COMPREPLY+=("${candidate#"$split_prefix"}"); fi
+    if [[ "$candidate" == "$current"* ]]; then
+      _homepodctl_quote "${candidate#"$split_prefix"}"
+      COMPREPLY+=("$quoted")
+    fi
   done
 }
 complete -F _homepodctl_completion homepodctl
