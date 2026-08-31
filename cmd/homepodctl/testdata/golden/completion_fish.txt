@@ -1,24 +1,836 @@
 # fish completion for homepodctl
-complete -c homepodctl -f -a "help version config automation plan schema completion setup doctor devices out playlists status now aliases run pause stop next prev play volume vol native-run config-init"
-complete -c homepodctl -l version
-complete -c homepodctl -l json
-complete -c homepodctl -l plain
-complete -c homepodctl -l verbose
-complete -c homepodctl -l quiet
-complete -c homepodctl -l backend
-complete -c homepodctl -l room
-complete -c homepodctl -l playlist
-complete -c homepodctl -l playlist-id
-complete -c homepodctl -l shuffle
-complete -c homepodctl -l volume
-complete -c homepodctl -l watch
-complete -c homepodctl -l query
-complete -c homepodctl -l limit
-complete -c homepodctl -l shortcut
-complete -c homepodctl -l include-network
-complete -c homepodctl -l file
-complete -c homepodctl -l dry-run
-complete -c homepodctl -l no-input
-complete -c homepodctl -l preset
-complete -c homepodctl -l name
-complete -c homepodctl -n '__fish_seen_argument --preset' -a "morning focus winddown party reset"
+function _homepodctl_scan
+    set -l context root
+    set -l pending ''
+    set -l optional 0
+    set -l ended 0
+    set -l position 0
+    set -l offset 0
+    set -l current $argv[-1]
+    set -e argv[-1]
+    set -l boolean_words '0' '1' 'false' 'n' 'no' 'off' 'on' 'true' 'y' 'yes'
+    set -l options
+    set -l value_flags
+    set -l position_flags
+    set -l boolean_flags
+    set -l terminal
+    set -l children
+    set -l positional
+    set -l start
+    set -l repeat
+    set -l stop
+    set -l legacy
+    set -l literal
+    while true
+        set options
+        set value_flags
+        set position_flags
+        set boolean_flags
+        set terminal
+        set children
+        set positional ''
+        set start 0
+        set repeat 0
+        set stop 0
+        set legacy 0
+        set literal 0
+        switch $context
+        case 'aliases'
+            set options '--help' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'automation'
+            set options
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal
+            set children 'init' 'plan' 'run' 'validate'
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'automation init'
+            set options '--help' '--json' '--name' '--preset' '-h'
+            set value_flags '--name' '--preset'
+            set position_flags
+            set boolean_flags '--json'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'automation plan'
+            set options '--file' '--help' '--json' '-f' '-h'
+            set value_flags '-f' '--file'
+            set position_flags
+            set boolean_flags '--json'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'automation run'
+            set options '--dry-run' '--file' '--help' '--json' '--no-input' '-f' '-h'
+            set value_flags '-f' '--file'
+            set position_flags
+            set boolean_flags '--dry-run' '--json' '--no-input'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'automation validate'
+            set options '--file' '--help' '--json' '-f' '-h'
+            set value_flags '-f' '--file'
+            set position_flags
+            set boolean_flags '--json'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'completion'
+            set options '--help' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal '--help' '-h'
+            set children 'install'
+            set positional 'shells'
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'completion install'
+            set options '--help' '--path' '-h'
+            set value_flags '--path'
+            set position_flags
+            set boolean_flags
+            set terminal '--help' '-h'
+            set children
+            set positional 'shells'
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'config'
+            set options
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal
+            set children 'get' 'set' 'validate'
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'config get'
+            set options '--help' '--json' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'config set'
+            set options '--help' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 1
+        case 'config validate'
+            set options '--help' '--json' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'config-init'
+            set options '--help' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'devices'
+            set options '--help' '--include-network' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--include-network' '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'doctor'
+            set options '--help' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'help'
+            set options '--help' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal '--help' '-h'
+            set children
+            set positional 'commands'
+            set start 0
+            set repeat 0
+            set stop 1
+            set legacy 0
+            set literal 0
+        case 'native-run'
+            set options '--dry-run' '--help' '--json' '--shortcut' '-h'
+            set value_flags '--shortcut'
+            set position_flags
+            set boolean_flags '--dry-run' '--json'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'next'
+            set options '--help' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'now'
+            set options '--help' '--json' '--plain' '--watch' '-h'
+            set value_flags '--watch'
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'out'
+            set options
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal
+            set children 'list' 'set'
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'out list'
+            set options '--help' '--include-network' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--include-network' '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'out set'
+            set options '--backend' '--dry-run' '--help' '--json' '--plain' '--room' '-h'
+            set value_flags '--backend' '--room'
+            set position_flags
+            set boolean_flags '--dry-run' '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional 'rooms'
+            set start 0
+            set repeat 1
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'pause'
+            set options '--help' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'plan'
+            set options '--json'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json'
+            set terminal
+            set children 'automation' 'native-run' 'out' 'play' 'run' 'vol' 'volume'
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'plan automation'
+            set options '--json'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json'
+            set terminal
+            set children 'run'
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'plan automation run'
+            set options '--dry-run' '--file' '--json' '--no-input' '-f'
+            set value_flags '-f' '--file'
+            set position_flags
+            set boolean_flags '--dry-run' '--json' '--no-input'
+            set terminal
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'plan native-run'
+            set options '--dry-run' '--json' '--shortcut'
+            set value_flags '--shortcut'
+            set position_flags
+            set boolean_flags '--dry-run' '--json'
+            set terminal
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'plan out'
+            set options '--json'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json'
+            set terminal
+            set children 'set'
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'plan out set'
+            set options '--backend' '--dry-run' '--json' '--plain' '--room'
+            set value_flags '--backend' '--room'
+            set position_flags
+            set boolean_flags '--dry-run' '--json' '--plain'
+            set terminal
+            set children
+            set positional 'rooms'
+            set start 0
+            set repeat 1
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'plan play'
+            set options '--backend' '--choose' '--dry-run' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume'
+            set value_flags '--backend' '--playlist' '--playlist-id' '--room' '--volume'
+            set position_flags
+            set boolean_flags '--choose' '--dry-run' '--json' '--no-input' '--plain' '--shuffle'
+            set terminal
+            set children
+            set positional 'playlists'
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'plan run'
+            set options '--dry-run' '--json' '--plain'
+            set value_flags
+            set position_flags
+            set boolean_flags '--dry-run' '--json' '--plain'
+            set terminal
+            set children
+            set positional 'aliases'
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'plan vol'
+            set options '--backend' '--dry-run' '--json' '--plain' '--room' '--value' '--volume'
+            set value_flags '--backend' '--room' '--value' '--volume'
+            set position_flags '--value' '--volume'
+            set boolean_flags '--dry-run' '--json' '--plain'
+            set terminal
+            set children
+            set positional 'rooms'
+            set start 1
+            set repeat 1
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'plan volume'
+            set options '--backend' '--dry-run' '--json' '--plain' '--room' '--value' '--volume'
+            set value_flags '--backend' '--room' '--value' '--volume'
+            set position_flags '--value' '--volume'
+            set boolean_flags '--dry-run' '--json' '--plain'
+            set terminal
+            set children
+            set positional 'rooms'
+            set start 1
+            set repeat 1
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'play'
+            set options '--backend' '--choose' '--dry-run' '--help' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume' '-h'
+            set value_flags '--backend' '--playlist' '--playlist-id' '--room' '--volume'
+            set position_flags
+            set boolean_flags '--choose' '--dry-run' '--json' '--no-input' '--plain' '--shuffle'
+            set terminal '--help' '-h'
+            set children
+            set positional 'playlists'
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'playlists'
+            set options '--help' '--json' '--limit' '--plain' '--query' '-h'
+            set value_flags '--limit' '--query'
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 1
+            set literal 0
+        case 'prev'
+            set options '--help' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'root'
+            set options '--help' '--quiet' '--verbose' '--version' '-h' '-q' '-v'
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal '--help' '--version' '-h'
+            set children 'aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'version' 'vol' 'volume'
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'run'
+            set options '--dry-run' '--help' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--dry-run' '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional 'aliases'
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'schema'
+            set options '--help' '--json' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'setup'
+            set options '--backend' '--help' '--json' '--no-input' '--room' '-h'
+            set value_flags '--backend' '--room'
+            set position_flags
+            set boolean_flags '--json' '--no-input'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'status'
+            set options '--help' '--json' '--plain' '--watch' '-h'
+            set value_flags '--watch'
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'stop'
+            set options '--help' '--json' '--plain' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'version'
+            set options '--help' '-h'
+            set value_flags
+            set position_flags
+            set boolean_flags
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'vol'
+            set options '--backend' '--dry-run' '--help' '--json' '--plain' '--room' '--value' '--volume' '-h'
+            set value_flags '--backend' '--room' '--value' '--volume'
+            set position_flags '--value' '--volume'
+            set boolean_flags '--dry-run' '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional 'rooms'
+            set start 1
+            set repeat 1
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'volume'
+            set options '--backend' '--dry-run' '--help' '--json' '--plain' '--room' '--value' '--volume' '-h'
+            set value_flags '--backend' '--room' '--value' '--volume'
+            set position_flags '--value' '--volume'
+            set boolean_flags '--dry-run' '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional 'rooms'
+            set start 1
+            set repeat 1
+            set stop 0
+            set legacy 0
+            set literal 0
+
+        end
+        if not set -q argv[1]
+            break
+        end
+        set -l word $argv[1]
+        set -e argv[1]
+        if test -n "$pending"
+            set pending ''
+            continue
+        end
+        if test $optional = 1
+            set optional 0
+            if contains -- (string lower -- (string trim -- "$word")) $boolean_words
+                continue
+            end
+        end
+        if test $ended = 0
+            if test "$word" = --
+                test "$context" = root; and return
+                if test "$context" != plan
+                    set ended 1
+                end
+                continue
+            end
+            if string match -q -- '-*' "$word"; and test "$word" != -
+                set -l parts (string split -m 1 = -- "$word")
+                set -l flag $parts[1]
+                set -l attached 0
+                set -l value ''
+                set -l flag_legacy $legacy
+                if set -q parts[2]
+                    set attached 1
+                    set value $parts[2]
+                end
+                if string match -q 'plan*' "$context"; and test "$flag" = --json
+                    set flag_legacy 1
+                end
+                if test $legacy = 1; and not string match -q -- '--*' "$flag"; and not contains -- "$flag" -h -f
+                    set flag -$flag
+                end
+                if test "$flag" = -f; and test "$word" != -f
+                    return
+                end
+                contains -- "$flag" $options; or return
+                contains -- "$flag" $terminal; and return
+                if contains -- "$flag" $value_flags
+                    if contains -- "$flag" $position_flags
+                        set offset 1
+                    end
+                    if test $attached = 0; or begin; test -z "$value"; and test $flag_legacy = 0; end
+                        set pending $flag
+                    end
+                else if contains -- "$flag" $boolean_flags
+                    if test $attached = 0; or begin; test -z "$value"; and test $flag_legacy = 0; end
+                        set optional 1
+                    end
+                else if test $attached = 1
+                    return
+                end
+                continue
+            end
+        end
+        if test $position = 0; and contains -- "$word" $children
+            if test "$context" = root
+                set context $word
+            else
+                set context "$context $word"
+            end
+            continue
+        end
+        if test $literal = 1; or test $stop = 1
+            return
+        end
+        if set -q children[1]; and test -z "$positional"
+            return
+        end
+        set position (math $position + 1)
+    end
+    set -l group none
+    if test -n "$pending"
+        switch $pending
+            case '--backend'
+                set group 'backends'
+            case '--playlist'
+                set group 'playlists'
+            case '--preset'
+                set group 'presets'
+            case '--room'
+                set group 'rooms'
+
+        end
+    else if test $ended = 0; and string match -q -- '-*' "$current"
+        if string match -q '*=*' -- "$current"
+            set -l flag (string split -m 1 = -- "$current")[1]
+            contains -- "$flag" $options; or return
+            if contains -- "$flag" $value_flags; or contains -- "$flag" $boolean_flags
+                set group inline:$flag
+            end
+        else
+            set group options:$context
+        end
+    else if test $position = 0; and set -q children[1]
+        set group children:$context
+    else if test -n "$positional"; and test (math $position + $offset) -ge $start; and begin; test $repeat = 1; or test (math $position + $offset) = $start; end
+        set group $positional
+    else if test $ended = 0; and test -z "$current"
+        set group options:$context
+    end
+    printf '%s\n' "$group"
+end
+
+function _homepodctl_wants
+    set -l line (commandline -cp | string collect --allow-empty)
+    # All registrations for one completion share the same pure argument walk.
+    if not set -q _homepodctl_cache_line; or test "$_homepodctl_cache_line" != "$line"
+        set -l raw_current (commandline -ct | string collect --allow-empty)
+        set -l prefix_length (math (string length -- "$line") - (string length -- "$raw_current"))
+        set -l prefix (string sub -l $prefix_length -- "$line" | string collect --allow-empty)
+        set -l tokens
+        set -l current_tokens
+        # Tokenize without evaluating substitutions; NUL framing preserves
+        # quoted newlines in completed values.
+        printf '%s\0' "$prefix" | read -z -t -a tokens
+        printf '%s\0' "$raw_current" | read -z -t -a current_tokens
+        set -l current ''
+        if set -q current_tokens[1]
+            set current $current_tokens[1]
+        end
+        set -e tokens[1]
+        set -g _homepodctl_cache_group (_homepodctl_scan $tokens "$current")
+        set -g _homepodctl_cache_current "$current"
+        set -g _homepodctl_cache_line "$line"
+    end
+    test "$_homepodctl_cache_group" = "$argv[1]"
+end
+
+function _homepodctl_candidates
+    # Fish otherwise applies fuzzy matching, which can offer unrelated
+    # spellings for a prefix such as --c. All shells use literal prefixes.
+    set -l pattern '^'(string escape --style=regex -- "$_homepodctl_cache_current")
+    for candidate in $argv
+        set -l name (string split -m 1 \t -- "$candidate")[1]
+        if string match -q -r -- "$pattern" "$name"
+            printf '%s\0' "$candidate"
+        end
+    end
+end
+
+complete -c homepodctl -f
+complete -c homepodctl -n '_homepodctl_wants \'backends\'' -a '(_homepodctl_candidates \'airplay\' \'native\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'booleans\'' -a '(_homepodctl_candidates \'true\' \'false\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:automation\'' -a '(_homepodctl_candidates \'init\' \'plan	Preview command execution\' \'run	Run alias\' \'validate\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:completion\'' -a '(_homepodctl_candidates \'install\' \'bash\' \'zsh\' \'fish\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:config\'' -a '(_homepodctl_candidates \'get\' \'set\' \'validate\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:out\'' -a '(_homepodctl_candidates \'list\' \'set\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:plan\'' -a '(_homepodctl_candidates \'automation	Run automation routines\' \'native-run	Run shortcut\' \'out	Manage outputs\' \'play	Play playlist\' \'run	Run alias\' \'vol	Set volume\' \'volume	Set volume\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:plan automation\'' -a '(_homepodctl_candidates \'run	Run alias\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:plan out\'' -a '(_homepodctl_candidates \'set\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:root\'' -a '(_homepodctl_candidates \'aliases	List aliases\' \'automation	Run automation routines\' \'completion	Generate shell completion\' \'config	Inspect/update config\' \'config-init	Write starter config\' \'devices	List devices\' \'doctor	Run diagnostics\' \'help	Show help\' \'native-run	Run shortcut\' \'next	Next track\' \'now	Alias of status\' \'out	Manage outputs\' \'pause	Pause playback\' \'plan	Preview command execution\' \'play	Play playlist\' \'playlists	List playlists\' \'prev	Previous track\' \'run	Run alias\' \'schema	Show JSON schemas\' \'setup	Onboard and verify environment\' \'status	Show playback, route, and backend status\' \'stop	Stop playback\' \'version	Show version\' \'vol	Set volume\' \'volume	Set volume\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'commands\'' -a '(_homepodctl_candidates \'aliases	List aliases\' \'automation	Run automation routines\' \'completion	Generate shell completion\' \'config	Inspect/update config\' \'config-init	Write starter config\' \'devices	List devices\' \'doctor	Run diagnostics\' \'help	Show help\' \'native-run	Run shortcut\' \'next	Next track\' \'now	Alias of status\' \'out	Manage outputs\' \'pause	Pause playback\' \'plan	Preview command execution\' \'play	Play playlist\' \'playlists	List playlists\' \'prev	Previous track\' \'run	Run alias\' \'schema	Show JSON schemas\' \'setup	Onboard and verify environment\' \'status	Show playback, route, and backend status\' \'stop	Stop playback\' \'version	Show version\' \'vol	Set volume\' \'volume	Set volume\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--backend\'' -a '(_homepodctl_candidates \'--backend=airplay\' \'--backend=native\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--choose\'' -a '(_homepodctl_candidates \'--choose=true\' \'--choose=false\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--dry-run\'' -a '(_homepodctl_candidates \'--dry-run=true\' \'--dry-run=false\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--include-network\'' -a '(_homepodctl_candidates \'--include-network=true\' \'--include-network=false\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--json\'' -a '(_homepodctl_candidates \'--json=true\' \'--json=false\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--no-input\'' -a '(_homepodctl_candidates \'--no-input=true\' \'--no-input=false\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--plain\'' -a '(_homepodctl_candidates \'--plain=true\' \'--plain=false\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--preset\'' -a '(_homepodctl_candidates \'--preset=morning\' \'--preset=focus\' \'--preset=winddown\' \'--preset=party\' \'--preset=reset\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'inline:--shuffle\'' -a '(_homepodctl_candidates \'--shuffle=true\' \'--shuffle=false\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:aliases\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:automation init\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--name	Routine name\' \'--preset	Preset name\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:automation plan\'' -a '(_homepodctl_candidates \'--file	Input file\' \'--help	Show help\' \'--json	Output JSON\' \'-f	Input file\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:automation run\'' -a '(_homepodctl_candidates \'--dry-run	Preview without side effects\' \'--file	Input file\' \'--help	Show help\' \'--json	Output JSON\' \'--no-input	Non-interactive mode\' \'-f	Input file\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:automation validate\'' -a '(_homepodctl_candidates \'--file	Input file\' \'--help	Show help\' \'--json	Output JSON\' \'-f	Input file\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:completion\'' -a '(_homepodctl_candidates \'--help	Show help\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:completion install\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--path	Completion installation path\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:config get\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:config set\'' -a '(_homepodctl_candidates \'--help	Show help\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:config validate\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:config-init\'' -a '(_homepodctl_candidates \'--help	Show help\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:devices\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--include-network	Include network address\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:doctor\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:help\'' -a '(_homepodctl_candidates \'--help	Show help\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:native-run\'' -a '(_homepodctl_candidates \'--dry-run	Preview without side effects\' \'--help	Show help\' \'--json	Output JSON\' \'--shortcut	Shortcut name\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:next\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:now\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'--watch	Poll interval\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:out list\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--include-network	Include network address\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:out set\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--dry-run	Preview without side effects\' \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'--room	Room name\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:pause\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan\'' -a '(_homepodctl_candidates \'--json	Output JSON\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan automation\'' -a '(_homepodctl_candidates \'--json	Output JSON\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan automation run\'' -a '(_homepodctl_candidates \'--dry-run	Preview without side effects\' \'--file	Input file\' \'--json	Output JSON\' \'--no-input	Non-interactive mode\' \'-f	Input file\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan native-run\'' -a '(_homepodctl_candidates \'--dry-run	Preview without side effects\' \'--json	Output JSON\' \'--shortcut	Shortcut name\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan out\'' -a '(_homepodctl_candidates \'--json	Output JSON\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan out set\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--dry-run	Preview without side effects\' \'--json	Output JSON\' \'--plain	Plain output\' \'--room	Room name\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan play\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--choose	Choose among playlist matches\' \'--dry-run	Preview without side effects\' \'--json	Output JSON\' \'--no-input	Non-interactive mode\' \'--plain	Plain output\' \'--playlist	Playlist name\' \'--playlist-id	Playlist ID\' \'--room	Room name\' \'--shuffle	Shuffle toggle\' \'--volume	Volume 0-100\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan run\'' -a '(_homepodctl_candidates \'--dry-run	Preview without side effects\' \'--json	Output JSON\' \'--plain	Plain output\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan vol\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--dry-run	Preview without side effects\' \'--json	Output JSON\' \'--plain	Plain output\' \'--room	Room name\' \'--value	Volume 0-100\' \'--volume	Volume 0-100\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:plan volume\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--dry-run	Preview without side effects\' \'--json	Output JSON\' \'--plain	Plain output\' \'--room	Room name\' \'--value	Volume 0-100\' \'--volume	Volume 0-100\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:play\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--choose	Choose among playlist matches\' \'--dry-run	Preview without side effects\' \'--help	Show help\' \'--json	Output JSON\' \'--no-input	Non-interactive mode\' \'--plain	Plain output\' \'--playlist	Playlist name\' \'--playlist-id	Playlist ID\' \'--room	Room name\' \'--shuffle	Shuffle toggle\' \'--volume	Volume 0-100\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:playlists\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--limit	Maximum results\' \'--plain	Plain output\' \'--query	Playlist filter\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:prev\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:root\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--quiet	Suppress non-essential success output\' \'--verbose	Verbose diagnostics\' \'--version	Show version\' \'-h	Show help\' \'-q	Suppress non-essential success output\' \'-v	Verbose diagnostics\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:run\'' -a '(_homepodctl_candidates \'--dry-run	Preview without side effects\' \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:schema\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:setup\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--help	Show help\' \'--json	Output JSON\' \'--no-input	Non-interactive mode\' \'--room	Room name\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:status\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'--watch	Poll interval\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:stop\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:version\'' -a '(_homepodctl_candidates \'--help	Show help\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:vol\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--dry-run	Preview without side effects\' \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'--room	Room name\' \'--value	Volume 0-100\' \'--volume	Volume 0-100\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:volume\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--dry-run	Preview without side effects\' \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'--room	Room name\' \'--value	Volume 0-100\' \'--volume	Volume 0-100\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'presets\'' -a '(_homepodctl_candidates \'morning\' \'focus\' \'winddown\' \'party\' \'reset\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'shells\'' -a '(_homepodctl_candidates \'bash\' \'zsh\' \'fish\' | string split0)'

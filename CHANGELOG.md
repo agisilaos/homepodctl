@@ -8,6 +8,7 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
+- Bash, Zsh, and Fish completions share command-specific flags and value suggestions, including `--choose`, supported nested `plan` targets, and explicit short aliases; unrelated options are no longer suggested.
 - Commands now reject unrelated flags instead of silently ignoring them, including setup options that were previously accepted without effect.
 - Boolean decoding is shared across command flags, config edits, and environment values. JSON errors respect explicit false values, repeated flags, literal flag values, and `--` delimiters.
 - Plan previews preserve flag-looking shortcut and playlist values and keep legacy single-dash output options from overriding safe preview settings.

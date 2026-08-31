@@ -139,7 +139,7 @@ func TestBashCompletionCandidatesAreOpaque(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			harness := script + "\n" + tc.setup + "\n_homepodctl_completion\nprintf '%s\\0' \"${COMPREPLY[@]}\"\n"
+			harness := script + "\n" + tc.setup + "\n_homepodctl_completion\n" + decodeBashReplies("", "")
 			got := runShellScript(t, bash, []string{"--noprofile", "--norc"}, harness)
 			assertNULValues(t, got, tc.want)
 			assertNotCreated(t, sentinel)
@@ -177,19 +177,6 @@ func TestZshCompletionCandidatesAreOpaque(t *testing.T) {
 	}
 }
 
-func TestFishCompletionArgumentsAreOpaque(t *testing.T) {
-	fish := requireFish(t)
-	sentinel := filepath.Join(t.TempDir(), "executed")
-	candidates := fishHostileCompletionCandidates(sentinel)
-	harness := "set deferred " + fishCompletionArguments(candidates) + "\n" +
-		"set decoded\n" +
-		"eval \"set decoded $deferred\"\n" +
-		"printf '%s\\0' $decoded\n"
-	got := runShellScript(t, fish, []string{"--no-config"}, harness)
-	assertNULValues(t, got, candidates)
-	assertNotCreated(t, sentinel)
-}
-
 func TestFishCompletionScriptCandidatesAreOpaque(t *testing.T) {
 	fish := requireFish(t)
 	sentinel := filepath.Join(t.TempDir(), "executed")
@@ -214,31 +201,6 @@ func TestFishCompletionScriptCandidatesAreOpaque(t *testing.T) {
 			}
 		}
 		assertNotCreated(t, sentinel)
-	}
-}
-
-func TestFishCompletionScriptConsolidatesDynamicCandidates(t *testing.T) {
-	t.Parallel()
-
-	script, err := renderCompletion("fish", completionValues{
-		aliases:   []string{"one", "two"},
-		rooms:     []string{"one", "two"},
-		playlists: []string{"one", "two"},
-	})
-	if err != nil {
-		t.Fatalf("renderCompletion(fish): %v", err)
-	}
-	conditions := []string{
-		"__fish_seen_subcommand_from run",
-		"__fish_seen_argument --room",
-		"__fish_seen_subcommand_from out; and __fish_seen_subcommand_from set",
-		"__fish_seen_subcommand_from play",
-		"__fish_seen_argument --playlist",
-	}
-	for _, condition := range conditions {
-		if count := strings.Count(script, fishStringLiteral(condition)); count != 1 {
-			t.Errorf("condition %q appears %d times, want one registration", condition, count)
-		}
 	}
 }
 

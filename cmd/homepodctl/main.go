@@ -70,6 +70,11 @@ type globalOptions struct {
 	quiet   bool
 }
 
+var globalFlagNames = map[string]string{
+	"-h": "help", "--help": "help", "--version": "version",
+	"-v": "verbose", "--verbose": "verbose", "-q": "quiet", "--quiet": "quiet",
+}
+
 func parseGlobalOptions(args []string) (globalOptions, string, []string, error) {
 	opts := globalOptions{}
 	for i := 0; i < len(args); i++ {
@@ -80,14 +85,14 @@ func parseGlobalOptions(args []string) (globalOptions, string, []string, error) 
 		if !strings.HasPrefix(a, "-") || a == "-" {
 			return opts, a, args[i+1:], nil
 		}
-		switch a {
-		case "-h", "--help":
+		switch globalFlagNames[a] {
+		case "help":
 			opts.help = true
-		case "--version":
+		case "version":
 			opts.version = true
-		case "-v", "--verbose":
+		case "verbose":
 			opts.verbose = true
-		case "-q", "--quiet":
+		case "quiet":
 			opts.quiet = true
 		default:
 			return globalOptions{}, "", nil, usageErrf("unknown global flag: %s (tip: run `homepodctl --help`)", a)

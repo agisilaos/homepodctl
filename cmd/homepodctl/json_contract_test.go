@@ -130,7 +130,7 @@ echo stopped
 		backendFail bool
 		backendCall bool
 	}{
-		{name: "config usage", args: []string{"config", "set", "defaults.backend", "invalid"}, want: 2, errorCode: "USAGE_ERROR"},
+		{name: "config usage", args: []string{"config", "get", "defaults.backend", "unexpected"}, want: 2, errorCode: "USAGE_ERROR"},
 		{name: "schema unknown", args: []string{"schema", "not-real"}, want: 2, errorCode: "USAGE_ERROR"},
 		{name: "plan unsupported", args: []string{"plan", "pause"}, want: 2, errorCode: "USAGE_ERROR"},
 		{name: "standalone backend failure", args: []string{"native-run", "--shortcut", "Example"}, want: 4, errorCode: "BACKEND_ERROR", backendFail: true, backendCall: true},

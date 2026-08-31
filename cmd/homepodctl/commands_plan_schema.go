@@ -143,22 +143,25 @@ func scanPlanArgs(args []string, jsonOut, tolerateErrors bool) (bool, []string, 
 	return jsonOut, pos, nil
 }
 
+var planTargetSubcommands = map[string]string{
+	"run": "", "play": "", "volume": "", "vol": "", "native-run": "",
+	"out": "set", "automation": "run",
+}
+
 func normalizePlanTarget(cmd string, args []string) (string, []string, error) {
 	prefixLen := 0
-	switch cmd {
-	case "run", "play", "volume", "vol", "native-run":
-	case "out":
-		if len(args) == 0 || strings.TrimSpace(args[0]) != "set" {
-			return "", nil, usageErrf("plan only supports `out set` (usage: homepodctl plan out set --room <name> ...)")
-		}
-		prefixLen = 1
-	case "automation":
-		if len(args) == 0 || strings.TrimSpace(args[0]) != "run" {
+	subcommand, ok := planTargetSubcommands[cmd]
+	if !ok {
+		return "", nil, usageErrf("plan only supports run, play, volume, vol, native-run, out set, and automation run")
+	}
+	if subcommand != "" {
+		if len(args) == 0 || strings.TrimSpace(args[0]) != subcommand {
+			if cmd == "out" {
+				return "", nil, usageErrf("plan only supports `out set` (usage: homepodctl plan out set --room <name> ...)")
+			}
 			return "", nil, usageErrf("plan only supports `automation run` (usage: homepodctl plan automation run -f <file>)")
 		}
 		prefixLen = 1
-	default:
-		return "", nil, usageErrf("plan only supports run, play, volume, vol, native-run, out set, and automation run")
 	}
 	targetArgs, err := canonicalPlanTargetArgs(cmd, args, prefixLen)
 	return cmd, targetArgs, err

@@ -1,88 +1,579 @@
 #compdef homepodctl
-_homepodctl() {
-  local -a commands
-  local -a opts
-  local -a aliases
-  local -a rooms
-  local -a playlists
-  local -a presets
-  local -a expl
-  commands=(
-    'help:Show help'
-    'version:Show version'
-    'config:Inspect/update config'
-    'automation:Run automation routines'
-    'plan:Preview command execution'
-    'schema:Show JSON schemas'
-    'completion:Generate shell completion'
-    'setup:Onboard and verify environment'
-    'doctor:Run diagnostics'
-    'devices:List devices'
-    'out:Manage outputs'
-    'playlists:List playlists'
-    'status:Show playback, route, and backend status'
-    'now:Alias of status'
-    'aliases:List aliases'
-    'run:Run alias'
-    'pause:Pause playback'
-    'stop:Stop playback'
-    'next:Next track'
-    'prev:Previous track'
-    'play:Play playlist'
-    'volume:Set volume'
-    'vol:Set volume'
-    'native-run:Run shortcut'
-    'config-init:Write starter config'
-  )
-  aliases=()
-  rooms=()
-  playlists=()
-  presets=('morning' 'focus' 'winddown' 'party' 'reset')
-  opts=(
-    '--version[show version]'
-    '--json[output JSON]'
-    '--plain[plain output]'
-    '--verbose[verbose diagnostics]'
-    '--quiet[suppress non-essential success output]'
-    '--dry-run[preview without side effects]'
-    '--backend[backend]:backend:(airplay native)'
-    '--room[room name]'
-    '--playlist[playlist name]'
-    '--playlist-id[playlist ID]'
-    '--shuffle[shuffle toggle]'
-    '--volume[volume 0-100]'
-    '--watch[poll interval]'
-    '--query[playlist filter]'
-    '--limit[max results]'
-    '--shortcut[shortcut name]'
-    '--include-network[include network address]'
-    '--file[input file]'
-    '--no-input[non-interactive mode]'
-    '--preset[preset name]'
-    '--name[routine name]'
-  )
-  if [[ $CURRENT -eq 3 && ${words[2]} == run ]]; then
-    _description aliases expl "alias"
-    compadd "$expl[@]" -a aliases
-    return
-  fi
-  if [[ ${words[CURRENT-1]} == --room ]]; then
-    _description rooms expl "room"
-    compadd "$expl[@]" -a rooms
-    return
-  fi
-  if [[ ${words[CURRENT-1]} == --playlist || ( ${words[2]} == play && $CURRENT -eq 3 ) ]]; then
-    _description playlists expl "playlist"
-    compadd "$expl[@]" -a playlists
-    return
-  fi
-  if [[ ${words[CURRENT-1]} == --preset ]]; then
-    _describe -t presets "preset" presets
-    return
-  fi
-  _arguments $opts '*::command:->command'
-  case $state in
-    command) _describe -t commands "homepodctl command" commands ;;
+# Shared Bash/Zsh argument walk. Metadata and candidate arrays are generated.
+_homepodctl_contains() {
+  local wanted="$1" item
+  shift
+  for item in "$@"; do
+    [[ "$item" == "$wanted" ]] && return 0
+  done
+  return 1
+}
+
+_homepodctl_context() {
+  options=() value_flags=() position_flags=() boolean_flags=() terminal=() children=()
+  positional='' start=0 repeat=0 stop=0 legacy=0 literal=0
+  case "$1" in
+    'aliases')
+      options=('--help' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'automation')
+      options=()
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=()
+      children=('init' 'plan' 'run' 'validate')
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'automation init')
+      options=('--help' '--json' '--name' '--preset' '-h')
+      value_flags=('--name' '--preset')
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'automation plan')
+      options=('--file' '--help' '--json' '-f' '-h')
+      value_flags=('-f' '--file')
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'automation run')
+      options=('--dry-run' '--file' '--help' '--json' '--no-input' '-f' '-h')
+      value_flags=('-f' '--file')
+      position_flags=()
+      boolean_flags=('--dry-run' '--json' '--no-input')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'automation validate')
+      options=('--file' '--help' '--json' '-f' '-h')
+      value_flags=('-f' '--file')
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'completion')
+      options=('--help' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=('--help' '-h')
+      children=('install')
+      positional='shells' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'completion install')
+      options=('--help' '--path' '-h')
+      value_flags=('--path')
+      position_flags=()
+      boolean_flags=()
+      terminal=('--help' '-h')
+      children=()
+      positional='shells' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'config')
+      options=()
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=()
+      children=('get' 'set' 'validate')
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'config get')
+      options=('--help' '--json' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'config set')
+      options=('--help' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=1 ;;
+    'config validate')
+      options=('--help' '--json' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'config-init')
+      options=('--help' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'devices')
+      options=('--help' '--include-network' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--include-network' '--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'doctor')
+      options=('--help' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'help')
+      options=('--help' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=('--help' '-h')
+      children=()
+      positional='commands' start=0 repeat=0 stop=1 legacy=0 literal=0 ;;
+    'native-run')
+      options=('--dry-run' '--help' '--json' '--shortcut' '-h')
+      value_flags=('--shortcut')
+      position_flags=()
+      boolean_flags=('--dry-run' '--json')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'next')
+      options=('--help' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'now')
+      options=('--help' '--json' '--plain' '--watch' '-h')
+      value_flags=('--watch')
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'out')
+      options=()
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=()
+      children=('list' 'set')
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'out list')
+      options=('--help' '--include-network' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--include-network' '--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'out set')
+      options=('--backend' '--dry-run' '--help' '--json' '--plain' '--room' '-h')
+      value_flags=('--backend' '--room')
+      position_flags=()
+      boolean_flags=('--dry-run' '--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='rooms' start=0 repeat=1 stop=0 legacy=0 literal=0 ;;
+    'pause')
+      options=('--help' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'plan')
+      options=('--json')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=()
+      children=('automation' 'native-run' 'out' 'play' 'run' 'vol' 'volume')
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'plan automation')
+      options=('--json')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=()
+      children=('run')
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'plan automation run')
+      options=('--dry-run' '--file' '--json' '--no-input' '-f')
+      value_flags=('-f' '--file')
+      position_flags=()
+      boolean_flags=('--dry-run' '--json' '--no-input')
+      terminal=()
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'plan native-run')
+      options=('--dry-run' '--json' '--shortcut')
+      value_flags=('--shortcut')
+      position_flags=()
+      boolean_flags=('--dry-run' '--json')
+      terminal=()
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'plan out')
+      options=('--json')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=()
+      children=('set')
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'plan out set')
+      options=('--backend' '--dry-run' '--json' '--plain' '--room')
+      value_flags=('--backend' '--room')
+      position_flags=()
+      boolean_flags=('--dry-run' '--json' '--plain')
+      terminal=()
+      children=()
+      positional='rooms' start=0 repeat=1 stop=0 legacy=0 literal=0 ;;
+    'plan play')
+      options=('--backend' '--choose' '--dry-run' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume')
+      value_flags=('--backend' '--playlist' '--playlist-id' '--room' '--volume')
+      position_flags=()
+      boolean_flags=('--choose' '--dry-run' '--json' '--no-input' '--plain' '--shuffle')
+      terminal=()
+      children=()
+      positional='playlists' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'plan run')
+      options=('--dry-run' '--json' '--plain')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--dry-run' '--json' '--plain')
+      terminal=()
+      children=()
+      positional='aliases' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'plan vol')
+      options=('--backend' '--dry-run' '--json' '--plain' '--room' '--value' '--volume')
+      value_flags=('--backend' '--room' '--value' '--volume')
+      position_flags=('--value' '--volume')
+      boolean_flags=('--dry-run' '--json' '--plain')
+      terminal=()
+      children=()
+      positional='rooms' start=1 repeat=1 stop=0 legacy=0 literal=0 ;;
+    'plan volume')
+      options=('--backend' '--dry-run' '--json' '--plain' '--room' '--value' '--volume')
+      value_flags=('--backend' '--room' '--value' '--volume')
+      position_flags=('--value' '--volume')
+      boolean_flags=('--dry-run' '--json' '--plain')
+      terminal=()
+      children=()
+      positional='rooms' start=1 repeat=1 stop=0 legacy=0 literal=0 ;;
+    'play')
+      options=('--backend' '--choose' '--dry-run' '--help' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume' '-h')
+      value_flags=('--backend' '--playlist' '--playlist-id' '--room' '--volume')
+      position_flags=()
+      boolean_flags=('--choose' '--dry-run' '--json' '--no-input' '--plain' '--shuffle')
+      terminal=('--help' '-h')
+      children=()
+      positional='playlists' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'playlists')
+      options=('--help' '--json' '--limit' '--plain' '--query' '-h')
+      value_flags=('--limit' '--query')
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=1 literal=0 ;;
+    'prev')
+      options=('--help' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'root')
+      options=('--help' '--quiet' '--verbose' '--version' '-h' '-q' '-v')
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=('--help' '--version' '-h')
+      children=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'version' 'vol' 'volume')
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'run')
+      options=('--dry-run' '--help' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--dry-run' '--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='aliases' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'schema')
+      options=('--help' '--json' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'setup')
+      options=('--backend' '--help' '--json' '--no-input' '--room' '-h')
+      value_flags=('--backend' '--room')
+      position_flags=()
+      boolean_flags=('--json' '--no-input')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'status')
+      options=('--help' '--json' '--plain' '--watch' '-h')
+      value_flags=('--watch')
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'stop')
+      options=('--help' '--json' '--plain' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'version')
+      options=('--help' '-h')
+      value_flags=()
+      position_flags=()
+      boolean_flags=()
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'vol')
+      options=('--backend' '--dry-run' '--help' '--json' '--plain' '--room' '--value' '--volume' '-h')
+      value_flags=('--backend' '--room' '--value' '--volume')
+      position_flags=('--value' '--volume')
+      boolean_flags=('--dry-run' '--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='rooms' start=1 repeat=1 stop=0 legacy=0 literal=0 ;;
+    'volume')
+      options=('--backend' '--dry-run' '--help' '--json' '--plain' '--room' '--value' '--volume' '-h')
+      value_flags=('--backend' '--room' '--value' '--volume')
+      position_flags=('--value' '--volume')
+      boolean_flags=('--dry-run' '--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='rooms' start=1 repeat=1 stop=0 legacy=0 literal=0 ;;
+
   esac
+}
+
+_homepodctl_value_group() {
+  value_group='none'
+  case "$1" in
+    '--backend') value_group='backends' ;;
+    '--playlist') value_group='playlists' ;;
+    '--preset') value_group='presets' ;;
+    '--room') value_group='rooms' ;;
+
+  esac
+}
+
+_homepodctl_boolean_word() {
+  local word="$1"
+  word="${word#"${word%%[!$' \t\r\n']*}"}"
+  word="${word%"${word##*[!$' \t\r\n']}"}"
+  case "$word" in
+0|1|[fF][aA][lL][sS][eE]|[nN]|[nN][oO]|[oO][fF][fF]|[oO][nN]|[tT][rR][uU][eE]|[yY]|[yY][eE][sS]) return 0 ;;
+  esac
+  return 1
+}
+
+_homepodctl_scan() {
+  local context=root pending='' optional=0 ended=0 position=0 offset=0 word flag value attached flag_legacy
+  local positional start repeat stop legacy literal value_group
+  local -a options value_flags position_flags boolean_flags terminal children
+  group=none
+  _homepodctl_context "$context"
+  while (( $# > 1 )); do
+    word="$1"
+    shift
+    if [[ -n "$pending" ]]; then
+      pending=''
+      continue
+    fi
+    if (( optional )); then
+      optional=0
+      _homepodctl_boolean_word "$word" && continue
+    fi
+    if (( ! ended )); then
+      if [[ "$word" == -- ]]; then
+        [[ "$context" == root ]] && return
+        # A delimiter before plan's target belongs to the wrapper only.
+        [[ "$context" != plan ]] && ended=1
+        continue
+      fi
+      if [[ "$word" == -* && "$word" != - ]]; then
+        flag="${word%%=*}"
+        value='' attached=0 flag_legacy=$legacy
+        if [[ "$word" == *=* ]]; then value="${word#*=}"; attached=1; fi
+        [[ "$context" == plan* && "$flag" == --json ]] && flag_legacy=1
+        if (( legacy )) && [[ "$flag" != --* && "$flag" != -h && "$flag" != -f ]]; then flag="-$flag"; fi
+        [[ "$flag" == -f && "$word" != -f ]] && return
+        _homepodctl_contains "$flag" "${options[@]}" || return
+        if _homepodctl_contains "$flag" "${terminal[@]}"; then return; fi
+        if _homepodctl_contains "$flag" "${value_flags[@]}"; then
+          if _homepodctl_contains "$flag" "${position_flags[@]}"; then offset=1; fi
+          if (( ! attached )) || { [[ -z "$value" ]] && (( ! flag_legacy )); }; then pending="$flag"; fi
+        elif _homepodctl_contains "$flag" "${boolean_flags[@]}"; then
+          if (( ! attached )) || { [[ -z "$value" ]] && (( ! flag_legacy )); }; then optional=1; fi
+        elif (( attached )); then
+          return
+        fi
+        continue
+      fi
+    fi
+    if (( position == 0 )) && _homepodctl_contains "$word" "${children[@]}"; then
+      if [[ "$context" == root ]]; then context="$word"; else context="$context $word"; fi
+      _homepodctl_context "$context"
+      continue
+    fi
+    if (( literal || stop )); then return; fi
+    if (( ${#children[@]} > 0 )) && [[ -z "$positional" ]]; then return; fi
+    position=$((position + 1))
+  done
+  current="$1"
+  if [[ -n "$pending" ]]; then
+    _homepodctl_value_group "$pending"
+    group="$value_group"
+  elif (( ! ended )) && [[ "$current" == -* ]]; then
+    if [[ "$current" == *=* ]]; then
+      flag="${current%%=*}"
+      _homepodctl_contains "$flag" "${options[@]}" || return
+      if _homepodctl_contains "$flag" "${value_flags[@]}" || _homepodctl_contains "$flag" "${boolean_flags[@]}"; then
+        group="inline:$flag"
+      fi
+    else
+      group="options:$context"
+    fi
+  elif (( position == 0 && ${#children[@]} > 0 )); then
+    group="children:$context"
+  elif [[ -n "$positional" ]] && (( position + offset >= start )) && (( repeat || position + offset == start )); then
+    group="$positional"
+  elif (( ! ended )) && [[ -z "$current" ]]; then
+    group="options:$context"
+  fi
+}
+
+_homepodctl_values() {
+  candidates=() descriptions=()
+  case "$1" in
+    'aliases') candidates=(); descriptions=() ;;
+    'backends') candidates=('airplay' 'native'); descriptions=() ;;
+    'booleans') candidates=('true' 'false'); descriptions=() ;;
+    'children:automation') candidates=('init' 'plan' 'run' 'validate'); descriptions=('' 'Preview command execution' 'Run alias' '') ;;
+    'children:completion') candidates=('install' 'bash' 'zsh' 'fish'); descriptions=('' '' '' '') ;;
+    'children:config') candidates=('get' 'set' 'validate'); descriptions=('' '' '') ;;
+    'children:out') candidates=('list' 'set'); descriptions=('' '') ;;
+    'children:plan') candidates=('automation' 'native-run' 'out' 'play' 'run' 'vol' 'volume'); descriptions=('Run automation routines' 'Run shortcut' 'Manage outputs' 'Play playlist' 'Run alias' 'Set volume' 'Set volume') ;;
+    'children:plan automation') candidates=('run'); descriptions=('Run alias') ;;
+    'children:plan out') candidates=('set'); descriptions=('') ;;
+    'children:root') candidates=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'version' 'vol' 'volume'); descriptions=('List aliases' 'Run automation routines' 'Generate shell completion' 'Inspect/update config' 'Write starter config' 'List devices' 'Run diagnostics' 'Show help' 'Run shortcut' 'Next track' 'Alias of status' 'Manage outputs' 'Pause playback' 'Preview command execution' 'Play playlist' 'List playlists' 'Previous track' 'Run alias' 'Show JSON schemas' 'Onboard and verify environment' 'Show playback, route, and backend status' 'Stop playback' 'Show version' 'Set volume' 'Set volume') ;;
+    'commands') candidates=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'version' 'vol' 'volume'); descriptions=('List aliases' 'Run automation routines' 'Generate shell completion' 'Inspect/update config' 'Write starter config' 'List devices' 'Run diagnostics' 'Show help' 'Run shortcut' 'Next track' 'Alias of status' 'Manage outputs' 'Pause playback' 'Preview command execution' 'Play playlist' 'List playlists' 'Previous track' 'Run alias' 'Show JSON schemas' 'Onboard and verify environment' 'Show playback, route, and backend status' 'Stop playback' 'Show version' 'Set volume' 'Set volume') ;;
+    'inline:--backend') candidates=('--backend=airplay' '--backend=native'); descriptions=() ;;
+    'inline:--choose') candidates=('--choose=true' '--choose=false'); descriptions=() ;;
+    'inline:--dry-run') candidates=('--dry-run=true' '--dry-run=false'); descriptions=() ;;
+    'inline:--include-network') candidates=('--include-network=true' '--include-network=false'); descriptions=() ;;
+    'inline:--json') candidates=('--json=true' '--json=false'); descriptions=() ;;
+    'inline:--no-input') candidates=('--no-input=true' '--no-input=false'); descriptions=() ;;
+    'inline:--plain') candidates=('--plain=true' '--plain=false'); descriptions=() ;;
+    'inline:--playlist') candidates=(); descriptions=() ;;
+    'inline:--preset') candidates=('--preset=morning' '--preset=focus' '--preset=winddown' '--preset=party' '--preset=reset'); descriptions=() ;;
+    'inline:--room') candidates=(); descriptions=() ;;
+    'inline:--shuffle') candidates=('--shuffle=true' '--shuffle=false'); descriptions=() ;;
+    'options:aliases') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:automation') candidates=(); descriptions=() ;;
+    'options:automation init') candidates=('--help' '--json' '--name' '--preset' '-h'); descriptions=('Show help' 'Output JSON' 'Routine name' 'Preset name' 'Show help') ;;
+    'options:automation plan') candidates=('--file' '--help' '--json' '-f' '-h'); descriptions=('Input file' 'Show help' 'Output JSON' 'Input file' 'Show help') ;;
+    'options:automation run') candidates=('--dry-run' '--file' '--help' '--json' '--no-input' '-f' '-h'); descriptions=('Preview without side effects' 'Input file' 'Show help' 'Output JSON' 'Non-interactive mode' 'Input file' 'Show help') ;;
+    'options:automation validate') candidates=('--file' '--help' '--json' '-f' '-h'); descriptions=('Input file' 'Show help' 'Output JSON' 'Input file' 'Show help') ;;
+    'options:completion') candidates=('--help' '-h'); descriptions=('Show help' 'Show help') ;;
+    'options:completion install') candidates=('--help' '--path' '-h'); descriptions=('Show help' 'Completion installation path' 'Show help') ;;
+    'options:config') candidates=(); descriptions=() ;;
+    'options:config get') candidates=('--help' '--json' '-h'); descriptions=('Show help' 'Output JSON' 'Show help') ;;
+    'options:config set') candidates=('--help' '-h'); descriptions=('Show help' 'Show help') ;;
+    'options:config validate') candidates=('--help' '--json' '-h'); descriptions=('Show help' 'Output JSON' 'Show help') ;;
+    'options:config-init') candidates=('--help' '-h'); descriptions=('Show help' 'Show help') ;;
+    'options:devices') candidates=('--help' '--include-network' '--json' '--plain' '-h'); descriptions=('Show help' 'Include network address' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:doctor') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:help') candidates=('--help' '-h'); descriptions=('Show help' 'Show help') ;;
+    'options:native-run') candidates=('--dry-run' '--help' '--json' '--shortcut' '-h'); descriptions=('Preview without side effects' 'Show help' 'Output JSON' 'Shortcut name' 'Show help') ;;
+    'options:next') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:now') candidates=('--help' '--json' '--plain' '--watch' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Poll interval' 'Show help') ;;
+    'options:out') candidates=(); descriptions=() ;;
+    'options:out list') candidates=('--help' '--include-network' '--json' '--plain' '-h'); descriptions=('Show help' 'Include network address' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:out set') candidates=('--backend' '--dry-run' '--help' '--json' '--plain' '--room' '-h'); descriptions=('Playback backend' 'Preview without side effects' 'Show help' 'Output JSON' 'Plain output' 'Room name' 'Show help') ;;
+    'options:pause') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:plan') candidates=('--json'); descriptions=('Output JSON') ;;
+    'options:plan automation') candidates=('--json'); descriptions=('Output JSON') ;;
+    'options:plan automation run') candidates=('--dry-run' '--file' '--json' '--no-input' '-f'); descriptions=('Preview without side effects' 'Input file' 'Output JSON' 'Non-interactive mode' 'Input file') ;;
+    'options:plan native-run') candidates=('--dry-run' '--json' '--shortcut'); descriptions=('Preview without side effects' 'Output JSON' 'Shortcut name') ;;
+    'options:plan out') candidates=('--json'); descriptions=('Output JSON') ;;
+    'options:plan out set') candidates=('--backend' '--dry-run' '--json' '--plain' '--room'); descriptions=('Playback backend' 'Preview without side effects' 'Output JSON' 'Plain output' 'Room name') ;;
+    'options:plan play') candidates=('--backend' '--choose' '--dry-run' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume'); descriptions=('Playback backend' 'Choose among playlist matches' 'Preview without side effects' 'Output JSON' 'Non-interactive mode' 'Plain output' 'Playlist name' 'Playlist ID' 'Room name' 'Shuffle toggle' 'Volume 0-100') ;;
+    'options:plan run') candidates=('--dry-run' '--json' '--plain'); descriptions=('Preview without side effects' 'Output JSON' 'Plain output') ;;
+    'options:plan vol') candidates=('--backend' '--dry-run' '--json' '--plain' '--room' '--value' '--volume'); descriptions=('Playback backend' 'Preview without side effects' 'Output JSON' 'Plain output' 'Room name' 'Volume 0-100' 'Volume 0-100') ;;
+    'options:plan volume') candidates=('--backend' '--dry-run' '--json' '--plain' '--room' '--value' '--volume'); descriptions=('Playback backend' 'Preview without side effects' 'Output JSON' 'Plain output' 'Room name' 'Volume 0-100' 'Volume 0-100') ;;
+    'options:play') candidates=('--backend' '--choose' '--dry-run' '--help' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume' '-h'); descriptions=('Playback backend' 'Choose among playlist matches' 'Preview without side effects' 'Show help' 'Output JSON' 'Non-interactive mode' 'Plain output' 'Playlist name' 'Playlist ID' 'Room name' 'Shuffle toggle' 'Volume 0-100' 'Show help') ;;
+    'options:playlists') candidates=('--help' '--json' '--limit' '--plain' '--query' '-h'); descriptions=('Show help' 'Output JSON' 'Maximum results' 'Plain output' 'Playlist filter' 'Show help') ;;
+    'options:prev') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:root') candidates=('--help' '--quiet' '--verbose' '--version' '-h' '-q' '-v'); descriptions=('Show help' 'Suppress non-essential success output' 'Verbose diagnostics' 'Show version' 'Show help' 'Suppress non-essential success output' 'Verbose diagnostics') ;;
+    'options:run') candidates=('--dry-run' '--help' '--json' '--plain' '-h'); descriptions=('Preview without side effects' 'Show help' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:schema') candidates=('--help' '--json' '-h'); descriptions=('Show help' 'Output JSON' 'Show help') ;;
+    'options:setup') candidates=('--backend' '--help' '--json' '--no-input' '--room' '-h'); descriptions=('Playback backend' 'Show help' 'Output JSON' 'Non-interactive mode' 'Room name' 'Show help') ;;
+    'options:status') candidates=('--help' '--json' '--plain' '--watch' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Poll interval' 'Show help') ;;
+    'options:stop') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:version') candidates=('--help' '-h'); descriptions=('Show help' 'Show help') ;;
+    'options:vol') candidates=('--backend' '--dry-run' '--help' '--json' '--plain' '--room' '--value' '--volume' '-h'); descriptions=('Playback backend' 'Preview without side effects' 'Show help' 'Output JSON' 'Plain output' 'Room name' 'Volume 0-100' 'Volume 0-100' 'Show help') ;;
+    'options:volume') candidates=('--backend' '--dry-run' '--help' '--json' '--plain' '--room' '--value' '--volume' '-h'); descriptions=('Playback backend' 'Preview without side effects' 'Show help' 'Output JSON' 'Plain output' 'Room name' 'Volume 0-100' 'Volume 0-100' 'Show help') ;;
+    'playlists') candidates=(); descriptions=() ;;
+    'presets') candidates=('morning' 'focus' 'winddown' 'party' 'reset'); descriptions=() ;;
+    'rooms') candidates=(); descriptions=() ;;
+    'shells') candidates=('bash' 'zsh' 'fish'); descriptions=() ;;
+
+  esac
+}
+
+_homepodctl() {
+  emulate -L zsh
+  local group current candidate word index=1
+  local -a candidates descriptions matches match_descriptions input
+  for word in "${words[@]:1:$((CURRENT-1))}"; do input+=("${(Q)word}"); done
+  # PREFIX has quote removal applied even for an unfinished current quote.
+  if (( ${+PREFIX} )); then input[-1]="$PREFIX"; fi
+  _homepodctl_scan "${input[@]}"
+  _homepodctl_values "$group"
+  for candidate in "${candidates[@]}"; do
+    if [[ "$candidate" == "$current"* ]]; then
+      matches+=("$candidate")
+      match_descriptions+=("${descriptions[index]}")
+    fi
+    index=$((index + 1))
+  done
+  # Keep values opaque: compadd receives array elements, never shell code.
+  if (( ${#descriptions[@]} > 0 )); then
+    compadd -d match_descriptions -a matches
+  else
+    compadd -a matches
+  fi
 }
 _homepodctl "$@"

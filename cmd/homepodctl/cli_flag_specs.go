@@ -65,14 +65,13 @@ var commandFlagSpecs = map[string]commandFlagSpec{
 	"help":                flagSpec("", ""),
 }
 
+var commandFlagAliases = map[string]string{
+	"now": "status", "stop": "pause", "next": "pause", "prev": "pause", "vol": "volume",
+}
+
 func flagsForCommand(command string) commandFlagSpec {
-	switch command {
-	case "now":
-		command = "status"
-	case "stop", "next", "prev":
-		command = "pause"
-	case "vol":
-		command = "volume"
+	if canonical, ok := commandFlagAliases[command]; ok {
+		command = canonical
 	}
 	return commandFlagSpecs[command]
 }
