@@ -4,21 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on *Keep a Changelog*, and this project adheres to *Semantic Versioning*.
 
-## [v0.2.1] - 2026-08-26
+## [v0.3.0] - 2026-08-31
+
+### Changed
+
+- Commands now reject unrelated flags instead of silently ignoring them. Scripts that passed options to the wrong command must remove or relocate those options. Boolean parsing is shared across commands, config edits, and environment values. ([#13](https://github.com/agisilaos/homepodctl/pull/13))
+- `play` now requires exactly one playlist target: positional query, `--playlist`, or `--playlist-id`. Competing targets and volumes outside 0–100 are rejected on both backends, including during previews. ([#7](https://github.com/agisilaos/homepodctl/pull/7))
+- JSON consumers should read native playback ID previews from `playlistId`, not `playlist`, and expect the `plan` command's top-level `args` to show canonical `--dry-run=true` and `--json=true` flags. ([#7](https://github.com/agisilaos/homepodctl/pull/7), [#2](https://github.com/agisilaos/homepodctl/pull/2))
+- Bash, Zsh, and Fish completions now share command-specific flags and value suggestions, including `--choose`, supported nested `plan` targets, and short aliases. Regenerate installed completions after upgrading with `homepodctl completion install <bash|zsh|fish>`. ([#14](https://github.com/agisilaos/homepodctl/pull/14))
 
 ### Fixed
 
-- Release failures now report the interrupted step, command outcomes, retained artifacts, and safe manual recovery guidance without retrying publication.
-- Bash, Zsh, and Fish completions share command-specific flags and value suggestions, including `--choose`, supported nested `plan` targets, and explicit short aliases; unrelated options are no longer suggested.
-- Commands now reject unrelated flags instead of silently ignoring them, including setup options that were previously accepted without effect.
-- Boolean decoding is shared across command flags, config edits, and environment values. JSON errors respect explicit false values, repeated flags, literal flag values, and `--` delimiters.
-- Plan previews preserve flag-looking shortcut and playlist values and keep legacy single-dash output options from overriding safe preview settings.
-- Config writes from `setup` and `config set` now use the same persistence path as `config-init` and consistently report failures as config errors (exit code 3).
-- `play` now rejects competing positional, `--playlist`, and `--playlist-id` targets on both backends instead of silently choosing one.
-- Playback previews and execution share request validation, including volume bounds and AirPlay's requirement for rooms with an explicit volume. Negative volumes no longer act as an omitted value.
-- Native playback previews report persistent IDs as `playlistId` rather than playlist names; execution retains the ID alongside the resolved name.
-- Serialized config-derived Bash, Zsh, and Fish completion candidates as shell-specific data so special characters cannot corrupt or execute generated scripts.
-- Completion generation now reports malformed config and values that the target shell cannot represent instead of silently producing incomplete scripts.
+- `plan` cannot be switched out of dry-run JSON mode by target flags. Previews preserve literal arguments after `--` and flag-looking shortcut or playlist values. JSON errors respect explicit false values, repeated flags, and argument boundaries. ([#2](https://github.com/agisilaos/homepodctl/pull/2), [#13](https://github.com/agisilaos/homepodctl/pull/13))
+- Configuration-derived completion values are escaped for each shell so special characters cannot corrupt or execute generated scripts. Malformed config and values a shell cannot represent now produce errors instead of incomplete scripts. ([#3](https://github.com/agisilaos/homepodctl/pull/3))
+- Multi-room native playlist and volume actions check all required Shortcut mappings before running any of them, preventing missing mappings from causing partial execution. Runtime Shortcut failures still stop subsequent actions without rolling back earlier ones. ([#5](https://github.com/agisilaos/homepodctl/pull/5))
+- Playback previews and execution share request validation, including AirPlay's requirement for rooms when setting an explicit volume. Native execution retains the persistent playlist ID alongside its resolved name. ([#7](https://github.com/agisilaos/homepodctl/pull/7))
+- Automation previews and execution share one resolved plan. Run results retain resolved details for successful, failed, and skipped steps and report actual execution timing; live playlist and output lookups remain execution-time operations. Help and documentation now describe the matching JSON and exit-code contracts. ([#6](https://github.com/agisilaos/homepodctl/pull/6), [#12](https://github.com/agisilaos/homepodctl/pull/12))
+- Invalid setup options fail before reading or creating config. `setup`, `config set`, and `config-init` share configuration persistence, and write failures consistently return config error code 3. ([#9](https://github.com/agisilaos/homepodctl/pull/9), [#10](https://github.com/agisilaos/homepodctl/pull/10))
+- Interrupted release checks restore module files. Publication failures report the stopped step and uncertain command outcomes, retain recovery artifacts, and provide safe manual recovery instructions. Automatic resume remains intentionally unsupported. ([#11](https://github.com/agisilaos/homepodctl/pull/11), [#15](https://github.com/agisilaos/homepodctl/pull/15))
+
+### Development
+
+- Continuous verification no longer depends on a publishable version. CLI subprocess tests isolate configuration and verify stdout and stderr separately; release fixtures cover interrupted checks, partial publication, and ambiguous remote outcomes. ([#4](https://github.com/agisilaos/homepodctl/pull/4), [#8](https://github.com/agisilaos/homepodctl/pull/8), [#15](https://github.com/agisilaos/homepodctl/pull/15))
 
 ## [v0.2.0] - 2026-02-23
 
@@ -37,7 +44,6 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
-- Ensured `plan` cannot be overridden by target `--dry-run` or `--json` values and preserves literal arguments after `--`.
 - Fixed `out set` backend defaulting so it resolves to `airplay` when unset.
 - Removed non-portable `rg` dependency from release checks.
 
