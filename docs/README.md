@@ -9,6 +9,7 @@
 - Troubleshooting: `automation/troubleshooting.md`
 - Config persistence design: `config-persistence-design.md`
 - R11 flag compatibility decision: [Reject irrelevant command flags](adr/0001-reject-irrelevant-command-flags.md)
+- R12 completion contract: [Shared completion vocabulary](completion-design.md)
 
 ## Presets
 

@@ -286,46 +286,70 @@ func emitAutomationResult(result automationCommandResult, jsonOut bool) {
 	}
 }
 
-func automationPreset(name string) (automationFile, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "morning":
+type automationPresetDefinition struct {
+	name  string
+	build func() automationFile
+}
+
+var automationPresets = []automationPresetDefinition{
+	{"morning", func() automationFile {
 		return automationFile{
 			Version:  "1",
 			Name:     "morning",
 			Defaults: automationDefaults{Backend: "airplay", Rooms: []string{"Bedroom"}, Volume: intPtr(30), Shuffle: boolPtr(false)},
 			Steps:    []automationStep{{Type: "out.set", Rooms: []string{"Bedroom"}}, {Type: "play", Query: "Morning Mix"}, {Type: "volume.set", Value: intPtr(30)}, {Type: "wait", State: "playing", Timeout: "20s"}},
-		}, nil
-	case "focus":
+		}
+	}},
+	{"focus", func() automationFile {
 		return automationFile{
 			Version:  "1",
 			Name:     "focus",
 			Defaults: automationDefaults{Backend: "airplay", Rooms: []string{"Office"}, Volume: intPtr(25), Shuffle: boolPtr(false)},
 			Steps:    []automationStep{{Type: "out.set", Rooms: []string{"Office"}}, {Type: "play", Query: "Deep Focus"}, {Type: "volume.set", Value: intPtr(25)}, {Type: "wait", State: "playing", Timeout: "20s"}},
-		}, nil
-	case "winddown":
+		}
+	}},
+	{"winddown", func() automationFile {
 		return automationFile{
 			Version:  "1",
 			Name:     "winddown",
 			Defaults: automationDefaults{Backend: "airplay", Rooms: []string{"Bedroom"}, Volume: intPtr(20), Shuffle: boolPtr(false)},
 			Steps:    []automationStep{{Type: "out.set", Rooms: []string{"Bedroom"}}, {Type: "play", Query: "Evening Ambient"}, {Type: "volume.set", Value: intPtr(20)}, {Type: "wait", State: "playing", Timeout: "20s"}},
-		}, nil
-	case "party":
+		}
+	}},
+	{"party", func() automationFile {
 		return automationFile{
 			Version:  "1",
 			Name:     "party",
 			Defaults: automationDefaults{Backend: "airplay", Rooms: []string{"Living Room", "Kitchen"}, Volume: intPtr(55), Shuffle: boolPtr(true)},
 			Steps:    []automationStep{{Type: "out.set", Rooms: []string{"Living Room", "Kitchen"}}, {Type: "play", Query: "Party Mix"}, {Type: "volume.set", Value: intPtr(55)}, {Type: "wait", State: "playing", Timeout: "30s"}},
-		}, nil
-	case "reset":
+		}
+	}},
+	{"reset", func() automationFile {
 		return automationFile{
 			Version:  "1",
 			Name:     "reset",
 			Defaults: automationDefaults{Backend: "airplay", Rooms: []string{"Bedroom"}, Volume: intPtr(25)},
 			Steps:    []automationStep{{Type: "transport", Action: "stop"}, {Type: "out.set", Rooms: []string{"Bedroom"}}, {Type: "volume.set", Value: intPtr(25)}},
-		}, nil
-	default:
-		return automationFile{}, usageErrf("unknown preset %q (expected morning, focus, winddown, party, reset)", name)
+		}
+	}},
+}
+
+func automationPresetNames() []string {
+	names := make([]string, 0, len(automationPresets))
+	for _, preset := range automationPresets {
+		names = append(names, preset.name)
 	}
+	return names
+}
+
+func automationPreset(name string) (automationFile, error) {
+	key := strings.ToLower(strings.TrimSpace(name))
+	for _, preset := range automationPresets {
+		if preset.name == key {
+			return preset.build(), nil
+		}
+	}
+	return automationFile{}, usageErrf("unknown preset %q (expected %s)", name, strings.Join(automationPresetNames(), ", "))
 }
 
 func intPtr(v int) *int { return &v }

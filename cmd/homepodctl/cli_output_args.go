@@ -188,20 +188,20 @@ func parseBoolWord(value string) (bool, bool) {
 	return decodeBool(value, false)
 }
 
+var booleanWords = map[string]bool{
+	"true": true, "1": true, "yes": true, "y": true, "on": true,
+	"false": false, "0": false, "no": false, "n": false, "off": false,
+}
+
 // Short words are a legacy attached-value syntax. They must not cause a
 // following positional such as the playlist "f" to be consumed as a boolean.
 func decodeBool(value string, allowShort bool) (bool, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "true", "1", "yes", "y", "on":
-		return true, true
-	case "false", "0", "no", "n", "off":
-		return false, true
-	case "t", "f":
-		if allowShort {
-			return strings.EqualFold(strings.TrimSpace(value), "t"), true
-		}
+	word := strings.ToLower(strings.TrimSpace(value))
+	if allowShort && (word == "t" || word == "f") {
+		return word == "t", true
 	}
-	return false, false
+	b, ok := booleanWords[word]
+	return b, ok
 }
 
 func (p parsedArgs) boolStrict(key string) (bool, bool, error) {

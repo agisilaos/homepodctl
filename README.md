@@ -224,6 +224,10 @@ homepodctl doctor
 homepodctl doctor --json
 ```
 
+Bash, Zsh, and Fish completions share command-specific flags, supported subcommands and `plan` targets, and known values such as rooms, playlists, presets, and backends. Canonical long options and explicit short aliases are suggested; legacy single-dash names remain accepted without being suggested.
+
+Configuration values are captured when the script is generated, so regenerate or reinstall completions after updating the CLI or configuration. Pressing Tab does not launch `homepodctl` or call a backend.
+
 Generate shell completions:
 
 ```sh
