@@ -24,6 +24,7 @@ docs-check:
 verify:
 	./scripts/release-check.sh
 	./scripts/release-check-test.sh
+	python3 ./scripts/release-publication-test.py
 
 release-check:
 	@if [ -z "$(VERSION)" ]; then echo "VERSION is required (e.g. make release-check VERSION=v0.1.0)"; exit 2; fi

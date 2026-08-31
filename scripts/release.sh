@@ -112,8 +112,68 @@ if [[ -n "$(git status --porcelain)" ]]; then
   err "working tree is not clean"
 fi
 
+release_phase="preflight"
+local_tag_status="not attempted"
+tag_push_status="not attempted"
+github_status="not attempted"
+homebrew_status="not attempted"
+publication_started=0
+artifacts_ready=0
+tap_prepared=0
+tmp_dir=""
+tap_dir=""
+
+# This is a report of this invocation, not persisted state or a resume mechanism.
+# A failed remote command can still have succeeded on the server.
+finish_release() {
+  local status=$?
+  trap - EXIT
+  trap '' HUP INT TERM
+  set +e
+  if [[ "$status" -ne 0 ]]; then
+    {
+      echo "release $VERSION stopped during: $release_phase (exit $status)"
+      if [[ "$publication_started" -eq 1 ]]; then
+        echo "Publication commands in this run:"
+        echo "  Local tag: $local_tag_status"
+        echo "  Tag push: $tag_push_status"
+        echo "  GitHub release/assets: $github_status"
+        echo "  Homebrew push: $homebrew_status"
+        echo "Expected release commit: $release_commit"
+        echo "Do not rerun release.sh or release-dry-run: rebuilding can change artifact checksums."
+        echo "Inspect remote state before repeating any write; an error does not prove it failed remotely."
+        echo "Run these read-only checks from this checkout:"
+        printf '  git rev-parse %q\n' "refs/tags/$VERSION^{commit}"
+        printf '  git ls-remote origin %q %q\n' "refs/tags/$VERSION" "refs/tags/$VERSION^{}"
+        printf '  gh release view %q --json url,assets\n' "$VERSION"
+      else
+        echo "No publication commands were attempted in this run."
+      fi
+      if [[ "$artifacts_ready" -eq 1 ]]; then
+        echo "Original archives and SHA256SUMS retained in: $PWD/$dist_dir"
+      fi
+      if [[ "$tap_prepared" -eq 1 ]]; then
+        echo "Homebrew work directory retained for inspection: $tap_dir"
+        echo "Verify published checksums and the current tap version before using that formula."
+      fi
+      echo "Manual recovery: docs/release-recovery.md"
+    } >&2
+  fi
+  [[ -z "$tmp_dir" ]] || rm -rf "$tmp_dir"
+  if [[ -n "$tap_dir" && ( "$status" -eq 0 || "$tap_prepared" -eq 0 ) ]]; then
+    rm -rf "$tap_dir"
+  fi
+  exit "$status"
+}
+
+trap finish_release EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 ./scripts/release-check.sh "$VERSION"
 
+release_phase="prepare artifacts"
 for cmd in go git gh tar; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     err "required command not found: $cmd"
@@ -125,7 +185,6 @@ dist_dir="dist"
 mkdir -p "$dist_dir"
 
 tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
 
 if ! git rev-parse -q --verify HEAD >/dev/null 2>&1; then
   err "repository has no commits yet; create an initial commit before running release scripts"
@@ -178,6 +237,7 @@ cat <<SUMS > "$sha_sums_path"
 ${amd64_sha}  ${ARTIFACT_NAME}_${version_no_v}_darwin_amd64.tar.gz
 ${arm64_sha}  ${ARTIFACT_NAME}_${version_no_v}_darwin_arm64.tar.gz
 SUMS
+artifacts_ready=1
 
 notes=""
 if prev_tag="$(git describe --tags --abbrev=0 2>/dev/null)"; then
@@ -204,21 +264,35 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
+release_phase="resolve release repository"
 repo_slug="${GITHUB_REPO:-$(detect_repo_slug)}"
 if [[ -z "$repo_slug" ]]; then
   err "could not determine GitHub repo slug"
 fi
 
+release_commit="$(git rev-parse HEAD)"
+publication_started=1
+release_phase="create local tag"
+local_tag_status="outcome unknown (command did not report success)"
 git tag "$VERSION"
-git push origin "$VERSION"
+local_tag_status="completed (command reported success)"
 
+release_phase="push version tag"
+tag_push_status="outcome unknown (command did not report success)"
+git push origin "$VERSION"
+tag_push_status="completed (command reported success)"
+
+release_phase="publish GitHub release/assets"
+github_status="outcome unknown (command did not report success)"
 gh release create "$VERSION" \
   "$amd64_archive" \
   "$arm64_archive" \
   "$sha_sums_path" \
   --title "$VERSION" \
   --notes "$notes"
+github_status="completed (command reported success)"
 
+release_phase="prepare Homebrew formula"
 tap_repo="${HOMEBREW_TAP_REPO:-agisilaos/homebrew-tap}"
 tap_branch="${HOMEBREW_TAP_BRANCH:-main}"
 formula_path="${HOMEBREW_FORMULA_PATH:-${DEFAULT_FORMULA_PATH}}"
@@ -228,9 +302,10 @@ formula_license="${HOMEBREW_LICENSE:-${DEFAULT_HOMEBREW_LICENSE}}"
 formula_test_arg="${HOMEBREW_TEST_ARG:-${DEFAULT_HOMEBREW_TEST_ARG}}"
 
 tap_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir" "$tap_dir"' EXIT
 
+release_phase="clone Homebrew tap"
 git clone "git@github.com:${tap_repo}.git" "$tap_dir"
+release_phase="prepare Homebrew formula"
 mkdir -p "$(dirname "$tap_dir/$formula_path")"
 
 cat <<FORMULA > "$tap_dir/$formula_path"
@@ -259,16 +334,19 @@ class ${formula_class} < Formula
   end
 end
 FORMULA
+tap_prepared=1
 
-(
-  cd "$tap_dir"
-  git add "$formula_path"
-  if ! git diff --cached --quiet; then
-    git commit -m "${FORMULA_NAME}: ${VERSION}"
-    git push origin HEAD:"$tap_branch"
-  else
-    echo "Homebrew formula already up to date"
-  fi
-)
+release_phase="commit Homebrew formula"
+git -C "$tap_dir" add "$formula_path"
+if ! git -C "$tap_dir" diff --cached --quiet; then
+  git -C "$tap_dir" commit -m "${FORMULA_NAME}: ${VERSION}"
+  release_phase="push Homebrew formula"
+  homebrew_status="outcome unknown (command did not report success)"
+  git -C "$tap_dir" push origin HEAD:"$tap_branch"
+  homebrew_status="completed (command reported success)"
+else
+  echo "Homebrew formula already up to date"
+  homebrew_status="not needed (formula already matched the cloned tap)"
+fi
 
 echo "release completed for $VERSION"
