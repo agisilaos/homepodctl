@@ -1,0 +1,3 @@
+# Report release failures for manual recovery
+
+R14 reports the interrupted publication step, command outcomes, retained artifacts, and safe manual recovery instructions while preserving the existing release sequence and strict existing-tag checks. Automatic resume was considered but deferred: proving artifact identity across partial uploads would add substantial complexity for an occasional failure, while builds of the same source can produce different bytes. Failed remote commands are reported as having an unknown outcome, and recovery guidance requires inspecting remote state and verifying original artifacts before any manual write; no automatic retries, rollback, or manifest protocol are introduced.
