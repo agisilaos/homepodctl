@@ -52,7 +52,7 @@ func collectStatus(ctx context.Context) (statusResult, error) {
 		}, err
 	}
 
-	np, err := getNowPlaying(ctx)
+	np, err := playbackApp.NowPlaying(ctx)
 	if err != nil {
 		connection := inferStatusConnection(err)
 		return statusResult{
@@ -283,7 +283,7 @@ func cmdTransport(ctx context.Context, args []string, action string, fn func(con
 	if err := fn(ctx); err != nil {
 		die(err)
 	}
-	if np, err := getNowPlaying(ctx); err == nil {
+	if np, err := playbackApp.NowPlaying(ctx); err == nil {
 		writeActionOutput(action, jsonOut, plainOut, actionOutput{NowPlaying: &np})
 		return
 	}

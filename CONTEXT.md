@@ -1,10 +1,17 @@
 # homepodctl
 
-The language used to describe playlist playback and release publication for homepodctl.
+The language used to describe playback, routing, playback observation, and release publication for homepodctl.
 
 ## Language
 
 ### Playback
+
+**AirPlay playback**:
+Playback sent by Music.app through a playback route.
+
+**Native playback**:
+Playback initiated on a Room through a configured Shortcut rather than sent by Music.app.
+_Avoid_: Assuming that Music.app's state describes native playback.
 
 **Playlist target**:
 The playlist selection supplied for playback, expressed as either playlist text or a persistent ID.
@@ -17,7 +24,30 @@ Playlist text used to find a playlist. AirPlay treats it as a fuzzy search, whil
 The identifier for a playlist in the Music.app library, distinct from its display name.
 
 **Room**:
-A named playback destination.
+A named playback destination, including HomePods, Apple TVs, and other AirPlay speakers.
+_Avoid_: Using “HomePod” when the destination may be another kind of AirPlay device.
+
+**Playback route**:
+The set of Rooms currently selected as Music.app's AirPlay outputs.
+_Avoid_: Treating selection as proof that every Room is audibly playing.
+
+**Pending playback route**:
+A proposed set of Rooms that has not yet been applied as the playback route.
+_Avoid_: Treating each selection change as an applied route change.
+
+**Selected output**:
+A Room included in the playback route.
+
+**Active output**:
+A Room that Music.app reports as active, distinct from merely being selected or available.
+
+**Now-playing snapshot**:
+The playback state, track details, and playback route observed at one point in time.
+_Avoid_: Treating a snapshot as independent state reported directly by every Room.
+
+**Stale snapshot**:
+The most recent successful now-playing snapshot retained after a later observation failed.
+_Avoid_: Presenting stale state as current without qualification.
 
 **Explicit volume**:
 A volume supplied for the current playback request.

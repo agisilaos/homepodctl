@@ -18,17 +18,13 @@ var (
 	version              = "dev"
 	commit               = "none"
 	date                 = "unknown"
-	getNowPlaying        = music.GetNowPlaying
+	playbackApp          = newPlaybackApplication()
 	searchPlaylists      = music.SearchUserPlaylists
-	listAirPlayDevices   = music.ListAirPlayDevices
-	setCurrentOutputs    = music.SetCurrentAirPlayDevices
-	setDeviceVolume      = music.SetAirPlayDeviceVolume
 	setShuffle           = music.SetShuffleEnabled
 	playPlaylistByID     = music.PlayUserPlaylistByPersistentID
 	findPlaylistNameByID = music.FindUserPlaylistNameByPersistentID
 	runNativeShortcut    = native.RunShortcut
 	initConfig           = native.InitConfig
-	stopPlayback         = music.Stop
 	lookPath             = exec.LookPath
 	configPath           = native.ConfigPath
 	loadConfigOptional   = native.LoadConfigOptional
@@ -130,7 +126,9 @@ func main() {
 	}
 	verbose = opts.verbose || envTruthy(os.Getenv("HOMEPODCTL_VERBOSE"))
 	quiet = opts.quiet
-	debugf("command=%q args=%q", cmd, args)
+	if cmd != "tui" {
+		debugf("command=%q args=%q", cmd, args)
+	}
 
 	if opts.version {
 		fmt.Printf("homepodctl %s (%s) %s\n", version, commit, date)
@@ -158,7 +156,9 @@ func main() {
 			die(cfgErr)
 		}
 		cfg = loadedCfg
-		debugf("config: default_backend=%q default_rooms=%v aliases=%d", cfg.Defaults.Backend, cfg.Defaults.Rooms, len(cfg.Aliases))
+		if cmd != "tui" {
+			debugf("config: default_backend=%q default_rooms=%v aliases=%d", cfg.Defaults.Backend, cfg.Defaults.Rooms, len(cfg.Aliases))
+		}
 		return cfg
 	}
 
@@ -188,6 +188,8 @@ func main() {
 		cmdStatus(ctx, args)
 	case "now":
 		cmdStatus(ctx, args)
+	case "tui":
+		cmdTUI(context.Background(), args)
 	case "out":
 		cmdOut(ctx, loadCfg(), args)
 	case "aliases":
@@ -195,13 +197,13 @@ func main() {
 	case "run":
 		cmdRun(ctx, loadCfg(), args)
 	case "pause":
-		cmdTransport(ctx, args, "pause", music.Pause)
+		cmdTransport(ctx, args, "pause", playbackApp.Pause)
 	case "stop":
-		cmdTransport(ctx, args, "stop", music.Stop)
+		cmdTransport(ctx, args, "stop", playbackApp.Stop)
 	case "next":
-		cmdTransport(ctx, args, "next", music.NextTrack)
+		cmdTransport(ctx, args, "next", playbackApp.Next)
 	case "prev":
-		cmdTransport(ctx, args, "prev", music.PreviousTrack)
+		cmdTransport(ctx, args, "prev", playbackApp.Previous)
 	case "play":
 		cmdPlay(ctx, loadCfg(), args)
 	case "volume":

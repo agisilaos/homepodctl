@@ -41,11 +41,11 @@ func (st automationOutSet) execute(ctx context.Context, _ *native.Config) error 
 	if st.Backend != "airplay" {
 		return fmt.Errorf("out.set only supports backend=airplay")
 	}
-	return setCurrentOutputs(ctx, append([]string(nil), st.Rooms...))
+	return playbackApp.SetRoute(ctx, append([]string(nil), st.Rooms...))
 }
 
 func (st automationTransport) execute(ctx context.Context, _ *native.Config) error {
-	return stopPlayback(ctx)
+	return playbackApp.Stop(ctx)
 }
 
 func (st automationPlay) execute(ctx context.Context, cfg *native.Config) error {
@@ -53,7 +53,7 @@ func (st automationPlay) execute(ctx context.Context, cfg *native.Config) error 
 	case "airplay":
 		rooms := append([]string(nil), st.Rooms...)
 		if len(rooms) > 0 {
-			if err := setCurrentOutputs(ctx, rooms); err != nil {
+			if err := playbackApp.SetRoute(ctx, rooms); err != nil {
 				return err
 			}
 		}
@@ -130,7 +130,7 @@ func (st automationWait) execute(ctx context.Context, _ *native.Config) error {
 	deadline := time.Now().Add(st.timeout)
 	want := st.State
 	for {
-		np, err := getNowPlaying(ctx)
+		np, err := playbackApp.NowPlaying(ctx)
 		if err != nil {
 			return err
 		}

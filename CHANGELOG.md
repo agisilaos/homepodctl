@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on *Keep a Changelog*, and this project adheres to *Semantic Versioning*.
 
+## [v0.4.0] - 2026-09-02
+
+### Added
+
+- Added the Preview `homepodctl tui` dashboard for Music.app now-playing details, complete AirPlay Room state, transport controls, staged multi-room routing, and focused-room volume changes.
+
+### Changed
+
+- Playback commands and the TUI now share one in-process application boundary. Interactive snapshots require complete device state while existing status and action output contracts retain their selected-output behavior.
+- The TUI keeps retrying after backend failures, marks retained snapshots stale, disables mutations until state is current, honors `NO_COLOR`, and distinguishes Music/AirPlay observation from unobservable native Shortcut playback.
+
 ## [v0.3.0] - 2026-08-31
 
 ### Changed

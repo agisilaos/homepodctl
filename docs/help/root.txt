@@ -22,6 +22,7 @@ Usage:
   homepodctl playlists [--query <substr>] [--limit N] [--json] [--plain]
   homepodctl status [--json] [--plain] [--watch <duration>]
   homepodctl now [--json] [--plain] [--watch <duration>]
+  homepodctl tui [--refresh <duration>]
   homepodctl aliases [--json] [--plain]
   homepodctl run <alias> [--json] [--plain] [--dry-run]
   homepodctl pause [--json] [--plain]

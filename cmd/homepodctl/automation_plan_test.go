@@ -26,18 +26,18 @@ func mustCompileAutomation(t *testing.T, cfg *native.Config, doc *automationFile
 }
 
 func TestAutomationCommandsShareResolvedPlan(t *testing.T) {
-	origOutputs, origVolume, origShuffle := setCurrentOutputs, setDeviceVolume, setShuffle
-	origSearch, origPlay, origNow, origStop := searchPlaylists, playPlaylistByID, getNowPlaying, stopPlayback
+	origOutputs, origVolume, origShuffle := playbackApp.setRouteFn, playbackApp.setVolumeFn, setShuffle
+	origSearch, origPlay, origNow, origStop := searchPlaylists, playPlaylistByID, playbackApp.nowPlayingFn, playbackApp.stopFn
 	t.Cleanup(func() {
-		setCurrentOutputs, setDeviceVolume, setShuffle = origOutputs, origVolume, origShuffle
-		searchPlaylists, playPlaylistByID, getNowPlaying, stopPlayback = origSearch, origPlay, origNow, origStop
+		playbackApp.setRouteFn, playbackApp.setVolumeFn, setShuffle = origOutputs, origVolume, origShuffle
+		searchPlaylists, playPlaylistByID, playbackApp.nowPlayingFn, playbackApp.stopFn = origSearch, origPlay, origNow, origStop
 	})
 	var calls []string
-	setCurrentOutputs = func(_ context.Context, rooms []string) error {
+	playbackApp.setRouteFn = func(_ context.Context, rooms []string) error {
 		calls = append(calls, "outputs:"+strings.Join(rooms, ","))
 		return nil
 	}
-	setDeviceVolume = func(_ context.Context, room string, value int) error {
+	playbackApp.setVolumeFn = func(_ context.Context, room string, value int) error {
 		calls = append(calls, fmt.Sprintf("volume:%s:%d", room, value))
 		return nil
 	}
@@ -53,11 +53,11 @@ func TestAutomationCommandsShareResolvedPlan(t *testing.T) {
 		calls = append(calls, "play:"+id)
 		return nil
 	}
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		calls = append(calls, "state")
 		return music.NowPlaying{PlayerState: "playing"}, nil
 	}
-	stopPlayback = func(context.Context) error {
+	playbackApp.stopFn = func(context.Context) error {
 		calls = append(calls, "stop")
 		return nil
 	}
@@ -219,8 +219,8 @@ func TestAutomationResolvedJSON(t *testing.T) {
 }
 
 func TestExecuteAutomationPlanFailurePositions(t *testing.T) {
-	origStop := stopPlayback
-	t.Cleanup(func() { stopPlayback = origStop })
+	origStop := playbackApp.stopFn
+	t.Cleanup(func() { playbackApp.stopFn = origStop })
 	plan := mustCompileAutomation(t, nil, &automationFile{
 		Version: "1", Name: "failure",
 		Steps: []automationStep{{Type: "transport", Action: "stop"}, {Type: "transport", Action: "stop"}, {Type: "transport", Action: "stop"}},
@@ -229,7 +229,7 @@ func TestExecuteAutomationPlanFailurePositions(t *testing.T) {
 	for _, failAt := range []int{-1, 0, 1, 2} {
 		t.Run(fmt.Sprintf("failure_%d", failAt), func(t *testing.T) {
 			calls := 0
-			stopPlayback = func(context.Context) error {
+			playbackApp.stopFn = func(context.Context) error {
 				index := calls
 				calls++
 				if index == failAt {
@@ -275,15 +275,15 @@ func TestExecuteAutomationPlanFailurePositions(t *testing.T) {
 }
 
 func TestExecuteAutomationPlanTiming(t *testing.T) {
-	origStop := stopPlayback
-	t.Cleanup(func() { stopPlayback = origStop })
+	origStop := playbackApp.stopFn
+	t.Cleanup(func() { playbackApp.stopFn = origStop })
 	plan := mustCompileAutomation(t, nil, &automationFile{
 		Version: "1", Name: "timing", Steps: []automationStep{{Type: "transport", Action: "stop"}},
 	})
 	for _, fail := range []bool{false, true} {
 		t.Run(fmt.Sprintf("fail_%t", fail), func(t *testing.T) {
 			var entered, left time.Time
-			stopPlayback = func(context.Context) error {
+			playbackApp.stopFn = func(context.Context) error {
 				entered = time.Now()
 				time.Sleep(12 * time.Millisecond)
 				left = time.Now()
@@ -318,9 +318,9 @@ func TestExecuteAutomationPlanTiming(t *testing.T) {
 }
 
 func TestAutomationPlanSnapshotsInputsAndDefaults(t *testing.T) {
-	origOutputs, origVolume, origShuffle, origPlay := setCurrentOutputs, setDeviceVolume, setShuffle, playPlaylistByID
+	origOutputs, origVolume, origShuffle, origPlay := playbackApp.setRouteFn, playbackApp.setVolumeFn, setShuffle, playPlaylistByID
 	t.Cleanup(func() {
-		setCurrentOutputs, setDeviceVolume, setShuffle, playPlaylistByID = origOutputs, origVolume, origShuffle, origPlay
+		playbackApp.setRouteFn, playbackApp.setVolumeFn, setShuffle, playPlaylistByID = origOutputs, origVolume, origShuffle, origPlay
 	})
 	cfg := &native.Config{Defaults: native.DefaultsConfig{
 		Rooms: []string{"Office"}, Volume: intPtr(20), Shuffle: false,
@@ -345,11 +345,11 @@ func TestAutomationPlanSnapshotsInputsAndDefaults(t *testing.T) {
 	// Even reporting metadata is not an execution source.
 	plan.Steps[0].Input.PlaylistID = "not-an-operation"
 	var calls []string
-	setCurrentOutputs = func(_ context.Context, rooms []string) error {
+	playbackApp.setRouteFn = func(_ context.Context, rooms []string) error {
 		calls = append(calls, "outputs:"+strings.Join(rooms, ","))
 		return nil
 	}
-	setDeviceVolume = func(_ context.Context, room string, value int) error {
+	playbackApp.setVolumeFn = func(_ context.Context, room string, value int) error {
 		calls = append(calls, fmt.Sprintf("volume:%s:%d", room, value))
 		return nil
 	}
@@ -412,20 +412,22 @@ func TestAutomationNativePlanSnapshotsMappingsAndDefersPlaylistLookup(t *testing
 }
 
 func TestAutomationVolumeResolvesOutputsAfterEarlierStep(t *testing.T) {
-	origOutputs, origVolume, origNow := setCurrentOutputs, setDeviceVolume, getNowPlaying
-	t.Cleanup(func() { setCurrentOutputs, setDeviceVolume, getNowPlaying = origOutputs, origVolume, origNow })
+	origOutputs, origVolume, origNow := playbackApp.setRouteFn, playbackApp.setVolumeFn, playbackApp.nowPlayingFn
+	t.Cleanup(func() {
+		playbackApp.setRouteFn, playbackApp.setVolumeFn, playbackApp.nowPlayingFn = origOutputs, origVolume, origNow
+	})
 	selected := "Old Room"
 	var calls []string
-	setCurrentOutputs = func(_ context.Context, rooms []string) error {
+	playbackApp.setRouteFn = func(_ context.Context, rooms []string) error {
 		selected = rooms[0]
 		calls = append(calls, "outputs:"+selected)
 		return nil
 	}
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		calls = append(calls, "current:"+selected)
 		return music.NowPlaying{Outputs: []music.AirPlayDevice{{Name: selected}}}, nil
 	}
-	setDeviceVolume = func(_ context.Context, room string, value int) error {
+	playbackApp.setVolumeFn = func(_ context.Context, room string, value int) error {
 		calls = append(calls, fmt.Sprintf("volume:%s:%d", room, value))
 		return nil
 	}
@@ -447,10 +449,10 @@ func TestAutomationVolumeResolvesOutputsAfterEarlierStep(t *testing.T) {
 }
 
 func TestAutomationPreconditionFailureRemainsAtItsStep(t *testing.T) {
-	origStop, origShortcut := stopPlayback, runNativeShortcut
-	t.Cleanup(func() { stopPlayback, runNativeShortcut = origStop, origShortcut })
+	origStop, origShortcut := playbackApp.stopFn, runNativeShortcut
+	t.Cleanup(func() { playbackApp.stopFn, runNativeShortcut = origStop, origShortcut })
 	stops := 0
-	stopPlayback = func(context.Context) error { stops++; return nil }
+	playbackApp.stopFn = func(context.Context) error { stops++; return nil }
 	runNativeShortcut = func(context.Context, string) error {
 		t.Fatal("missing mapping must not run a shortcut")
 		return nil
@@ -470,12 +472,12 @@ func TestAutomationPreconditionFailureRemainsAtItsStep(t *testing.T) {
 }
 
 func TestAutomationCancellationStopsLaterSteps(t *testing.T) {
-	origStop := stopPlayback
-	t.Cleanup(func() { stopPlayback = origStop })
+	origStop := playbackApp.stopFn
+	t.Cleanup(func() { playbackApp.stopFn = origStop })
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	calls := 0
-	stopPlayback = func(context.Context) error { calls++; cancel(); return nil }
+	playbackApp.stopFn = func(context.Context) error { calls++; cancel(); return nil }
 	plan := mustCompileAutomation(t, nil, &automationFile{
 		Version: "1", Name: "cancel",
 		Steps: []automationStep{{Type: "transport", Action: "stop"}, {Type: "transport", Action: "stop"}, {Type: "transport", Action: "stop"}},

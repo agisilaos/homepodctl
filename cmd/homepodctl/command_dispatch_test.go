@@ -192,6 +192,9 @@ func TestUsageOutputContainsCoreCommands(t *testing.T) {
 	if !strings.Contains(out, "automation") || !strings.Contains(out, "config") {
 		t.Fatalf("usage output missing expected commands: %q", out)
 	}
+	if !strings.Contains(out, "homepodctl tui [--refresh <duration>]") {
+		t.Fatalf("usage output missing tui command: %q", out)
+	}
 }
 
 func captureStdoutAndRecover(t *testing.T, fn func()) (string, any) {

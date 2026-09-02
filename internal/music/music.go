@@ -48,6 +48,14 @@ type NowPlaying struct {
 	Outputs         []AirPlayDevice `json:"outputs"`
 }
 
+// PlaybackSnapshot is the complete Music.app view needed by interactive
+// clients. NowPlaying.Outputs contains only selected devices; Devices retains
+// every AirPlay device so callers can also show availability and activity.
+type PlaybackSnapshot struct {
+	NowPlaying NowPlaying
+	Devices    []AirPlayDevice
+}
+
 type NowPlayingTrack struct {
 	Name         string  `json:"name,omitempty"`
 	Artist       string  `json:"artist,omitempty"`
@@ -345,6 +353,15 @@ end tell
 	return err
 }
 
+func PlayPause(ctx context.Context) error {
+	_, err := runAppleScript(ctx, `
+tell application "Music"
+	playpause
+end tell
+`)
+	return err
+}
+
 func Stop(ctx context.Context) error {
 	_, err := runAppleScript(ctx, `
 tell application "Music"
@@ -402,7 +419,7 @@ end tell
 	}, nil
 }
 
-func GetNowPlaying(ctx context.Context) (NowPlaying, error) {
+func getNowPlayingDetails(ctx context.Context) (NowPlaying, error) {
 	out, err := runAppleScript(ctx, `
 tell application "Music"
 	set ps to (player state as text)
@@ -453,15 +470,45 @@ end tell
 		},
 	}
 
-	devs, err := ListAirPlayDevices(ctx)
-	if err == nil {
-		for _, d := range devs {
-			if d.Selected {
-				np.Outputs = append(np.Outputs, d)
-			}
+	return np, nil
+}
+
+func selectedOutputs(devices []AirPlayDevice) []AirPlayDevice {
+	var outputs []AirPlayDevice
+	for _, device := range devices {
+		if device.Selected {
+			outputs = append(outputs, device)
 		}
 	}
-	return np, nil
+	return outputs
+}
+
+// GetPlaybackSnapshot requires both player metadata and complete device state.
+// Unlike GetNowPlaying, it reports device-enumeration failures so an
+// interactive client cannot present a partial route as current state.
+func GetPlaybackSnapshot(ctx context.Context) (PlaybackSnapshot, error) {
+	nowPlaying, err := getNowPlayingDetails(ctx)
+	if err != nil {
+		return PlaybackSnapshot{}, err
+	}
+	devices, err := ListAirPlayDevices(ctx)
+	if err != nil {
+		return PlaybackSnapshot{NowPlaying: nowPlaying}, err
+	}
+	nowPlaying.Outputs = selectedOutputs(devices)
+	return PlaybackSnapshot{NowPlaying: nowPlaying, Devices: devices}, nil
+}
+
+func GetNowPlaying(ctx context.Context) (NowPlaying, error) {
+	nowPlaying, err := getNowPlayingDetails(ctx)
+	if err != nil {
+		return NowPlaying{}, err
+	}
+	devices, err := ListAirPlayDevices(ctx)
+	if err == nil {
+		nowPlaying.Outputs = selectedOutputs(devices)
+	}
+	return nowPlaying, nil
 }
 
 func runAppleScript(ctx context.Context, script string) (string, error) {

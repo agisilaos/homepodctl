@@ -2,3 +2,4 @@
 root.txt	--help
 automation.txt	help automation
 plan.txt	help plan
+tui.txt	help tui

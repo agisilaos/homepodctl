@@ -27,14 +27,14 @@ type playBackendRecorder struct {
 func recordPlayBackend(t *testing.T) *playBackendRecorder {
 	t.Helper()
 	oldSearch, oldLookup := searchPlaylists, findPlaylistNameByID
-	oldOutputs, oldVolume := setCurrentOutputs, setDeviceVolume
+	oldOutputs, oldVolume := playbackApp.setRouteFn, playbackApp.setVolumeFn
 	oldShuffle, oldPlay := setShuffle, playPlaylistByID
-	oldNow, oldShortcut := getNowPlaying, runNativeShortcut
+	oldNow, oldShortcut := playbackApp.nowPlayingFn, runNativeShortcut
 	t.Cleanup(func() {
 		searchPlaylists, findPlaylistNameByID = oldSearch, oldLookup
-		setCurrentOutputs, setDeviceVolume = oldOutputs, oldVolume
+		playbackApp.setRouteFn, playbackApp.setVolumeFn = oldOutputs, oldVolume
 		setShuffle, playPlaylistByID = oldShuffle, oldPlay
-		getNowPlaying, runNativeShortcut = oldNow, oldShortcut
+		playbackApp.nowPlayingFn, runNativeShortcut = oldNow, oldShortcut
 	})
 	r := &playBackendRecorder{
 		matches:      []music.UserPlaylist{{Name: "Focus Mix", PersistentID: "A"}},
@@ -48,11 +48,11 @@ func recordPlayBackend(t *testing.T) *playBackendRecorder {
 		r.calls = append(r.calls, "lookup:"+id)
 		return r.playlistName, nil
 	}
-	setCurrentOutputs = func(_ context.Context, rooms []string) error {
+	playbackApp.setRouteFn = func(_ context.Context, rooms []string) error {
 		r.calls = append(r.calls, "outputs:"+strings.Join(rooms, ","))
 		return nil
 	}
-	setDeviceVolume = func(_ context.Context, room string, volume int) error {
+	playbackApp.setVolumeFn = func(_ context.Context, room string, volume int) error {
 		r.calls = append(r.calls, fmt.Sprintf("volume:%s:%d", room, volume))
 		return nil
 	}
@@ -64,7 +64,7 @@ func recordPlayBackend(t *testing.T) *playBackendRecorder {
 		r.calls = append(r.calls, "play:"+id)
 		return nil
 	}
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		r.calls = append(r.calls, "now")
 		return r.nowPlaying, r.nowErr
 	}

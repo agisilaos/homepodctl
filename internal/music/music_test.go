@@ -348,3 +348,59 @@ func TestGetNowPlaying_SelectedOutputsAndDeviceFailure(t *testing.T) {
 		t.Fatalf("outputs=%v, want empty when device listing fails", np.Outputs)
 	}
 }
+
+func TestGetPlaybackSnapshot_RequiresCompleteDeviceState(t *testing.T) {
+	origExec := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = origExec })
+
+	runAppleScriptExec = func(_ context.Context, script string) ([]byte, error) {
+		switch {
+		case strings.Contains(script, "set ps to (player state as text)"):
+			return []byte("playing\t12.5\ttrue\tall\tFocus\tPL123\tTrack\tArtist\tAlbum\t240.0\tT123"), nil
+		case strings.Contains(script, "every AirPlay device"):
+			return []byte(strings.Join([]string{
+				"Bedroom\tHomePod\ttrue\ttrue\ttrue\t35\t\tB1",
+				"Kitchen\tHomePod\ttrue\tfalse\tfalse\t30\t\tK1",
+			}, "\n")), nil
+		default:
+			t.Fatalf("unexpected script call: %s", script)
+			return nil, nil
+		}
+	}
+
+	snapshot, err := GetPlaybackSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("GetPlaybackSnapshot: %v", err)
+	}
+	if len(snapshot.Devices) != 2 || len(snapshot.NowPlaying.Outputs) != 1 || snapshot.NowPlaying.Outputs[0].Name != "Bedroom" {
+		t.Fatalf("unexpected snapshot: %+v", snapshot)
+	}
+
+	runAppleScriptExec = func(_ context.Context, script string) ([]byte, error) {
+		if strings.Contains(script, "set ps to (player state as text)") {
+			return []byte("paused\t0\tfalse\toff\t\t\t\t\t\t0\t"), nil
+		}
+		return nil, errors.New("device lookup failed")
+	}
+
+	snapshot, err = GetPlaybackSnapshot(context.Background())
+	if err == nil || snapshot.NowPlaying.PlayerState != "paused" {
+		t.Fatalf("snapshot=%+v err=%v, want partial player state and device error", snapshot, err)
+	}
+}
+
+func TestPlayPause_UsesMusicToggle(t *testing.T) {
+	origExec := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = origExec })
+
+	runAppleScriptExec = func(_ context.Context, script string) ([]byte, error) {
+		if !strings.Contains(script, "playpause") {
+			t.Fatalf("script does not toggle playback: %s", script)
+		}
+		return nil, nil
+	}
+
+	if err := PlayPause(context.Background()); err != nil {
+		t.Fatalf("PlayPause: %v", err)
+	}
+}
