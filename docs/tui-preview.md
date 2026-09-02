@@ -15,7 +15,7 @@ homepodctl tui
 homepodctl tui --refresh 2s
 ```
 
-The default refresh interval is one second and the minimum is 500 milliseconds. Each refresh and mutation has its own five-second timeout; the TUI session itself stays open until the user quits. Interactive stdin and stdout are required.
+The default refresh interval is two seconds and the minimum is 500 milliseconds. Each refresh and mutation has its own five-second timeout; the TUI session itself stays open until the user quits. Interactive stdin and stdout are required. Manual refreshes and post-action confirmation remain immediate.
 
 If a refresh fails, the most recent successful snapshot remains visible and is marked stale. Mutating controls stay disabled until a current snapshot arrives. Starting while Music is unavailable opens a disconnected view and keeps retrying.
 

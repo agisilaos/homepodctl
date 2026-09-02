@@ -174,7 +174,7 @@ Keys:
   q           Quit
 
 Notes:
-  - The default refresh interval is 1s; --refresh cannot be below 500ms.
+  - The default refresh interval is 2s; --refresh cannot be below 500ms.
   - Route edits are staged and an empty route is rejected.
   - Failed refreshes retain a clearly marked stale snapshot and disable mutations while retrying.
   - Set NO_COLOR to disable color; every state also has a text or symbol label.

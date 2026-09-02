@@ -134,8 +134,8 @@ Use Space for play/pause, `n`/`b` for next/previous, `s` to stop, arrows or
 quit. Route changes are staged so multi-room edits apply once; an empty route
 is rejected.
 
-The default refresh interval is one second. Override it with
-`homepodctl tui --refresh 2s`; values below 500 ms are rejected. A failed
+The default refresh interval is two seconds. Override it with
+`homepodctl tui --refresh 5s`; values below 500 ms are rejected. A failed
 refresh retains the last snapshot as visibly stale, disables mutations, and
 keeps retrying. The interface uses text and symbols in addition to color and
 honors the `NO_COLOR` environment variable. See the [TUI Preview guide](docs/tui-preview.md).
@@ -323,7 +323,7 @@ See the [automation exit and output contract](docs/automation-v1-cli-spec.md#exi
 - `homepodctl play <query> [--json|--plain|--dry-run]` / `homepodctl play --playlist-id <id>`: play a playlist
 - `homepodctl playlists --query <text> [--json|--plain]`: search playlists
 - `homepodctl status [--json|--plain]` / `homepodctl now` / `homepodctl status --watch 1s`: playback, route, and connectivity status
-- `homepodctl tui [--refresh 1s]`: interactive Music/AirPlay dashboard and controls (Preview)
+- `homepodctl tui [--refresh 2s]`: interactive Music/AirPlay dashboard and controls (Preview)
 - `homepodctl pause|stop|next|prev [--json|--plain]`: transport controls
 - `homepodctl volume <0-100> [room ...] [--json|--plain|--dry-run]` / `homepodctl vol ...`: output volume
 - `homepodctl aliases [--json|--plain]` / `homepodctl run <alias> [--json|--plain|--dry-run]`: config shortcuts

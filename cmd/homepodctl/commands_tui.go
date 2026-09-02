@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultTUIRefresh = time.Second
+	defaultTUIRefresh = 2 * time.Second
 	minimumTUIRefresh = 500 * time.Millisecond
 	tuiActionTimeout  = 5 * time.Second
 )

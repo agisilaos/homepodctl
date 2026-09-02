@@ -9,6 +9,12 @@ import (
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
+func TestTUIDefaultRefreshReducesBackgroundPolling(t *testing.T) {
+	if defaultTUIRefresh != 2*time.Second {
+		t.Fatalf("default refresh=%s, want 2s", defaultTUIRefresh)
+	}
+}
+
 func TestCmdTUIParsesOptionsBeforeLaunching(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	origTerminal := tuiTerminalAvailable
