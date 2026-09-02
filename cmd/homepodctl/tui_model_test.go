@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/agisilaos/homepodctl/internal/music"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 type fakeTUIPlaybackService struct {
@@ -383,6 +387,110 @@ func TestTUIViewKeepsRedundantStateLabelsWhenColorEnabled(t *testing.T) {
 	}
 }
 
+func TestTUIViewMaintainsBackgroundAcrossStyledSpans(t *testing.T) {
+	colorProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(colorProfile) })
+
+	m := readyTUIModel(&fakeTUIPlaybackService{})
+	m.opts.noColor = false
+	m.width, m.height = 142, 42
+
+	view := m.View()
+	line, column, ok := firstTUIVisibleCellWithoutBackground(view)
+	if ok {
+		t.Fatalf("visible cell at line %d column %d lost the dashboard background", line, column)
+	}
+
+	var panelLine, focusedLine string
+	for _, renderedLine := range strings.Split(view, "\n") {
+		switch {
+		case strings.Contains(renderedLine, "NOW PLAYING"):
+			panelLine = renderedLine
+		case strings.Contains(renderedLine, "Bedroom"):
+			focusedLine = renderedLine
+		}
+	}
+	if !strings.Contains(panelLine, "48;2;24;29;39m") {
+		t.Fatalf("now-playing surface is missing the agreed panel background: %q", panelLine)
+	}
+	if count := strings.Count(focusedLine, "48;2;32;43;59m"); count < 4 {
+		t.Fatalf("focused Room background was not restored across nested styles: count=%d line=%q", count, focusedLine)
+	}
+}
+
+func TestTUIViewUsesMidnightMusicComposition(t *testing.T) {
+	m := readyTUIModel(&fakeTUIPlaybackService{})
+	m.width, m.height = 88, 24
+	lines := strings.Split(m.View(), "\n")
+
+	var nowPlayingLine, focusedRoomLine string
+	for _, line := range lines {
+		switch {
+		case strings.Contains(line, "NOW PLAYING"):
+			nowPlayingLine = line
+		case strings.Contains(line, "Bedroom"):
+			focusedRoomLine = line
+		}
+	}
+	if !strings.HasPrefix(nowPlayingLine, "  ▌ ") {
+		t.Fatalf("now-playing panel lacks the agreed inset/accent: %q", nowPlayingLine)
+	}
+	if !strings.HasPrefix(focusedRoomLine, "  ▌› ") {
+		t.Fatalf("focused Room lacks the agreed inset focus rail: %q", focusedRoomLine)
+	}
+}
+
+func firstTUIVisibleCellWithoutBackground(value string) (int, int, bool) {
+	line, column := 1, 0
+	backgroundSet := false
+	for index := 0; index < len(value); {
+		if value[index] == '\x1b' && index+1 < len(value) && value[index+1] == '[' {
+			end := index + 2
+			for end < len(value) && value[end] != 'm' {
+				end++
+			}
+			if end == len(value) {
+				return line, column + 1, true
+			}
+			params := strings.Split(value[index+2:end], ";")
+			for parameter := 0; parameter < len(params); parameter++ {
+				code, _ := strconv.Atoi(params[parameter])
+				switch code {
+				case 0, 49:
+					backgroundSet = false
+				case 48:
+					if parameter+4 < len(params) && params[parameter+1] == "2" {
+						backgroundSet = true
+						parameter += 4
+					} else if parameter+2 < len(params) && params[parameter+1] == "5" {
+						backgroundSet = true
+						parameter += 2
+					}
+				}
+			}
+			index = end + 1
+			continue
+		}
+
+		r, size := utf8.DecodeRuneInString(value[index:])
+		index += size
+		switch r {
+		case '\n':
+			line, column = line+1, 0
+			continue
+		case '\r':
+			column = 0
+			continue
+		}
+		column++
+		if !backgroundSet {
+			return line, column, true
+		}
+	}
+	return 0, 0, false
+}
+
 func TestTUIViewCompactLayoutShowsRequiredStateAndFocusedRoom(t *testing.T) {
 	m := readyTUIModel(&fakeTUIPlaybackService{})
 	for index := 0; index < 5; index++ {
@@ -397,7 +505,7 @@ func TestTUIViewCompactLayoutShowsRequiredStateAndFocusedRoom(t *testing.T) {
 	m.focusKey = "id:RE"
 	m.width, m.height = 48, 14
 	view := m.View()
-	for _, want := range []string{"HIT ME", "Playlist", "SHUFFLE ON", "REPEAT ALL", "KIND", "AUDIO", "Room E", "IDLE", "14%"} {
+	for _, want := range []string{"HIT ME", "Chill Mix", "SHUFFLE ON", "REPEAT ALL", "KIND", "AUDIO", "Room E", "IDLE", "14%"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("compact view missing %q:\n%s", want, view)
 		}

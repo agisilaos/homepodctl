@@ -13,7 +13,9 @@ import (
 const (
 	tuiColorMidnight     = "#12151c"
 	tuiColorMidnightDeep = "#090b10"
+	tuiColorPanel        = "#181d27"
 	tuiColorFocus        = "#202b3b"
+	tuiColorPending      = "#342b16"
 	tuiColorText         = "#f5f6f8"
 	tuiColorMuted        = "#a4adba"
 	tuiColorDim          = "#737d8b"
@@ -36,40 +38,49 @@ func (m tuiModel) View() string {
 	if width < 48 || height < 14 {
 		return m.renderMinimumSize(width, height)
 	}
+	contentWidth := maxInt(width-4, 1)
 
 	var lines []string
 	lines = append(lines, m.renderTitle(width))
 	if m.opts.nativeDefault {
-		lines = append(lines, m.paint(tuiColorYellow, "! NATIVE DEFAULT · this TUI observes Music/AirPlay only"))
+		lines = append(lines, insetTUILine(m.paint(tuiColorYellow, "! NATIVE DEFAULT · this TUI observes Music/AirPlay only"), 2))
 	}
 	if m.showHelp {
-		lines = append(lines, m.renderHelp(width)...)
+		lines = append(lines, insetTUILines(m.renderHelp(contentWidth), 2)...)
 		lines = append(lines, m.renderStatus(width))
 		return m.renderCanvas(lines, width, height)
 	}
 	if m.snapshot == nil {
-		lines = append(lines, "", m.paint(tuiColorMuted, "NOW PLAYING"))
-		lines = append(lines, m.strong("Waiting for Music.app…"))
-		if m.lastError != "" {
-			lines = append(lines, m.paint(tuiColorOrange, m.lastError))
+		waiting := []string{
+			m.paint(tuiColorMuted, "NOW PLAYING"),
+			m.strong("Waiting for Music.app…"),
 		}
-		lines = append(lines, "", m.paint(tuiColorMuted, "ROOMS"), m.paint(tuiColorDim, "No current device snapshot"))
-		lines = append(lines, "", m.renderNotice(width), m.renderStatus(width))
+		if m.lastError != "" {
+			waiting = append(waiting, m.paint(tuiColorOrange, m.lastError))
+		}
+		for index := range waiting {
+			line := m.paint(tuiColorMusic, "▌") + " " + waiting[index]
+			waiting[index] = m.renderSurface(line, contentWidth, tuiColorPanel)
+		}
+		lines = append(lines, "")
+		lines = append(lines, insetTUILines(waiting, 2)...)
+		lines = append(lines, "", insetTUILine(m.paint(tuiColorMuted, "ROOMS"), 2), insetTUILine(m.paint(tuiColorDim, "No current device snapshot"), 2))
+		lines = append(lines, "", insetTUILine(m.renderNotice(contentWidth), 2), m.renderStatus(width))
 		return m.renderCanvas(lines, width, height)
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, m.renderNowPlaying(width)...)
+	lines = append(lines, insetTUILines(m.renderNowPlaying(contentWidth), 2)...)
 	lines = append(lines, "")
 	reservedRows := 2
 	if m.pendingEdit {
 		reservedRows++
 	}
-	lines = append(lines, m.renderRooms(width, height-len(lines)-reservedRows)...)
+	lines = append(lines, insetTUILines(m.renderRooms(contentWidth, height-len(lines)-reservedRows), 2)...)
 	if m.pendingEdit {
-		lines = append(lines, m.renderPending(width))
+		lines = append(lines, insetTUILine(m.renderPending(contentWidth), 2))
 	}
-	lines = append(lines, m.renderNotice(width), m.renderStatus(width))
+	lines = append(lines, insetTUILine(m.renderNotice(contentWidth), 2), m.renderStatus(width))
 	return m.renderCanvas(lines, width, height)
 }
 
@@ -84,7 +95,7 @@ func (m tuiModel) renderMinimumSize(width, height int) string {
 }
 
 func (m tuiModel) renderTitle(width int) string {
-	left := m.paint(tuiColorMusic, "♪") + " " + m.strong("homepodctl") + " " + m.paint(tuiColorYellow, "PREVIEW")
+	left := "  " + m.musicMark() + " " + m.strong("homepodctl") + " " + m.paint(tuiColorYellow, "PREVIEW")
 	state := "AIRPLAY · LIVE"
 	color := tuiColorGreen
 	switch {
@@ -97,10 +108,19 @@ func (m tuiModel) renderTitle(width int) string {
 	case m.busy:
 		state, color = "AIRPLAY · WORKING", tuiColorYellow
 	}
-	return joinTUISides(left, m.paint(color, "● "+state), width)
+	return joinTUISides(left, m.paint(color, "● "+state)+"  ", width)
+}
+
+func (m tuiModel) musicMark() string {
+	if m.opts.noColor {
+		return "♪"
+	}
+	style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(tuiColorText)).Background(lipgloss.Color(tuiColorMusic))
+	return renderANSIStyle(style, " ♪ ")
 }
 
 func (m tuiModel) renderNowPlaying(width int) []string {
+	innerWidth := maxInt(width-2, 1)
 	now := m.snapshot.NowPlaying
 	track := strings.TrimSpace(now.Track.Name)
 	if track == "" {
@@ -116,13 +136,13 @@ func (m tuiModel) renderNowPlaying(width int) []string {
 	}
 	lines := []string{
 		m.paint(tuiColorMuted, "NOW PLAYING"),
-		joinTUISides(m.strong(clipRunes(track, maxInt(width-20, 12))), m.paint(stateColor, "▶ "+state), width),
+		joinTUISides(m.strong(clipRunes(track, maxInt(innerWidth-20, 12))), m.paint(stateColor, "▶ "+state), innerWidth),
 	}
-	meta := compactJoin(" · ", strings.TrimSpace(now.Track.Artist), strings.TrimSpace(now.Track.Album), playlistLabel(now.PlaylistName))
+	meta := nowPlayingMetadata(now, innerWidth)
 	if meta != "" {
-		lines = append(lines, m.paint(tuiColorMuted, clipRunes(meta, width)))
+		lines = append(lines, m.paint(tuiColorMuted, meta))
 	}
-	lines = append(lines, m.renderProgress(now, width))
+	lines = append(lines, m.renderProgress(now, innerWidth))
 	shuffle := "SHUFFLE OFF"
 	if now.ShuffleEnabled {
 		shuffle = "SHUFFLE ON"
@@ -132,15 +152,32 @@ func (m tuiModel) renderNowPlaying(width int) []string {
 		repeat = "REPEAT OFF"
 	}
 	lines = append(lines, m.paint(tuiColorMuted, shuffle+"   "+repeat))
+	for index := range lines {
+		line := m.paint(tuiColorMusic, "▌") + " " + lines[index]
+		lines[index] = m.renderSurface(line, width, tuiColorPanel)
+	}
 	return lines
 }
 
-func playlistLabel(name string) string {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return ""
+func nowPlayingMetadata(now music.NowPlaying, width int) string {
+	artist := strings.TrimSpace(now.Track.Artist)
+	album := strings.TrimSpace(now.Track.Album)
+	playlist := strings.TrimSpace(now.PlaylistName)
+	meta := compactJoin(" · ", artist, album, playlist)
+	if lipgloss.Width(meta) <= width || album == "" {
+		return clipRunes(meta, width)
 	}
-	return "Playlist: " + name
+
+	fixedWidth := lipgloss.Width(artist) + lipgloss.Width(playlist)
+	separatorWidth := 0
+	if artist != "" {
+		separatorWidth += 3
+	}
+	if playlist != "" {
+		separatorWidth += 3
+	}
+	albumWidth := maxInt(width-fixedWidth-separatorWidth, 3)
+	return clipRunes(compactJoin(" · ", artist, clipRunes(album, albumWidth), playlist), width)
 }
 
 func (m tuiModel) renderProgress(now music.NowPlaying, width int) string {
@@ -191,18 +228,18 @@ func (m tuiModel) renderRooms(width, availableRows int) []string {
 
 func (m tuiModel) renderRoomHeader(width int) string {
 	if width < 64 {
-		nameWidth := maxInt(width-36, 8)
-		return m.paint(tuiColorDim, "  "+fitTUIColumn("ROOM", nameWidth)+" "+fitTUIColumn("KIND", 8)+" "+fitTUIColumn("ROUTE", 8)+" "+fitTUIColumn("AUDIO", 9)+" "+rightTUIColumn("VOL", 5))
+		nameWidth := maxInt(width-37, 8)
+		return m.paint(tuiColorDim, "   "+fitTUIColumn("ROOM", nameWidth)+" "+fitTUIColumn("KIND", 8)+" "+fitTUIColumn("ROUTE", 8)+" "+fitTUIColumn("AUDIO", 9)+" "+rightTUIColumn("VOL", 5))
 	}
-	nameWidth := maxInt(width-48, 14)
-	return m.paint(tuiColorDim, "  "+fitTUIColumn("ROOM", nameWidth)+" "+fitTUIColumn("KIND", 14)+" "+fitTUIColumn("ROUTE", 9)+" "+fitTUIColumn("AUDIO", 11)+" "+rightTUIColumn("VOL", 5))
+	nameWidth, kindWidth := wideRoomColumnWidths(width)
+	return m.paint(tuiColorDim, "   "+fitTUIColumn("ROOM", nameWidth)+" "+fitTUIColumn("KIND", kindWidth)+" "+fitTUIColumn("ROUTE", 9)+" "+fitTUIColumn("AUDIO", 11)+" "+rightTUIColumn("VOL", 5))
 }
 
 func (m tuiModel) renderRoom(device music.AirPlayDevice, width int) string {
-	cursor := " "
 	focused := deviceKey(device) == m.focusKey
+	cursor := "  "
 	if focused {
-		cursor = "›"
+		cursor = m.paint(tuiColorBlue, "▌›")
 	}
 	routeText, routeColor := m.roomRouteState(device)
 	audioText, audioColor := roomAudioState(device)
@@ -212,24 +249,35 @@ func (m tuiModel) renderRoom(device music.AirPlayDevice, width int) string {
 	}
 	var row string
 	if width < 64 {
-		nameWidth := maxInt(width-36, 8)
+		nameWidth := maxInt(width-37, 8)
 		kind := strings.TrimSpace(device.Kind)
 		if kind == "" {
 			kind = "unknown"
 		}
 		row = cursor + " " + fitTUIColumn(device.Name, nameWidth) + " " + fitTUIColumn(kind, 8) + " " + fitTUIColumn(m.paint(routeColor, routeText), 8) + " " + fitTUIColumn(m.paint(audioColor, audioText), 9) + " " + rightTUIColumn(volume, 5)
 	} else {
-		nameWidth := maxInt(width-48, 14)
+		nameWidth, kindWidth := wideRoomColumnWidths(width)
 		kind := strings.TrimSpace(device.Kind)
 		if kind == "" {
 			kind = "unknown"
 		}
-		row = cursor + " " + fitTUIColumn(device.Name, nameWidth) + " " + fitTUIColumn(kind, 14) + " " + fitTUIColumn(m.paint(routeColor, routeText), 9) + " " + fitTUIColumn(m.paint(audioColor, audioText), 11) + " " + rightTUIColumn(volume, 5)
+		row = cursor + " " + fitTUIColumn(device.Name, nameWidth) + " " + fitTUIColumn(kind, kindWidth) + " " + fitTUIColumn(m.paint(routeColor, routeText), 9) + " " + fitTUIColumn(m.paint(audioColor, audioText), 11) + " " + rightTUIColumn(volume, 5)
 	}
 	if focused {
 		row = m.focus(row)
 	}
 	return row
+}
+
+func wideRoomColumnWidths(width int) (nameWidth, kindWidth int) {
+	flexWidth := maxInt(width-32, 28)
+	kindWidth = maxInt(flexWidth*4/9, 14)
+	nameWidth = flexWidth - kindWidth
+	if nameWidth < 14 {
+		nameWidth = 14
+		kindWidth = maxInt(flexWidth-nameWidth, 14)
+	}
+	return nameWidth, kindWidth
 }
 
 func (m tuiModel) roomRouteState(device music.AirPlayDevice) (string, string) {
@@ -271,7 +319,8 @@ func (m tuiModel) renderPending(width int) string {
 		changes = append(changes, prefix+device.Name)
 	}
 	left := "◆ PENDING ROUTE  " + strings.Join(changes, ", ")
-	return joinTUISides(m.paint(tuiColorYellow, clipRunes(left, maxInt(width-18, 12))), m.paint(tuiColorYellow, "ENTER TO APPLY"), width)
+	line := joinTUISides(m.paint(tuiColorYellow, clipRunes(left, maxInt(width-18, 12))), m.paint(tuiColorYellow, "ENTER TO APPLY"), width)
+	return m.renderSurface(line, width, tuiColorPending)
 }
 
 func (m tuiModel) renderNotice(width int) string {
@@ -310,7 +359,7 @@ func (m tuiModel) renderStatus(width int) string {
 	if width < 72 {
 		right = "? help  q quit"
 	}
-	return joinTUISides(m.paint(color, left), m.paint(tuiColorMuted, right), width)
+	return joinTUISides("  "+m.paint(color, left), m.paint(tuiColorMuted, right)+"  ", width)
 }
 
 func (m tuiModel) renderHelp(width int) []string {
@@ -346,15 +395,17 @@ func (m tuiModel) renderCanvas(lines []string, width, height int) string {
 	}
 	for index, line := range lines {
 		line = clipStyledLine(line, width)
+		line = padTUILine(line, width)
 		if m.opts.noColor {
-			lines[index] = padTUILine(line, width)
+			lines[index] = line
 			continue
 		}
 		background := tuiColorMidnight
 		if index == 0 || index == len(lines)-1 {
 			background = tuiColorMidnightDeep
 		}
-		lines[index] = lipgloss.NewStyle().Width(width).Foreground(lipgloss.Color(tuiColorText)).Background(lipgloss.Color(background)).Render(line)
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color(tuiColorText)).Background(lipgloss.Color(background))
+		lines[index] = renderANSIStyle(style, line)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -377,7 +428,33 @@ func (m tuiModel) focus(value string) string {
 	if m.opts.noColor {
 		return value
 	}
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(tuiColorText)).Background(lipgloss.Color(tuiColorFocus)).Render(value)
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color(tuiColorText)).Background(lipgloss.Color(tuiColorFocus))
+	return renderANSIStyle(style, value)
+}
+
+func (m tuiModel) renderSurface(value string, width int, background string) string {
+	value = padTUILine(clipStyledLine(value, width), width)
+	if m.opts.noColor {
+		return value
+	}
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color(tuiColorText)).Background(lipgloss.Color(background))
+	return renderANSIStyle(style, value)
+}
+
+func renderANSIStyle(style lipgloss.Style, value string) string {
+	// Lip Gloss resets nested spans with SGR 0. Reapply the containing style
+	// after each reset so foreground-only labels cannot punch holes through a
+	// panel or focused-row background.
+	const marker = "x"
+	template := style.Render(marker)
+	markerIndex := strings.Index(template, marker)
+	if markerIndex < 0 {
+		return style.Render(value)
+	}
+	prefix := template[:markerIndex]
+	suffix := template[markerIndex+len(marker):]
+	value = strings.ReplaceAll(value, "\x1b[0m", "\x1b[0m"+prefix)
+	return prefix + value + suffix
 }
 
 func joinTUISides(left, right string, width int) string {
@@ -401,6 +478,18 @@ func padTUILine(value string, width int) string {
 		return value
 	}
 	return value + strings.Repeat(" ", gap)
+}
+
+func insetTUILine(value string, inset int) string {
+	return strings.Repeat(" ", maxInt(inset, 0)) + value
+}
+
+func insetTUILines(lines []string, inset int) []string {
+	insetLines := make([]string, len(lines))
+	for index, line := range lines {
+		insetLines[index] = insetTUILine(line, inset)
+	}
+	return insetLines
 }
 
 func clipRunes(value string, width int) string {
