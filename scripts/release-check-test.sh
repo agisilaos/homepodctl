@@ -71,8 +71,23 @@ cat > "$shim_dir/go" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$GO_SHIM_LOG"
+
+record_stage() {
+  if [[ -n "${RELEASE_CHECK_STAGE_LOG:-}" ]]; then
+    printf '%s\n' "$1" >> "$RELEASE_CHECK_STAGE_LOG"
+  fi
+}
+
+fail_stage() {
+  if [[ "${RELEASE_CHECK_FAILURE:-}" == "$1" ]]; then
+    echo "controlled $1 failure" >&2
+    exit 42
+  fi
+}
+
 case "$*" in
   "help mod tidy")
+    record_stage module
     if [[ "$TIDY_CASE" == modern ]]; then
       echo 'usage: go mod tidy -diff'
     fi
@@ -98,9 +113,20 @@ case "$*" in
     esac
     exit 0
     ;;
-  "test ./..."|"vet ./...") exit 0 ;;
+  "test ./...")
+    record_stage test
+    fail_stage test
+    exit 0
+    ;;
+  "vet ./...")
+    record_stage vet
+    fail_stage vet
+    exit 0
+    ;;
 esac
-if [[ "$1" == build && "$2" == -ldflags && "$4" == -o ]]; then
+if [[ $# -eq 6 && "$1" == build && "$2" == -ldflags && "$4" == -o && "$6" == ./cmd/homepodctl ]]; then
+  record_stage build
+  fail_stage build
   flags="$3"
   version="${flags#*-X main.version=}"
   version="${version%% *}"
@@ -113,6 +139,24 @@ if [[ "$1" == build && "$2" == -ldflags && "$4" == -o ]]; then
 fi
 echo "unexpected go invocation: $*" >&2
 exit 99
+SH
+
+orchestration_shim_dir="$fixture_root/orchestration-shims"
+mkdir -p "$orchestration_shim_dir"
+cat > "$orchestration_shim_dir/gofmt" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" != "-l cmd internal" ]]; then
+  echo "unexpected gofmt invocation: $*" >&2
+  exit 99
+fi
+if [[ -n "${RELEASE_CHECK_STAGE_LOG:-}" ]]; then
+  printf '%s\n' format >> "$RELEASE_CHECK_STAGE_LOG"
+fi
+if [[ "${RELEASE_CHECK_FAILURE:-}" == format ]]; then
+  echo 'controlled format failure' >&2
+  echo 'cmd/homepodctl/main.go'
+fi
 SH
 
 cat > "$shim_dir/cp" <<'SH'
@@ -130,7 +174,7 @@ if [[ "$TIDY_CASE" == restore_failed && "$1" == "$TMPDIR/"*/go.mod && "$2" == go
 fi
 exec /bin/cp "$@"
 SH
-chmod +x "$shim_dir/go" "$shim_dir/cp"
+chmod +x "$shim_dir/go" "$shim_dir/cp" "$orchestration_shim_dir/gofmt"
 
 check_module_restoration() {
   local sum_state="$1"
@@ -143,8 +187,8 @@ check_module_restoration() {
   repo="$(clone_fixture "$name")"
   mkdir -p "$scratch/tmp"
 
-  # Module restoration is independent of the docs checker, covered below by
-  # the real-Go verification and preflight tests.
+  # Module restoration is independent of docs checking. The top-level
+  # release-check invocation in make verify exercises the real docs checker.
   printf '#!/usr/bin/env bash\nexit 0\n' > "$repo/scripts/docs-check.sh"
   if [[ "$sum_state" == absent ]]; then
     rm -f "$repo/go.sum"
@@ -230,9 +274,78 @@ done
 check_module_restoration present snapshot_sum 41
 check_module_restoration present sum_removed 1
 
-echo "[release-check-test] versionless verification"
+prepare_verification_fixture() {
+  local repo="$1"
+  cat > "$repo/scripts/docs-check.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $# -ne 0 ]]; then
+  echo "unexpected docs-check arguments: $*" >&2
+  exit 99
+fi
+printf '%s\n' docs >> "$RELEASE_CHECK_STAGE_LOG"
+if [[ "${RELEASE_CHECK_FAILURE:-}" == docs ]]; then
+  echo 'controlled docs failure' >&2
+  exit 42
+fi
+SH
+  chmod +x "$repo/scripts/docs-check.sh"
+  git -C "$repo" add scripts/docs-check.sh
+  git -C "$repo" commit --quiet -m "Prepare verification orchestration fixture"
+}
+
+check_verification_orchestration() {
+  local name="$1"
+  local repo="$2"
+  local version="$3"
+  local failure="$4"
+  local expected_status="$5"
+  local expected_stages="$6"
+  local expected_mode="$7"
+  local expected_version="$8"
+  local expected_binary="$9"
+  local scratch="$fixture_root/$name-check"
+  local output status stages
+  local -a command=(./scripts/release-check.sh)
+
+  if [[ -n "$version" ]]; then
+    command+=("$version")
+  fi
+  mkdir -p "$scratch/tmp"
+  set +e
+  output="$(cd "$repo" && PATH="$orchestration_shim_dir:$shim_dir:$PATH" TMPDIR="$scratch/tmp" \
+    TIDY_CASE=modern GO_SHIM_LOG="$scratch/go.log" \
+    RELEASE_CHECK_STAGE_LOG="$scratch/stages.log" RELEASE_CHECK_FAILURE="$failure" \
+    "${command[@]}" 2>&1)"
+  status=$?
+  set -e
+
+  if [[ "$status" -ne "$expected_status" ]]; then
+    echo "$output" >&2
+    die "$name: expected exit $expected_status, got $status"
+  fi
+  stages="$(paste -sd ' ' "$scratch/stages.log")"
+  if [[ "$stages" != "$expected_stages" ]]; then
+    echo "$output" >&2
+    die "$name: stages were '$stages', expected '$expected_stages'"
+  fi
+  if [[ -n "$failure" ]]; then
+    [[ "$output" == *"controlled $failure failure"* ]] || die "$name: missing controlled failure"
+  else
+    [[ "$output" == *'[release-check] ok'* ]] || die "$name: missing success output"
+    [[ "$output" == *"mode:      $expected_mode"* ]] || die "$name: wrong mode"
+    [[ "$output" == *"version:   $expected_version"* ]] || die "$name: wrong version"
+    [[ "$output" == *"binary:    $expected_binary"* ]] || die "$name: wrong binary path"
+  fi
+  echo "[release-check-test] $name: ok"
+}
+
 verify_repo="$(clone_fixture verify)"
-(cd "$verify_repo" && ./scripts/release-check.sh)
+prepare_verification_fixture "$verify_repo"
+echo "[release-check-test] versionless verification orchestration"
+check_verification_orchestration \
+  "versionless verification" "$verify_repo" "" "" 0 \
+  "test vet docs module format build" "verify" "dev" "dist/verify/homepodctl"
 
 candidate_version="v999.999.999"
 valid_repo="$(clone_fixture valid)"
@@ -257,8 +370,30 @@ path.write_text(updated, encoding="utf-8")
 PY
 git -C "$valid_repo" add CHANGELOG.md
 git -C "$valid_repo" commit --quiet -m "Prepare release-check test candidate"
-echo "[release-check-test] valid unpublished candidate"
-(cd "$valid_repo" && ./scripts/release-check.sh "$candidate_version")
+prepare_verification_fixture "$valid_repo"
+echo "[release-check-test] release preflight orchestration"
+check_verification_orchestration \
+  "valid unpublished candidate" "$valid_repo" "$candidate_version" "" 0 \
+  "test vet docs module format build" "preflight" "$candidate_version" "dist/release-check/homepodctl"
+
+for failure in test vet docs format build; do
+  failure_repo="$(clone_fixture "failure-$failure")"
+  prepare_verification_fixture "$failure_repo"
+  expected_status=42
+  case "$failure" in
+    test) expected_stages="test" ;;
+    vet) expected_stages="test vet" ;;
+    docs) expected_stages="test vet docs" ;;
+    format)
+      expected_status=1
+      expected_stages="test vet docs module format"
+      ;;
+    build) expected_stages="test vet docs module format build" ;;
+  esac
+  check_verification_orchestration \
+    "$failure failure" "$failure_repo" "" "$failure" "$expected_status" \
+    "$expected_stages" "" "" ""
+done
 
 mismatch_repo="$(clone_fixture mismatch)"
 expect_failure \
