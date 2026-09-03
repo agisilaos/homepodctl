@@ -124,7 +124,7 @@ case "$*" in
     exit 0
     ;;
 esac
-if [[ "$1" == build && "$2" == -ldflags && "$4" == -o ]]; then
+if [[ $# -eq 6 && "$1" == build && "$2" == -ldflags && "$4" == -o && "$6" == ./cmd/homepodctl ]]; then
   record_stage build
   fail_stage build
   flags="$3"
@@ -187,8 +187,8 @@ check_module_restoration() {
   repo="$(clone_fixture "$name")"
   mkdir -p "$scratch/tmp"
 
-  # Module restoration is independent of the docs checker, covered below by
-  # the real-Go verification and preflight tests.
+  # Module restoration is independent of docs checking. The top-level
+  # release-check invocation in make verify exercises the real docs checker.
   printf '#!/usr/bin/env bash\nexit 0\n' > "$repo/scripts/docs-check.sh"
   if [[ "$sum_state" == absent ]]; then
     rm -f "$repo/go.sum"
