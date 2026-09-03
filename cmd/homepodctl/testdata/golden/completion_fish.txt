@@ -509,7 +509,7 @@ function _homepodctl_scan
             set position_flags
             set boolean_flags
             set terminal '--help' '--version' '-h'
-            set children 'aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'version' 'vol' 'volume'
+            set children 'aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'tui' 'version' 'vol' 'volume'
             set positional ''
             set start 0
             set repeat 0
@@ -573,6 +573,19 @@ function _homepodctl_scan
             set value_flags
             set position_flags
             set boolean_flags '--json' '--plain'
+            set terminal '--help' '-h'
+            set children
+            set positional ''
+            set start 0
+            set repeat 0
+            set stop 0
+            set legacy 0
+            set literal 0
+        case 'tui'
+            set options '--help' '--refresh' '-h'
+            set value_flags '--refresh'
+            set position_flags
+            set boolean_flags
             set terminal '--help' '-h'
             set children
             set positional ''
@@ -779,8 +792,8 @@ complete -c homepodctl -n '_homepodctl_wants \'children:out\'' -a '(_homepodctl_
 complete -c homepodctl -n '_homepodctl_wants \'children:plan\'' -a '(_homepodctl_candidates \'automation	Run automation routines\' \'native-run	Run shortcut\' \'out	Manage outputs\' \'play	Play playlist\' \'run	Run alias\' \'vol	Set volume\' \'volume	Set volume\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'children:plan automation\'' -a '(_homepodctl_candidates \'run	Run alias\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'children:plan out\'' -a '(_homepodctl_candidates \'set\' | string split0)'
-complete -c homepodctl -n '_homepodctl_wants \'children:root\'' -a '(_homepodctl_candidates \'aliases	List aliases\' \'automation	Run automation routines\' \'completion	Generate shell completion\' \'config	Inspect/update config\' \'config-init	Write starter config\' \'devices	List devices\' \'doctor	Run diagnostics\' \'help	Show help\' \'native-run	Run shortcut\' \'next	Next track\' \'now	Alias of status\' \'out	Manage outputs\' \'pause	Pause playback\' \'plan	Preview command execution\' \'play	Play playlist\' \'playlists	List playlists\' \'prev	Previous track\' \'run	Run alias\' \'schema	Show JSON schemas\' \'setup	Onboard and verify environment\' \'status	Show playback, route, and backend status\' \'stop	Stop playback\' \'version	Show version\' \'vol	Set volume\' \'volume	Set volume\' | string split0)'
-complete -c homepodctl -n '_homepodctl_wants \'commands\'' -a '(_homepodctl_candidates \'aliases	List aliases\' \'automation	Run automation routines\' \'completion	Generate shell completion\' \'config	Inspect/update config\' \'config-init	Write starter config\' \'devices	List devices\' \'doctor	Run diagnostics\' \'help	Show help\' \'native-run	Run shortcut\' \'next	Next track\' \'now	Alias of status\' \'out	Manage outputs\' \'pause	Pause playback\' \'plan	Preview command execution\' \'play	Play playlist\' \'playlists	List playlists\' \'prev	Previous track\' \'run	Run alias\' \'schema	Show JSON schemas\' \'setup	Onboard and verify environment\' \'status	Show playback, route, and backend status\' \'stop	Stop playback\' \'version	Show version\' \'vol	Set volume\' \'volume	Set volume\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'children:root\'' -a '(_homepodctl_candidates \'aliases	List aliases\' \'automation	Run automation routines\' \'completion	Generate shell completion\' \'config	Inspect/update config\' \'config-init	Write starter config\' \'devices	List devices\' \'doctor	Run diagnostics\' \'help	Show help\' \'native-run	Run shortcut\' \'next	Next track\' \'now	Alias of status\' \'out	Manage outputs\' \'pause	Pause playback\' \'plan	Preview command execution\' \'play	Play playlist\' \'playlists	List playlists\' \'prev	Previous track\' \'run	Run alias\' \'schema	Show JSON schemas\' \'setup	Onboard and verify environment\' \'status	Show playback, route, and backend status\' \'stop	Stop playback\' \'tui	Interactive Music/AirPlay dashboard (Preview)\' \'version	Show version\' \'vol	Set volume\' \'volume	Set volume\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'commands\'' -a '(_homepodctl_candidates \'aliases	List aliases\' \'automation	Run automation routines\' \'completion	Generate shell completion\' \'config	Inspect/update config\' \'config-init	Write starter config\' \'devices	List devices\' \'doctor	Run diagnostics\' \'help	Show help\' \'native-run	Run shortcut\' \'next	Next track\' \'now	Alias of status\' \'out	Manage outputs\' \'pause	Pause playback\' \'plan	Preview command execution\' \'play	Play playlist\' \'playlists	List playlists\' \'prev	Previous track\' \'run	Run alias\' \'schema	Show JSON schemas\' \'setup	Onboard and verify environment\' \'status	Show playback, route, and backend status\' \'stop	Stop playback\' \'tui	Interactive Music/AirPlay dashboard (Preview)\' \'version	Show version\' \'vol	Set volume\' \'volume	Set volume\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'inline:--backend\'' -a '(_homepodctl_candidates \'--backend=airplay\' \'--backend=native\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'inline:--choose\'' -a '(_homepodctl_candidates \'--choose=true\' \'--choose=false\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'inline:--dry-run\'' -a '(_homepodctl_candidates \'--dry-run=true\' \'--dry-run=false\' | string split0)'
@@ -829,6 +842,7 @@ complete -c homepodctl -n '_homepodctl_wants \'options:schema\'' -a '(_homepodct
 complete -c homepodctl -n '_homepodctl_wants \'options:setup\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--help	Show help\' \'--json	Output JSON\' \'--no-input	Non-interactive mode\' \'--room	Room name\' \'-h	Show help\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'options:status\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'--watch	Poll interval\' \'-h	Show help\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'options:stop\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'-h	Show help\' | string split0)'
+complete -c homepodctl -n '_homepodctl_wants \'options:tui\'' -a '(_homepodctl_candidates \'--help	Show help\' \'--refresh	TUI refresh interval\' \'-h	Show help\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'options:version\'' -a '(_homepodctl_candidates \'--help	Show help\' \'-h	Show help\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'options:vol\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--dry-run	Preview without side effects\' \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'--room	Room name\' \'--value	Volume 0-100\' \'--volume	Volume 0-100\' \'-h	Show help\' | string split0)'
 complete -c homepodctl -n '_homepodctl_wants \'options:volume\'' -a '(_homepodctl_candidates \'--backend	Playback backend\' \'--dry-run	Preview without side effects\' \'--help	Show help\' \'--json	Output JSON\' \'--plain	Plain output\' \'--room	Room name\' \'--value	Volume 0-100\' \'--volume	Volume 0-100\' \'-h	Show help\' | string split0)'

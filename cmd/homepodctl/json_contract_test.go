@@ -53,12 +53,12 @@ func TestGoldenDoctorReportJSON(t *testing.T) {
 	origLookPath := lookPath
 	origConfigPath := configPath
 	origLoadConfig := loadConfigOptional
-	origGetNowPlaying := getNowPlaying
+	origGetNowPlaying := playbackApp.nowPlayingFn
 	t.Cleanup(func() {
 		lookPath = origLookPath
 		configPath = origConfigPath
 		loadConfigOptional = origLoadConfig
-		getNowPlaying = origGetNowPlaying
+		playbackApp.nowPlayingFn = origGetNowPlaying
 	})
 
 	lookPath = func(string) (string, error) { return "/usr/bin/fake", nil }
@@ -66,7 +66,7 @@ func TestGoldenDoctorReportJSON(t *testing.T) {
 	loadConfigOptional = func() (*native.Config, error) {
 		return &native.Config{Aliases: map[string]native.Alias{"bed": {}}}, nil
 	}
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{PlayerState: "playing"}, nil
 	}
 

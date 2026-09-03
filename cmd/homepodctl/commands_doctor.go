@@ -86,7 +86,7 @@ func runDoctorChecks(ctx context.Context) doctorReport {
 
 	backendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if _, err := getNowPlaying(backendCtx); err != nil {
+	if _, err := playbackApp.NowPlaying(backendCtx); err != nil {
 		add(doctorCheck{
 			Name:    "music-backend",
 			Status:  "warn",

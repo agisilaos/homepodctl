@@ -96,7 +96,7 @@ func cmdSetup(ctx context.Context, args []string) {
 	}
 
 	doctor := runDoctorChecks(ctx)
-	devices, devErr := listAirPlayDevices(ctx)
+	devices, devErr := playbackApp.Devices(ctx)
 	if devErr == nil {
 		for i := range devices {
 			devices[i].NetworkAddress = ""

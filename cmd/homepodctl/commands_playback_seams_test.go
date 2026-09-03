@@ -11,10 +11,10 @@ import (
 )
 
 func TestCmdTransportUsesGetNowPlayingSeam(t *testing.T) {
-	origGetNowPlaying := getNowPlaying
-	t.Cleanup(func() { getNowPlaying = origGetNowPlaying })
+	origGetNowPlaying := playbackApp.nowPlayingFn
+	t.Cleanup(func() { playbackApp.nowPlayingFn = origGetNowPlaying })
 
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{
 			PlayerState: "paused",
 			Track:       music.NowPlayingTrack{Name: "Test Song"},
@@ -33,22 +33,22 @@ func TestCmdTransportUsesGetNowPlayingSeam(t *testing.T) {
 }
 
 func TestCmdOutSetUsesSetCurrentOutputsSeam(t *testing.T) {
-	origSetCurrentOutputs := setCurrentOutputs
-	origGetNowPlaying := getNowPlaying
+	origSetCurrentOutputs := playbackApp.setRouteFn
+	origGetNowPlaying := playbackApp.nowPlayingFn
 	t.Cleanup(func() {
-		setCurrentOutputs = origSetCurrentOutputs
-		getNowPlaying = origGetNowPlaying
+		playbackApp.setRouteFn = origSetCurrentOutputs
+		playbackApp.nowPlayingFn = origGetNowPlaying
 	})
 
 	called := false
-	setCurrentOutputs = func(_ context.Context, rooms []string) error {
+	playbackApp.setRouteFn = func(_ context.Context, rooms []string) error {
 		called = true
 		if len(rooms) != 1 || rooms[0] != "Bedroom" {
 			t.Fatalf("unexpected rooms=%v", rooms)
 		}
 		return nil
 	}
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{PlayerState: "playing"}, nil
 	}
 
@@ -61,7 +61,7 @@ func TestCmdOutSetUsesSetCurrentOutputsSeam(t *testing.T) {
 		cmdOut(context.Background(), cfg, []string{"set", "--room", "Bedroom", "--json"})
 	})
 	if !called {
-		t.Fatalf("expected setCurrentOutputs seam to be called")
+		t.Fatalf("expected playbackApp.setRouteFn seam to be called")
 	}
 	if !strings.Contains(out, `"action": "out.set"`) {
 		t.Fatalf("unexpected output: %s", out)
@@ -69,11 +69,11 @@ func TestCmdOutSetUsesSetCurrentOutputsSeam(t *testing.T) {
 }
 
 func TestCmdOutSetFallsBackToPositionalRooms(t *testing.T) {
-	origSetCurrentOutputs := setCurrentOutputs
-	t.Cleanup(func() { setCurrentOutputs = origSetCurrentOutputs })
+	origSetCurrentOutputs := playbackApp.setRouteFn
+	t.Cleanup(func() { playbackApp.setRouteFn = origSetCurrentOutputs })
 
 	var got []string
-	setCurrentOutputs = func(_ context.Context, rooms []string) error {
+	playbackApp.setRouteFn = func(_ context.Context, rooms []string) error {
 		got = append([]string(nil), rooms...)
 		return nil
 	}

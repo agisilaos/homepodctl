@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/agisilaos/homepodctl/internal/music"
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
@@ -19,7 +18,7 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 		jsonOut := flags.boolDefault("json", false)
 		includeNetwork := flags.boolDefault("include-network", false)
 		plain := flags.boolDefault("plain", false)
-		devs, err := music.ListAirPlayDevices(ctx)
+		devs, err := playbackApp.Devices(ctx)
 		if err != nil {
 			die(err)
 		}
@@ -68,10 +67,10 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 			})
 			return
 		}
-		if err := setCurrentOutputs(ctx, rooms); err != nil {
+		if err := playbackApp.SetRoute(ctx, rooms); err != nil {
 			die(err)
 		}
-		if np, err := getNowPlaying(ctx); err == nil {
+		if np, err := playbackApp.NowPlaying(ctx); err == nil {
 			writeActionOutput("out.set", opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,

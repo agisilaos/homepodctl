@@ -14,9 +14,9 @@ import (
 
 func TestInferSelectedOutputs(t *testing.T) {
 	t.Run("dedupes and trims output names", func(t *testing.T) {
-		orig := getNowPlaying
-		t.Cleanup(func() { getNowPlaying = orig })
-		getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+		orig := playbackApp.nowPlayingFn
+		t.Cleanup(func() { playbackApp.nowPlayingFn = orig })
+		playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 			return music.NowPlaying{Outputs: []music.AirPlayDevice{
 				{Name: " Bedroom "},
 				{Name: ""},
@@ -32,9 +32,9 @@ func TestInferSelectedOutputs(t *testing.T) {
 	})
 
 	t.Run("returns nil on now-playing error", func(t *testing.T) {
-		orig := getNowPlaying
-		t.Cleanup(func() { getNowPlaying = orig })
-		getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+		orig := playbackApp.nowPlayingFn
+		t.Cleanup(func() { playbackApp.nowPlayingFn = orig })
+		playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 			return music.NowPlaying{}, errors.New("boom")
 		}
 
@@ -45,11 +45,11 @@ func TestInferSelectedOutputs(t *testing.T) {
 }
 
 func TestSetVolumeForRooms(t *testing.T) {
-	orig := setDeviceVolume
-	t.Cleanup(func() { setDeviceVolume = orig })
+	orig := playbackApp.setVolumeFn
+	t.Cleanup(func() { playbackApp.setVolumeFn = orig })
 
 	var got []string
-	setDeviceVolume = func(_ context.Context, room string, value int) error {
+	playbackApp.setVolumeFn = func(_ context.Context, room string, value int) error {
 		got = append(got, room+":"+strconv.Itoa(value))
 		if room == "Kitchen" {
 			return errors.New("boom")
@@ -70,12 +70,12 @@ func TestRunDoctorChecksUsesInjectedSeams(t *testing.T) {
 	origLookPath := lookPath
 	origConfigPath := configPath
 	origLoadConfigOptional := loadConfigOptional
-	origGetNowPlaying := getNowPlaying
+	origGetNowPlaying := playbackApp.nowPlayingFn
 	t.Cleanup(func() {
 		lookPath = origLookPath
 		configPath = origConfigPath
 		loadConfigOptional = origLoadConfigOptional
-		getNowPlaying = origGetNowPlaying
+		playbackApp.nowPlayingFn = origGetNowPlaying
 	})
 
 	lookPath = func(name string) (string, error) {
@@ -92,7 +92,7 @@ func TestRunDoctorChecksUsesInjectedSeams(t *testing.T) {
 	loadConfigOptional = func() (*native.Config, error) {
 		return &native.Config{Aliases: map[string]native.Alias{"bed": {Playlist: "Focus"}}}, nil
 	}
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{}, errors.New("music unavailable")
 	}
 
@@ -184,14 +184,14 @@ func TestRunStatusLoop_PropagatesPrintError(t *testing.T) {
 
 func TestCollectStatus_Connected(t *testing.T) {
 	origLookPath := lookPath
-	origGetNowPlaying := getNowPlaying
+	origGetNowPlaying := playbackApp.nowPlayingFn
 	t.Cleanup(func() {
 		lookPath = origLookPath
-		getNowPlaying = origGetNowPlaying
+		playbackApp.nowPlayingFn = origGetNowPlaying
 	})
 
 	lookPath = func(string) (string, error) { return "/usr/bin/osascript", nil }
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{
 			PlayerState: "playing",
 			Track: music.NowPlayingTrack{
@@ -271,14 +271,14 @@ func TestInferStatusConnection(t *testing.T) {
 
 func TestCmdStatus_JSONIncludesConnectionState(t *testing.T) {
 	origLookPath := lookPath
-	origGetNowPlaying := getNowPlaying
+	origGetNowPlaying := playbackApp.nowPlayingFn
 	t.Cleanup(func() {
 		lookPath = origLookPath
-		getNowPlaying = origGetNowPlaying
+		playbackApp.nowPlayingFn = origGetNowPlaying
 	})
 
 	lookPath = func(string) (string, error) { return "/usr/bin/osascript", nil }
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{
 			PlayerState: "paused",
 			Track:       music.NowPlayingTrack{Name: "Song"},

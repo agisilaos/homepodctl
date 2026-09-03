@@ -32,6 +32,7 @@ Usage:
   homepodctl playlists [--query <substr>] [--limit N] [--json] [--plain]
   homepodctl status [--json] [--plain] [--watch <duration>]
   homepodctl now [--json] [--plain] [--watch <duration>]
+  homepodctl tui [--refresh <duration>]
   homepodctl aliases [--json] [--plain]
   homepodctl run <alias> [--json] [--plain] [--dry-run]
   homepodctl pause [--json] [--plain]
@@ -148,6 +149,36 @@ Notes:
 
 Usage:
   homepodctl doctor [--json] [--plain]
+`)
+	case "tui":
+		fmt.Fprint(os.Stdout, `homepodctl tui - interactive Music/AirPlay dashboard (Preview)
+
+Usage:
+  homepodctl tui [--refresh <duration>]
+
+Scope:
+  - Shows Music.app playback and every AirPlay Room reported by Music.app.
+  - Selected outputs are the current Music.app route, not proof of independent native HomePod playback.
+  - A native default is called out, but native Shortcut playback is not observed.
+
+Keys:
+  space       Play/pause the current Music session
+  n / b       Next / previous track
+  s           Stop playback
+  up/down     Focus a Room (j/k also work)
+  x           Stage the focused Room into or out of the pending route
+  enter       Apply the pending route
+  + / -       Adjust focused Room volume by 5
+  r           Refresh immediately
+  ?           Toggle help
+  q           Quit
+
+Notes:
+  - The default refresh interval is 2s; --refresh cannot be below 500ms.
+  - Route edits are staged and an empty route is rejected.
+  - Failed refreshes retain a clearly marked stale snapshot and disable mutations while retrying.
+  - Set NO_COLOR to disable color; every state also has a text or symbol label.
+  - Interactive stdin and stdout are required. JSON, plain, and backend flags are not supported.
 `)
 	case "setup":
 		fmt.Fprint(os.Stdout, `homepodctl setup - onboard and verify local environment

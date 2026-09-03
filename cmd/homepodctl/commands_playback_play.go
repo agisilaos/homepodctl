@@ -30,7 +30,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 
 		// Without resolved rooms, keep Music.app's current outputs and volume.
 		if len(req.rooms) > 0 {
-			if err := setCurrentOutputs(ctx, req.rooms); err != nil {
+			if err := playbackApp.SetRoute(ctx, req.rooms); err != nil {
 				die(err)
 			}
 			if req.volume.source != playVolumeAbsent {
@@ -46,7 +46,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 			die(err)
 		}
 		out.PlaylistID = id
-		if np, err := getNowPlaying(ctx); err == nil {
+		if np, err := playbackApp.NowPlaying(ctx); err == nil {
 			out.NowPlaying = &np
 		}
 	case playNative:

@@ -34,7 +34,7 @@ func TestCompletionFlagParity(t *testing.T) {
 }
 
 func TestCompletionContextParity(t *testing.T) {
-	commands := strings.Fields("aliases automation completion config config-init devices doctor help native-run next now out pause plan play playlists prev run schema setup status stop version vol volume")
+	commands := strings.Fields("aliases automation completion config config-init devices doctor help native-run next now out pause plan play playlists prev run schema setup status stop tui version vol volume")
 	playFlags := strings.Fields("--backend --choose --dry-run --help --json --no-input --plain --playlist --playlist-id --room --shuffle --volume -h")
 	tests := []struct {
 		name  string
@@ -45,6 +45,7 @@ func TestCompletionContextParity(t *testing.T) {
 		{"root flags", []string{"-"}, strings.Fields("--help --quiet --verbose --version -h -q -v")},
 		{"global option then command", []string{"-v", ""}, commands},
 		{"global option then leaf", []string{"--quiet", "play", "-"}, playFlags},
+		{"tui flags", []string{"tui", "-"}, strings.Fields("--help --refresh -h")},
 		{"root version terminates", []string{"--version", ""}, nil},
 		{"help targets", []string{"help", ""}, commands},
 		{"help target terminates", []string{"help", "play", "-"}, nil},

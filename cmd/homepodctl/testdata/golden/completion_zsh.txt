@@ -307,7 +307,7 @@ _homepodctl_context() {
       position_flags=()
       boolean_flags=()
       terminal=('--help' '--version' '-h')
-      children=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'version' 'vol' 'volume')
+      children=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'tui' 'version' 'vol' 'volume')
       positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
     'run')
       options=('--dry-run' '--help' '--json' '--plain' '-h')
@@ -346,6 +346,14 @@ _homepodctl_context() {
       value_flags=()
       position_flags=()
       boolean_flags=('--json' '--plain')
+      terminal=('--help' '-h')
+      children=()
+      positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
+    'tui')
+      options=('--help' '--refresh' '-h')
+      value_flags=('--refresh')
+      position_flags=()
+      boolean_flags=()
       terminal=('--help' '-h')
       children=()
       positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
@@ -487,8 +495,8 @@ _homepodctl_values() {
     'children:plan') candidates=('automation' 'native-run' 'out' 'play' 'run' 'vol' 'volume'); descriptions=('Run automation routines' 'Run shortcut' 'Manage outputs' 'Play playlist' 'Run alias' 'Set volume' 'Set volume') ;;
     'children:plan automation') candidates=('run'); descriptions=('Run alias') ;;
     'children:plan out') candidates=('set'); descriptions=('') ;;
-    'children:root') candidates=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'version' 'vol' 'volume'); descriptions=('List aliases' 'Run automation routines' 'Generate shell completion' 'Inspect/update config' 'Write starter config' 'List devices' 'Run diagnostics' 'Show help' 'Run shortcut' 'Next track' 'Alias of status' 'Manage outputs' 'Pause playback' 'Preview command execution' 'Play playlist' 'List playlists' 'Previous track' 'Run alias' 'Show JSON schemas' 'Onboard and verify environment' 'Show playback, route, and backend status' 'Stop playback' 'Show version' 'Set volume' 'Set volume') ;;
-    'commands') candidates=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'version' 'vol' 'volume'); descriptions=('List aliases' 'Run automation routines' 'Generate shell completion' 'Inspect/update config' 'Write starter config' 'List devices' 'Run diagnostics' 'Show help' 'Run shortcut' 'Next track' 'Alias of status' 'Manage outputs' 'Pause playback' 'Preview command execution' 'Play playlist' 'List playlists' 'Previous track' 'Run alias' 'Show JSON schemas' 'Onboard and verify environment' 'Show playback, route, and backend status' 'Stop playback' 'Show version' 'Set volume' 'Set volume') ;;
+    'children:root') candidates=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'tui' 'version' 'vol' 'volume'); descriptions=('List aliases' 'Run automation routines' 'Generate shell completion' 'Inspect/update config' 'Write starter config' 'List devices' 'Run diagnostics' 'Show help' 'Run shortcut' 'Next track' 'Alias of status' 'Manage outputs' 'Pause playback' 'Preview command execution' 'Play playlist' 'List playlists' 'Previous track' 'Run alias' 'Show JSON schemas' 'Onboard and verify environment' 'Show playback, route, and backend status' 'Stop playback' 'Interactive Music/AirPlay dashboard (Preview)' 'Show version' 'Set volume' 'Set volume') ;;
+    'commands') candidates=('aliases' 'automation' 'completion' 'config' 'config-init' 'devices' 'doctor' 'help' 'native-run' 'next' 'now' 'out' 'pause' 'plan' 'play' 'playlists' 'prev' 'run' 'schema' 'setup' 'status' 'stop' 'tui' 'version' 'vol' 'volume'); descriptions=('List aliases' 'Run automation routines' 'Generate shell completion' 'Inspect/update config' 'Write starter config' 'List devices' 'Run diagnostics' 'Show help' 'Run shortcut' 'Next track' 'Alias of status' 'Manage outputs' 'Pause playback' 'Preview command execution' 'Play playlist' 'List playlists' 'Previous track' 'Run alias' 'Show JSON schemas' 'Onboard and verify environment' 'Show playback, route, and backend status' 'Stop playback' 'Interactive Music/AirPlay dashboard (Preview)' 'Show version' 'Set volume' 'Set volume') ;;
     'inline:--backend') candidates=('--backend=airplay' '--backend=native'); descriptions=() ;;
     'inline:--choose') candidates=('--choose=true' '--choose=false'); descriptions=() ;;
     'inline:--dry-run') candidates=('--dry-run=true' '--dry-run=false'); descriptions=() ;;
@@ -542,6 +550,7 @@ _homepodctl_values() {
     'options:setup') candidates=('--backend' '--help' '--json' '--no-input' '--room' '-h'); descriptions=('Playback backend' 'Show help' 'Output JSON' 'Non-interactive mode' 'Room name' 'Show help') ;;
     'options:status') candidates=('--help' '--json' '--plain' '--watch' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Poll interval' 'Show help') ;;
     'options:stop') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
+    'options:tui') candidates=('--help' '--refresh' '-h'); descriptions=('Show help' 'TUI refresh interval' 'Show help') ;;
     'options:version') candidates=('--help' '-h'); descriptions=('Show help' 'Show help') ;;
     'options:vol') candidates=('--backend' '--dry-run' '--help' '--json' '--plain' '--room' '--value' '--volume' '-h'); descriptions=('Playback backend' 'Preview without side effects' 'Show help' 'Output JSON' 'Plain output' 'Room name' 'Volume 0-100' 'Volume 0-100' 'Show help') ;;
     'options:volume') candidates=('--backend' '--dry-run' '--help' '--json' '--plain' '--room' '--value' '--volume' '-h'); descriptions=('Playback backend' 'Preview without side effects' 'Show help' 'Output JSON' 'Plain output' 'Room name' 'Volume 0-100' 'Volume 0-100' 'Show help') ;;

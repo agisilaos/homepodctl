@@ -16,7 +16,7 @@ func cmdDevices(ctx context.Context, args []string) {
 	includeNetwork := flags.boolDefault("include-network", false)
 	plain := flags.boolDefault("plain", false)
 
-	devs, err := music.ListAirPlayDevices(ctx)
+	devs, err := playbackApp.Devices(ctx)
 	if err != nil {
 		die(err)
 	}
@@ -148,7 +148,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 			})
 			return
 		}
-		if err := setCurrentOutputs(ctx, rooms); err != nil {
+		if err := playbackApp.SetRoute(ctx, rooms); err != nil {
 			die(err)
 		}
 		if a.Volume != nil {
@@ -185,7 +185,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				die(err)
 			}
 		}
-		np, err := getNowPlaying(ctx)
+		np, err := playbackApp.NowPlaying(ctx)
 		if err == nil {
 			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,

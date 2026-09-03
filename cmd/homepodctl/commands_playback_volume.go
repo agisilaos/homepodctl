@@ -73,7 +73,7 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 		if err := setVolumeForRooms(ctx, rooms, value); err != nil {
 			die(err)
 		}
-		if np, err := getNowPlaying(ctx); err == nil {
+		if np, err := playbackApp.NowPlaying(ctx); err == nil {
 			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
@@ -98,7 +98,7 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 		if err := runNativeVolumeShortcuts(ctx, cfg, rooms, value); err != nil {
 			die(fmt.Errorf("%w (config-native volume is discrete)", err))
 		}
-		if np, err := getNowPlaying(ctx); err == nil {
+		if np, err := playbackApp.NowPlaying(ctx); err == nil {
 			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,

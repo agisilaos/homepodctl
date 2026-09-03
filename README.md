@@ -114,6 +114,32 @@ Watch changes:
 homepodctl status --watch 1s
 ```
 
+### Interactive TUI (Preview)
+
+Open a live Music/AirPlay dashboard with playback, route, and focused-room
+volume controls:
+
+```sh
+homepodctl tui
+```
+
+The TUI shows Music.app's current track and every AirPlay Room reported by
+Music.app. It does **not** claim to observe independent native HomePod playback
+started through Siri, another device, or the Shortcuts-backed `native` backend.
+If native is your configured default, the interface calls out that boundary.
+
+Use Space for play/pause, `n`/`b` for next/previous, `s` to stop, arrows or
+`j`/`k` to focus a Room, `x` to stage a route change, Enter to apply it, and
+`+`/`-` to change the focused Room's volume. Press `?` for help and `q` to
+quit. Route changes are staged so multi-room edits apply once; an empty route
+is rejected.
+
+The default refresh interval is two seconds. Override it with
+`homepodctl tui --refresh 5s`; values below 500 ms are rejected. A failed
+refresh retains the last snapshot as visibly stale, disables mutations, and
+keeps retrying. The interface uses text and symbols in addition to color and
+honors the `NO_COLOR` environment variable. See the [TUI Preview guide](docs/tui-preview.md).
+
 Search playlists (for IDs / debugging):
 
 ```sh
@@ -297,6 +323,7 @@ See the [automation exit and output contract](docs/automation-v1-cli-spec.md#exi
 - `homepodctl play <query> [--json|--plain|--dry-run]` / `homepodctl play --playlist-id <id>`: play a playlist
 - `homepodctl playlists --query <text> [--json|--plain]`: search playlists
 - `homepodctl status [--json|--plain]` / `homepodctl now` / `homepodctl status --watch 1s`: playback, route, and connectivity status
+- `homepodctl tui [--refresh 2s]`: interactive Music/AirPlay dashboard and controls (Preview)
 - `homepodctl pause|stop|next|prev [--json|--plain]`: transport controls
 - `homepodctl volume <0-100> [room ...] [--json|--plain|--dry-run]` / `homepodctl vol ...`: output volume
 - `homepodctl aliases [--json|--plain]` / `homepodctl run <alias> [--json|--plain|--dry-run]`: config shortcuts
@@ -332,6 +359,8 @@ This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `s
 - **`go install` (after publishing):** `go install github.com/agisilaos/homepodctl/cmd/homepodctl@latest`
 
 ## Docs
+
+- TUI Preview design and usage: `docs/tui-preview.md`
 
 ### Automation (v1 design)
 
