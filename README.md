@@ -268,6 +268,11 @@ homepodctl config set defaults.backend airplay
 homepodctl config set defaults.rooms "Bedroom" "Living Room"
 ```
 
+`config validate` exits `0` for valid configuration and `3` for invalid
+configuration in both text and JSON modes. Validation reports stay on stdout;
+read or parse errors use stderr. Scripts that previously expected exit `2` for
+invalid config values should now expect `3`.
+
 Dry-run mutating commands without side effects:
 
 ```sh

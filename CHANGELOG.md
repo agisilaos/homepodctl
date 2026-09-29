@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on *Keep a Changelog*, and this project adheres to *Semantic Versioning*.
 
+## [v0.3.1] - 2026-09-29
+
+### Fixed
+
+- `config validate` now exits `3` for invalid config values in both text and JSON modes. Previously JSON mode incorrectly exited `0`, while text mode exited `2`. Validation reports remain on stdout; scripts checking the former exit codes should be updated.
+
 ## [v0.3.0] - 2026-08-31
 
 ### Changed
