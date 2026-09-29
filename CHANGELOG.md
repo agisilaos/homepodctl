@@ -8,6 +8,7 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
+- `volume`/`vol` and AirPlay alias `run` previews now show the volume and shuffle settings they apply, including zero and false. Their JSON results expose the same fields; native playlist and direct Shortcut aliases omit ignored settings.
 - `config validate` now exits `3` for invalid config values in both text and JSON modes. Previously JSON mode incorrectly exited `0`, while text mode exited `2`. Validation reports remain on stdout; scripts checking the former exit codes should be updated.
 - AirPlay playback previews now expose effective volume and shuffle in text and JSON, including zero and false values. `plan play` and successful `play --json` results include the same optional fields; ignored native settings and unchanged volume are omitted.
 

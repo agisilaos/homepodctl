@@ -149,6 +149,15 @@ or no resolved rooms). Native playback omits both settings because it does not
 apply them. These optional fields also appear in successful AirPlay `play --json`
 results; existing JSON fields are unchanged.
 
+`volume`/`vol` previews and JSON results include the requested `volume` on both
+backends. Native volume previews do not verify that a Shortcut mapping exists.
+AirPlay alias `run` previews and JSON results include the alias volume (or
+`defaults.volume` when absent) and alias shuffle when explicitly configured.
+Aliases leave shuffle unchanged when unset, even if `defaults.shuffle` is set.
+Unchanged settings and settings ignored by native playlist aliases or direct
+Shortcuts are omitted. These fields also appear under `plan` in `plan run` and
+`plan volume` JSON output and in their text previews.
+
 Set volume (if rooms are omitted, uses `defaults.rooms`; if that’s empty, uses the currently selected outputs in Music.app):
 
 ```sh

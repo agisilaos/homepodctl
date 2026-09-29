@@ -138,6 +138,10 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 		if len(rooms) == 0 {
 			die(fmt.Errorf("alias %q requires rooms (set defaults.rooms or alias.rooms)", aliasName))
 		}
+		volume := a.Volume
+		if volume == nil {
+			volume = cfg.Defaults.Volume
+		}
 		if opts.DryRun {
 			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
 				DryRun:     true,
@@ -145,18 +149,16 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				Rooms:      rooms,
 				Playlist:   a.Playlist,
 				PlaylistID: a.PlaylistID,
+				Volume:     volume,
+				Shuffle:    a.Shuffle,
 			})
 			return
 		}
 		if err := setCurrentOutputs(ctx, rooms); err != nil {
 			die(err)
 		}
-		if a.Volume != nil {
-			if err := setVolumeForRooms(ctx, rooms, *a.Volume); err != nil {
-				die(err)
-			}
-		} else if cfg.Defaults.Volume != nil {
-			if err := setVolumeForRooms(ctx, rooms, *cfg.Defaults.Volume); err != nil {
+		if volume != nil {
+			if err := setVolumeForRooms(ctx, rooms, *volume); err != nil {
 				die(err)
 			}
 		}
@@ -191,6 +193,8 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				Backend:    backend,
 				Rooms:      rooms,
 				PlaylistID: a.PlaylistID,
+				Volume:     volume,
+				Shuffle:    a.Shuffle,
 				NowPlaying: &np,
 			})
 		} else {
@@ -198,6 +202,8 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				Backend:    backend,
 				Rooms:      rooms,
 				PlaylistID: a.PlaylistID,
+				Volume:     volume,
+				Shuffle:    a.Shuffle,
 			})
 		}
 	case "native":

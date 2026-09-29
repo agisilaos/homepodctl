@@ -67,6 +67,7 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 				DryRun:  true,
 				Backend: backend,
 				Rooms:   rooms,
+				Volume:  &value,
 			})
 			return
 		}
@@ -77,12 +78,14 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
+				Volume:     &value,
 				NowPlaying: &np,
 			})
 		} else {
 			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend: backend,
 				Rooms:   rooms,
+				Volume:  &value,
 			})
 		}
 	case "native":
@@ -92,6 +95,7 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 				DryRun:  true,
 				Backend: backend,
 				Rooms:   rooms,
+				Volume:  &value,
 			})
 			return
 		}
@@ -102,12 +106,14 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend:    backend,
 				Rooms:      rooms,
+				Volume:     &value,
 				NowPlaying: &np,
 			})
 		} else {
 			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
 				Backend: backend,
 				Rooms:   rooms,
+				Volume:  &value,
 			})
 		}
 	default:

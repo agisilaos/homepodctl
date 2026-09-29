@@ -120,6 +120,7 @@ Usage:
 
 Notes:
   - If no rooms are provided, homepodctl uses defaults.rooms; if empty it uses Music.app’s currently selected outputs (airplay).
+  - Previews and JSON results include the requested volume, including 0. Native previews do not check Shortcut mappings.
 
 Examples:
   homepodctl volume 35
@@ -134,6 +135,8 @@ Usage:
 Notes:
   - Aliases come from config.json (see homepodctl aliases).
   - --dry-run resolves backend/rooms/targets without executing backend calls.
+  - AirPlay previews include alias volume (falling back to defaults.volume) and explicitly configured alias shuffle; unset shuffle is unchanged.
+  - Native playlist aliases and direct Shortcuts omit volume/shuffle because they do not apply those settings.
 `)
 	case "native-run":
 		fmt.Fprint(os.Stdout, `homepodctl native-run - execute a Shortcut by name
