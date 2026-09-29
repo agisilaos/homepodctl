@@ -73,7 +73,7 @@ func TestCLIQuietSuppressesDryRunOutput(t *testing.T) {
 }
 
 func TestCLISetupJSON(t *testing.T) {
-	cli := newCLIHarness(t)
+	cli := setupCLIHarness(t, false)
 
 	result := cli.run(t, "setup", "--json", "--no-input")
 	if result.ExitCode != 0 {
@@ -91,11 +91,11 @@ func TestCLISetupJSON(t *testing.T) {
 	}
 }
 
-func TestCLISetupPersistsDefaults(t *testing.T) {
-	cli := newCLIHarness(t)
+func TestCLISetupPersistsDefaultsAfterDiagnosticFailure(t *testing.T) {
+	cli := setupCLIHarness(t, true)
 
 	result := cli.run(t, "setup", "--backend", "native", "--room", "Bedroom", "--json", "--no-input")
-	if result.ExitCode != 0 {
+	if result.ExitCode != exitGeneric {
 		t.Fatalf("setup persist defaults exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 

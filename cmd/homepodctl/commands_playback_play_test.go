@@ -21,6 +21,8 @@ type playBackendRecorder struct {
 	nowPlaying   music.NowPlaying
 	nowErr       error
 	searchErr    error
+	lookupErr    error
+	volumeErr    error
 	playlistName string
 }
 
@@ -46,7 +48,7 @@ func recordPlayBackend(t *testing.T) *playBackendRecorder {
 	}
 	findPlaylistNameByID = func(_ context.Context, id string) (string, error) {
 		r.calls = append(r.calls, "lookup:"+id)
-		return r.playlistName, nil
+		return r.playlistName, r.lookupErr
 	}
 	setCurrentOutputs = func(_ context.Context, rooms []string) error {
 		r.calls = append(r.calls, "outputs:"+strings.Join(rooms, ","))
@@ -54,7 +56,7 @@ func recordPlayBackend(t *testing.T) *playBackendRecorder {
 	}
 	setDeviceVolume = func(_ context.Context, room string, volume int) error {
 		r.calls = append(r.calls, fmt.Sprintf("volume:%s:%d", room, volume))
-		return nil
+		return r.volumeErr
 	}
 	setShuffle = func(_ context.Context, shuffle bool) error {
 		r.calls = append(r.calls, fmt.Sprintf("shuffle:%t", shuffle))
@@ -140,7 +142,9 @@ func TestCmdPlayTargets(t *testing.T) {
 					if !dryRun {
 						if backend == "airplay" {
 							wantID = "A"
-							if !target.id {
+							if target.id {
+								wantCalls = append(wantCalls, "lookup:A")
+							} else {
 								wantCalls = append(wantCalls, "search:Focus Mix")
 							}
 							wantCalls = append(wantCalls, "outputs:Bedroom", "shuffle:false", "play:A", "now")
@@ -311,7 +315,7 @@ func TestCmdPlayVolume(t *testing.T) {
 				}
 				var wantCalls []string
 				if !dryRun {
-					wantCalls = append(wantCalls, "outputs:Bedroom")
+					wantCalls = append(wantCalls, "lookup:A", "outputs:Bedroom")
 					if tc.wantCall != "" {
 						wantCalls = append(wantCalls, tc.wantCall)
 					}
@@ -394,6 +398,7 @@ func TestCmdPlayRoomResolution(t *testing.T) {
 						if tc.backend == "native" {
 							wantCalls = append(wantCalls, "lookup:A", "shortcut:Kitchen Focus", "shortcut:Office Focus")
 						} else {
+							wantCalls = append(wantCalls, "lookup:A")
 							if len(tc.wantRooms) > 0 {
 								wantCalls = append(wantCalls, "outputs:"+strings.Join(tc.wantRooms, ","))
 								if tc.defaultVolume != nil {
@@ -497,7 +502,7 @@ func TestCmdPlayIDBypassesChoose(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := []string{"outputs:Bedroom", "shuffle:false", "play:A", "now"}
+			want := []string{"lookup:A", "outputs:Bedroom", "shuffle:false", "play:A", "now"}
 			if backend == "native" {
 				want = []string{"lookup:A", "shortcut:Play Focus"}
 			}

@@ -68,7 +68,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 
 func resolveAirplayPlaylist(ctx context.Context, req playRequest) (string, error) {
 	if req.target.kind == playIDTarget {
-		return req.target.value, nil
+		return resolveExistingPlaylistID(ctx, req.target.value)
 	}
 	query := req.target.value
 	matches, err := searchPlaylists(ctx, query)

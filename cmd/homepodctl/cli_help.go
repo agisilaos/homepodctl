@@ -52,7 +52,8 @@ Notes:
   - if no rooms are provided and defaults.rooms is empty, airplay commands fall back to Music.app’s currently selected AirPlay outputs (when possible).
   - --verbose (or HOMEPODCTL_VERBOSE=1) prints backend diagnostics to stderr.
   - --quiet suppresses non-essential human-readable success output.
-  - exit codes: 0 success, 1 runtime failures, 2 usage/flag errors, 3 config/automation validation errors, 4 backend command failures outside automation execution.
+  - exit codes: 0 success, 1 runtime failures, 2 usage/flag errors, 3 config/automation validation errors, 4 backend command failures outside setup diagnostics and automation execution.
+  - setup diagnostic failures exit 1 and retain saved configuration, including in JSON and quiet modes.
   - automation execution failures always exit 1, including backend errors, missing preconditions, and timeouts.
 `)
 }
@@ -163,6 +164,8 @@ Notes:
   - Ensures config exists (same as config-init behavior).
   - Runs doctor checks and lists current AirPlay devices.
   - Optionally updates defaults via --backend and --room.
+  - Exits 1 when diagnostics report ok=false, including in JSON and quiet modes.
+  - Warnings alone are nonfatal. Saved configuration is retained on diagnostic failure.
 `)
 	case "completion":
 		fmt.Fprint(os.Stdout, `homepodctl completion - generate shell completion scripts

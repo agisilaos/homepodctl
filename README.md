@@ -64,6 +64,13 @@ Bootstrap local config + diagnostics:
 homepodctl setup --room "Bedroom"
 ```
 
+`setup` saves configuration and then reports diagnostics and device discovery.
+It exits `0` when `ok=true` and `1` when `ok=false`, including in JSON and quiet
+modes. Warnings alone are nonfatal; device discovery errors fail setup on either
+backend, while an empty device list is successful. Diagnostic failure retains
+saved configuration. JSON reports remain on stdout without an extra error
+envelope; errors before diagnostics retain their usual exit codes and stderr output.
+
 ## Quick start (AirPlay)
 
 List available AirPlay outputs (these names are what you pass as “rooms”):
@@ -136,9 +143,18 @@ With neither, playback leaves volume unchanged. An explicit volume requires
 resolved rooms; a configured default is skipped when no rooms can be resolved.
 Invalid volume values fail before playback changes any outputs.
 
+AirPlay `play`, alias `run`, and each automation `play` step resolve playlist
+queries or verify explicit persistent IDs before changing outputs, volume, or
+shuffle. A missing target or failed lookup leaves those settings unchanged for
+that command or step. Aliases without a playlist can still apply settings alone.
+Later backend failures stop execution and may leave completed changes in place;
+playback changes are not rolled back. Automation retains earlier completed steps.
+Native playlist names continue to select configured Shortcut mappings.
+
 `play --dry-run` resolves the backend, rooms, options, and target using the same
 validation as execution. It may read Music.app's selected outputs to infer rooms,
-but does not search playlists, prompt for a selection, or check native mappings.
+but does not search playlists, verify persistent IDs, prompt for a selection, or
+check native mappings.
 A preview therefore does not guarantee that a playlist exists or uniquely matches.
 ID targets appear in the JSON `playlistId` field on both backends.
 
@@ -156,7 +172,8 @@ AirPlay alias `run` previews and JSON results include the alias volume (or
 Aliases leave shuffle unchanged when unset, even if `defaults.shuffle` is set.
 Unchanged settings and settings ignored by native playlist aliases or direct
 Shortcuts are omitted. These fields also appear under `plan` in `plan run` and
-`plan volume` JSON output and in their text previews.
+`plan volume` JSON output and in their text previews. Alias previews do not search
+playlists or verify persistent IDs.
 
 Set volume (if rooms are omitted, uses `defaults.rooms`; if that’s empty, uses the currently selected outputs in Music.app):
 
@@ -307,10 +324,10 @@ homepodctl run bed --dry-run --json
 ## Exit codes
 
 - `0`: success
-- `1`: runtime failures, including file read errors and all failed automation executions
+- `1`: runtime failures, including file read errors, failed setup diagnostics, and all failed automation executions
 - `2`: usage/flag/argument validation error
 - `3`: config or automation validation error
-- `4`: backend command error (`osascript` / `shortcuts`) outside automation execution
+- `4`: backend command error (`osascript` / `shortcuts`) outside setup diagnostics and automation execution
 
 Automation execution always returns `1` on failure, including backend errors,
 missing preconditions, and wait timeouts. With `--json`, the failed run result

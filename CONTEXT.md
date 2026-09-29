@@ -19,6 +19,9 @@ The identifier for a playlist in the Music.app library, distinct from its displa
 **Room**:
 A named playback destination.
 
+**Settings-only alias**:
+An AirPlay alias that selects rooms and optional volume or shuffle settings without selecting a playlist.
+
 **Explicit volume**:
 A volume supplied for the current playback request.
 
