@@ -180,6 +180,12 @@ This writes `config.json` under your macOS user config dir (typically `~/Library
 failures from `config-init`, `setup`, and `config set` use exit code `3`
 (`CONFIG_ERROR` in JSON error output).
 
+If `doctor` reports a config error, inspect the file at the reported path, fix its
+JSON syntax or access permissions, and run `homepodctl config validate` again.
+Rerunning `config-init` does not repair an existing file. To start fresh, move the
+existing file aside as a backup, run `homepodctl config-init`, then restore your
+defaults and aliases from the backup and validate the result.
+
 Defaults are used when flags are omitted. For example, if you set:
 
 - `defaults.backend = "airplay"`

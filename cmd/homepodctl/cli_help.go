@@ -180,6 +180,7 @@ Writes a starter config to:
 
 Notes:
   - If the file already exists, this command is a no-op.
+  - This does not repair invalid config. Repair the file, or move it aside as a backup before creating a new starter config.
   - Edit defaults.rooms to your AirPlay device names (homepodctl devices).
 `, path)
 	case "automation":
