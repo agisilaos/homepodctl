@@ -292,7 +292,7 @@ func TestCmdPlayVolume(t *testing.T) {
 				if !tc.wantErr && (err != nil || req.volume != tc.wantVolume) {
 					t.Fatalf("volume=%+v error=%v, want=%+v", req.volume, err, tc.wantVolume)
 				}
-				_, err = runPlayJSON(t, cfg, args, dryRun)
+				out, err := runPlayJSON(t, cfg, args, dryRun)
 				if tc.wantErr {
 					if err == nil || classifyExitCode(err) != exitUsage || len(r.calls) != 0 {
 						t.Fatalf("error=%v calls=%v, want usage error without backend calls", err, r.calls)
@@ -301,6 +301,13 @@ func TestCmdPlayVolume(t *testing.T) {
 				}
 				if err != nil {
 					t.Fatal(err)
+				}
+				if tc.wantVolume.source == playVolumeAbsent {
+					if out.Volume != nil {
+						t.Fatalf("absent volume reported as %d", *out.Volume)
+					}
+				} else if out.Volume == nil || *out.Volume != tc.wantVolume.value {
+					t.Fatalf("output volume=%v, want %d", out.Volume, tc.wantVolume.value)
 				}
 				var wantCalls []string
 				if !dryRun {
@@ -368,6 +375,20 @@ func TestCmdPlayRoomResolution(t *testing.T) {
 					}
 					if !slices.Equal(out.Rooms, tc.wantRooms) {
 						t.Fatalf("rooms=%v, want=%v", out.Rooms, tc.wantRooms)
+					}
+					if tc.backend == "airplay" {
+						if out.Shuffle == nil || *out.Shuffle {
+							t.Fatalf("expected explicit shuffle=false, got %v", out.Shuffle)
+						}
+						var wantVolume *int
+						if len(tc.wantRooms) > 0 {
+							wantVolume = tc.defaultVolume
+						}
+						if !reflect.DeepEqual(out.Volume, wantVolume) {
+							t.Fatalf("volume=%v, want %v", out.Volume, wantVolume)
+						}
+					} else if out.Volume != nil || out.Shuffle != nil {
+						t.Fatalf("native output includes ignored settings: %+v", out)
 					}
 					if !dryRun {
 						if tc.backend == "native" {

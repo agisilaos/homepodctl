@@ -152,6 +152,12 @@ func (req playRequest) actionOutput() actionOutput {
 		Rooms:   req.rooms,
 		DryRun:  req.output.DryRun,
 	}
+	if req.backend == playAirplay {
+		out.Shuffle = &req.shuffle
+		if len(req.rooms) > 0 && req.volume.source != playVolumeAbsent {
+			out.Volume = &req.volume.value
+		}
+	}
 	switch req.target.kind {
 	case playQueryTarget:
 		out.Playlist = req.target.value

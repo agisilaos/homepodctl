@@ -86,6 +86,7 @@ Notes:
   - --volume must be 0-100. AirPlay requires resolved rooms for explicit volume; a default volume without rooms is skipped.
   - Native play ignores volume, shuffle, and --choose after validating option values.
   - --dry-run shares argument/default validation and room inference, but skips playlist lookup, prompting, and native mapping checks.
+  - AirPlay previews show effective shuffle and volume (including false and 0); volume is omitted when unchanged. Native previews omit both.
 
 Examples:
   homepodctl play chill

@@ -142,6 +142,13 @@ but does not search playlists, prompt for a selection, or check native mappings.
 A preview therefore does not guarantee that a playlist exists or uniquely matches.
 ID targets appear in the JSON `playlistId` field on both backends.
 
+AirPlay `play --dry-run` and `plan play` show effective `volume` and `shuffle`
+settings in text and JSON, including volume `0` and shuffle `false`. Volume is
+omitted when playback would leave it unchanged (no configured or explicit volume,
+or no resolved rooms). Native playback omits both settings because it does not
+apply them. These optional fields also appear in successful AirPlay `play --json`
+results; existing JSON fields are unchanged.
+
 Set volume (if rooms are omitted, uses `defaults.rooms`; if that’s empty, uses the currently selected outputs in Music.app):
 
 ```sh

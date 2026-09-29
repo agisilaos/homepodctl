@@ -25,6 +25,8 @@ type actionResult struct {
 	Playlist   string            `json:"playlist,omitempty"`
 	PlaylistID string            `json:"playlistId,omitempty"`
 	Shortcut   string            `json:"shortcut,omitempty"`
+	Volume     *int              `json:"volume,omitempty"`
+	Shuffle    *bool             `json:"shuffle,omitempty"`
 	NowPlaying *music.NowPlaying `json:"nowPlaying,omitempty"`
 }
 
@@ -35,6 +37,8 @@ type actionOutput struct {
 	Playlist   string
 	PlaylistID string
 	Shortcut   string
+	Volume     *int
+	Shuffle    *bool
 	NowPlaying *music.NowPlaying
 }
 
@@ -83,6 +87,8 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOut
 			Playlist:   out.Playlist,
 			PlaylistID: out.PlaylistID,
 			Shortcut:   out.Shortcut,
+			Volume:     out.Volume,
+			Shuffle:    out.Shuffle,
 			NowPlaying: out.NowPlaying,
 		})
 		return
@@ -102,7 +108,7 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOut
 		if quiet {
 			return
 		}
-		fmt.Printf("dry-run action=%s backend=%s rooms=%s playlist=%q playlist_id=%q shortcut=%q\n",
+		fmt.Printf("dry-run action=%s backend=%s rooms=%s playlist=%q playlist_id=%q shortcut=%q",
 			action,
 			out.Backend,
 			strings.Join(out.Rooms, ","),
@@ -110,6 +116,13 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOut
 			out.PlaylistID,
 			out.Shortcut,
 		)
+		if out.Volume != nil {
+			fmt.Printf(" volume=%d", *out.Volume)
+		}
+		if out.Shuffle != nil {
+			fmt.Printf(" shuffle=%t", *out.Shuffle)
+		}
+		fmt.Println()
 	}
 }
 

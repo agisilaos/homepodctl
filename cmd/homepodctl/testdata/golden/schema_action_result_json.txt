@@ -32,6 +32,14 @@
       },
       "shortcut": {
         "type": "string"
+      },
+      "shuffle": {
+        "type": "boolean"
+      },
+      "volume": {
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
       }
     },
     "required": [
