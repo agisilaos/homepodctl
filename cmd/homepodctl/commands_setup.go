@@ -118,21 +118,21 @@ func cmdSetup(ctx context.Context, args []string) {
 
 	if opts.jsonOut {
 		writeJSON(res)
-		return
+	} else if !quiet {
+		fmt.Printf("setup ok=%t config=%s updated=%t\n", res.OK, res.ConfigPath, res.ConfigUpdated)
+		printDoctorReport(doctor, false)
+		if devErr != nil {
+			fmt.Printf("devices error=%q\n", res.DeviceError)
+		} else {
+			printDevicesTable(os.Stdout, devices, false)
+		}
+		fmt.Println("next:")
+		for _, step := range res.Next {
+			fmt.Printf("- %s\n", step)
+		}
 	}
-	if quiet {
-		return
-	}
-	fmt.Printf("setup ok=%t config=%s updated=%t\n", res.OK, res.ConfigPath, res.ConfigUpdated)
-	printDoctorReport(doctor, false)
-	if devErr != nil {
-		fmt.Printf("devices error=%q\n", res.DeviceError)
-	} else {
-		printDevicesTable(os.Stdout, devices, false)
-	}
-	fmt.Println("next:")
-	for _, step := range res.Next {
-		fmt.Printf("- %s\n", step)
+	if !res.OK {
+		exitCode(exitGeneric)
 	}
 }
 

@@ -64,6 +64,13 @@ Bootstrap local config + diagnostics:
 homepodctl setup --room "Bedroom"
 ```
 
+`setup` saves configuration and then reports diagnostics and device discovery.
+It exits `0` when `ok=true` and `1` when `ok=false`, including in JSON and quiet
+modes. Warnings alone are nonfatal; device discovery errors fail setup on either
+backend, while an empty device list is successful. Diagnostic failure retains
+saved configuration. JSON reports remain on stdout without an extra error
+envelope; errors before diagnostics retain their usual exit codes and stderr output.
+
 ## Quick start (AirPlay)
 
 List available AirPlay outputs (these names are what you pass as “rooms”):
@@ -307,10 +314,10 @@ homepodctl run bed --dry-run --json
 ## Exit codes
 
 - `0`: success
-- `1`: runtime failures, including file read errors and all failed automation executions
+- `1`: runtime failures, including file read errors, failed setup diagnostics, and all failed automation executions
 - `2`: usage/flag/argument validation error
 - `3`: config or automation validation error
-- `4`: backend command error (`osascript` / `shortcuts`) outside automation execution
+- `4`: backend command error (`osascript` / `shortcuts`) outside setup diagnostics and automation execution
 
 Automation execution always returns `1` on failure, including backend errors,
 missing preconditions, and wait timeouts. With `--json`, the failed run result
