@@ -9,6 +9,7 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 ### Fixed
 
 - `setup` now exits `1` when diagnostics report `ok=false`, including JSON and quiet modes. Reports and saved configuration are retained; warnings alone remain nonfatal.
+- AirPlay `play`, aliases, and automation play steps now resolve playlist queries or verify persistent IDs before changing outputs, volume, or shuffle. Failed lookups leave that command or step's settings unchanged; later runtime failures still retain completed changes.
 - `doctor` now explains how to repair config errors or preserve the existing file as a backup before creating a fresh config, instead of suggesting that rerunning `config-init` repairs it.
 - `volume`/`vol` and AirPlay alias `run` previews now show the volume and shuffle settings they apply, including zero and false. Their JSON results expose the same fields; native playlist and direct Shortcut aliases omit ignored settings.
 - `config validate` now exits `3` for invalid config values in both text and JSON modes. Previously JSON mode incorrectly exited `0`, while text mode exited `2`. Validation reports remain on stdout; scripts checking the former exit codes should be updated.

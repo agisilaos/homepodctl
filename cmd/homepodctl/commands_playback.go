@@ -8,6 +8,20 @@ import (
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
+// Resolve an explicit ID before changing playback settings. Use the same
+// normalized ID for the lookup and playback; later backend failures can still
+// leave earlier settings applied.
+func resolveExistingPlaylistID(ctx context.Context, id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", fmt.Errorf("playlist persistent ID is required")
+	}
+	if _, err := findPlaylistNameByID(ctx, id); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 func setVolumeForRooms(ctx context.Context, rooms []string, value int) error {
 	for _, room := range rooms {
 		if err := setDeviceVolume(ctx, room, value); err != nil {

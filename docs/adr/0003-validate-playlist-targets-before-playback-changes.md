@@ -1,0 +1,5 @@
+# Validate playlist targets before playback changes
+
+AirPlay playback validates its playlist target before changing outputs, volume, or shuffle, consistently across `play`, aliases, and automation play steps. Explicit persistent IDs receive an existence lookup as well as queries, accepting an additional backend read so a deleted playlist does not change playback settings before failing. Previews retain their existing lookup-free behavior, settings-only aliases remain valid, and native playlist names continue to select configured Shortcut mappings.
+
+Execution remains sequential: later runtime failures retain completed changes, including earlier automation steps, because validation cannot prevent concurrent playlist deletion or make Music and Shortcuts operations atomic. Setup likewise retains saved configuration and emits its complete diagnostic report before exiting `1` when `ok=false`, matching doctor rather than choosing a backend-specific code from an aggregate report; warnings and errors before diagnostics retain their existing meaning.

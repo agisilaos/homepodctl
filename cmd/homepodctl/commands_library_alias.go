@@ -154,6 +154,26 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 			})
 			return
 		}
+		id := a.PlaylistID
+		if id != "" {
+			id, err = resolveExistingPlaylistID(ctx, id)
+			if err != nil {
+				die(err)
+			}
+		} else if a.Playlist != "" {
+			matches, err := searchPlaylists(ctx, a.Playlist)
+			if err != nil {
+				die(err)
+			}
+			if len(matches) == 0 {
+				die(fmt.Errorf("alias %q playlist %q not found (tip: set playlistId to pin an exact playlist)", aliasName, a.Playlist))
+			}
+			best, _ := music.PickBestPlaylist(a.Playlist, matches)
+			id = best.PersistentID
+			if len(matches) > 1 {
+				fmt.Fprintf(os.Stderr, "picked %q (%s) for alias %q (set playlistId to pin)\n", best.Name, best.PersistentID, aliasName)
+			}
+		}
 		if err := setCurrentOutputs(ctx, rooms); err != nil {
 			die(err)
 		}
@@ -167,22 +187,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				die(err)
 			}
 		}
-		if a.PlaylistID != "" || a.Playlist != "" {
-			id := a.PlaylistID
-			if id == "" {
-				matches, err := searchPlaylists(ctx, a.Playlist)
-				if err != nil {
-					die(err)
-				}
-				if len(matches) == 0 {
-					die(fmt.Errorf("alias %q playlist %q not found (tip: set playlistId to pin an exact playlist)", aliasName, a.Playlist))
-				}
-				best, _ := music.PickBestPlaylist(a.Playlist, matches)
-				id = best.PersistentID
-				if len(matches) > 1 {
-					fmt.Fprintf(os.Stderr, "picked %q (%s) for alias %q (set playlistId to pin)\n", best.Name, best.PersistentID, aliasName)
-				}
-			}
+		if id != "" {
 			if err := playPlaylistByID(ctx, id); err != nil {
 				die(err)
 			}
