@@ -20,6 +20,7 @@ var (
 	date                 = "unknown"
 	getNowPlaying        = music.GetNowPlaying
 	searchPlaylists      = music.SearchUserPlaylists
+	listUserPlaylists    = music.ListUserPlaylists
 	listAirPlayDevices   = music.ListAirPlayDevices
 	setCurrentOutputs    = music.SetCurrentAirPlayDevices
 	setDeviceVolume      = music.SetAirPlayDeviceVolume
@@ -214,7 +215,8 @@ func main() {
 		parseFlagOnlyArgs("config-init", args)
 		cmdConfigInit()
 	case "setup":
-		cmdSetup(ctx, args)
+		// Human selection has no deadline; each setup backend read is bounded.
+		cmdSetup(context.Background(), args)
 	default:
 		if !jsonErrorOut {
 			usage()

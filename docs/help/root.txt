@@ -14,7 +14,7 @@ Usage:
   homepodctl schema [<name>] [--json]
   homepodctl completion <bash|zsh|fish>
   homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
-  homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]
+  homepodctl setup [--backend airplay|native] [--room <name> ...] [--playlist-id <id>] [--choose] [--json] [--no-input]
   homepodctl doctor [--json] [--plain]
   homepodctl devices [--json] [--plain] [--include-network]
   homepodctl out list [--json] [--plain] [--include-network]
@@ -28,7 +28,7 @@ Usage:
   homepodctl stop [--json] [--plain]
   homepodctl next [--json] [--plain]
   homepodctl prev [--json] [--plain]
-  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
+  homepodctl play [<playlist-query>] [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
   homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
   homepodctl volume <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
   homepodctl vol <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
@@ -38,7 +38,8 @@ Usage:
 Notes:
   - backend=airplay uses Music.app AirPlay selection (Mac is the sender).
   - backend=native runs a Shortcut you map in the config file (HomePod plays natively if your Shortcut/Scene is set up that way).
-  - defaults come from config.json (run homepodctl config-init); commands use defaults when flags/args are omitted.
+  - defaults come from config.json; use homepodctl setup --choose to discover and save rooms and a playlist.
+  - play with no playlist target uses defaults.playlistId; save a default with homepodctl setup --choose.
   - if no rooms are provided and defaults.rooms is empty, airplay commands fall back to Music.app’s currently selected AirPlay outputs (when possible).
   - --verbose (or HOMEPODCTL_VERBOSE=1) prints backend diagnostics to stderr.
   - --quiet suppresses non-essential human-readable success output.

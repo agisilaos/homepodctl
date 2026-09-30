@@ -19,10 +19,11 @@ type Config struct {
 }
 
 type DefaultsConfig struct {
-	Backend string   `json:"backend"`
-	Rooms   []string `json:"rooms"`
-	Shuffle bool     `json:"shuffle"`
-	Volume  *int     `json:"volume"` // 0-100
+	Backend    string   `json:"backend"`
+	Rooms      []string `json:"rooms"`
+	PlaylistID string   `json:"playlistId,omitempty"` // optional default for direct playback
+	Shuffle    bool     `json:"shuffle"`
+	Volume     *int     `json:"volume"` // 0-100
 }
 
 type Alias struct {
@@ -154,49 +155,13 @@ func InitConfig() (string, error) {
 		return path, nil
 	}
 
-	defaultVolume := 50
 	cfg := Config{
 		Defaults: DefaultsConfig{
 			Backend: "airplay",
-			Rooms:   []string{"Living Room"},
-			Shuffle: false,
-			Volume:  &defaultVolume,
-		},
-		Aliases: map[string]Alias{
-			"bed": {
-				Backend: "airplay",
-				Rooms:   []string{"Bedroom"},
-			},
-			"lr": {
-				Backend: "airplay",
-				Rooms:   []string{"Living Room"},
-			},
-			"bed-example": {
-				Backend:  "airplay",
-				Rooms:    []string{"Bedroom"},
-				Playlist: "Example Playlist",
-				Volume:   &defaultVolume,
-			},
-		},
-		Native: NativeConfig{
-			Playlists: map[string]map[string]string{
-				"Bedroom": {
-					"Example Playlist": "BR Play Example Playlist",
-				},
-				"Living Room": {
-					"Example Playlist": "LR Play Example Playlist",
-				},
-			},
-			VolumeShortcuts: map[string]map[string]string{
-				"Bedroom": {
-					"30": "BR Volume 30",
-				},
-				"Living Room": {
-					"30": "LR Volume 30",
-				},
-			},
+			Rooms:   []string{},
 		},
 	}
+	normalizeConfig(&cfg)
 
 	if err := SaveConfig(&cfg); err != nil {
 		return "", err

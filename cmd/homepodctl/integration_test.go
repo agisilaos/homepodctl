@@ -18,6 +18,15 @@ func TestCLIDryRunCommands(t *testing.T) {
 	if result := cli.run(t, "config", "set", "defaults.backend", "native"); result.ExitCode != 0 {
 		t.Fatalf("config set defaults.backend native exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
+	if result := cli.run(t, "config", "set", "defaults.rooms", "Living Room"); result.ExitCode != 0 {
+		t.Fatalf("config set defaults.rooms exit=%d stdout=%s", result.ExitCode, result.Stdout)
+	}
+	if result := cli.run(t, "config", "set", "aliases.bed.backend", "airplay"); result.ExitCode != 0 {
+		t.Fatalf("config set aliases.bed.backend exit=%d stdout=%s", result.ExitCode, result.Stdout)
+	}
+	if result := cli.run(t, "config", "set", "aliases.bed.rooms", "Bedroom"); result.ExitCode != 0 {
+		t.Fatalf("config set aliases.bed.rooms exit=%d stdout=%s", result.ExitCode, result.Stdout)
+	}
 
 	assertDryRun := func(args ...string) {
 		t.Helper()

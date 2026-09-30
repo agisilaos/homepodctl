@@ -50,7 +50,7 @@ var completionDescriptions = map[string]string{
 	"--quiet": "Suppress non-essential success output", "-q": "Suppress non-essential success output",
 	"--json": "Output JSON", "--plain": "Plain output", "--dry-run": "Preview without side effects",
 	"--backend": "Playback backend", "--room": "Room name", "--playlist": "Playlist name",
-	"--playlist-id": "Playlist ID", "--shuffle": "Shuffle toggle", "--choose": "Choose among playlist matches",
+	"--playlist-id": "Playlist ID", "--shuffle": "Shuffle toggle", "--choose": "Choose interactively",
 	"--volume": "Volume 0-100", "--value": "Volume 0-100", "--watch": "Poll interval",
 	"--query": "Playlist filter", "--limit": "Maximum results", "--shortcut": "Shortcut name",
 	"--include-network": "Include network address", "--file": "Input file", "-f": "Input file",

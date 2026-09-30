@@ -73,6 +73,8 @@ func getConfigPathValue(cfg *native.Config, key string) (any, error) {
 	switch key {
 	case "defaults.backend":
 		return cfg.Defaults.Backend, nil
+	case "defaults.playlistId":
+		return cfg.Defaults.PlaylistID, nil
 	case "defaults.shuffle":
 		return cfg.Defaults.Shuffle, nil
 	case "defaults.volume":
@@ -149,6 +151,12 @@ func getConfigPathValue(cfg *native.Config, key string) (any, error) {
 
 func setConfigPathValue(cfg *native.Config, key string, values []string) error {
 	switch key {
+	case "defaults.playlistId":
+		if len(values) != 1 {
+			return usageErrf("%s expects exactly 1 value", key)
+		}
+		cfg.Defaults.PlaylistID = strings.TrimSpace(values[0])
+		return nil
 	case "defaults.backend":
 		if len(values) != 1 {
 			return usageErrf("%s expects exactly 1 value", key)

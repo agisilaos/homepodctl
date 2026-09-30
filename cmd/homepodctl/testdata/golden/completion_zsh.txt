@@ -326,10 +326,10 @@ _homepodctl_context() {
       children=()
       positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
     'setup')
-      options=('--backend' '--help' '--json' '--no-input' '--room' '-h')
-      value_flags=('--backend' '--room')
+      options=('--backend' '--choose' '--help' '--json' '--no-input' '--playlist-id' '--room' '-h')
+      value_flags=('--backend' '--playlist-id' '--room')
       position_flags=()
-      boolean_flags=('--json' '--no-input')
+      boolean_flags=('--choose' '--json' '--no-input')
       terminal=('--help' '-h')
       children=()
       positional='' start=0 repeat=0 stop=0 legacy=0 literal=0 ;;
@@ -529,17 +529,17 @@ _homepodctl_values() {
     'options:plan native-run') candidates=('--dry-run' '--json' '--shortcut'); descriptions=('Preview without side effects' 'Output JSON' 'Shortcut name') ;;
     'options:plan out') candidates=('--json'); descriptions=('Output JSON') ;;
     'options:plan out set') candidates=('--backend' '--dry-run' '--json' '--plain' '--room'); descriptions=('Playback backend' 'Preview without side effects' 'Output JSON' 'Plain output' 'Room name') ;;
-    'options:plan play') candidates=('--backend' '--choose' '--dry-run' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume'); descriptions=('Playback backend' 'Choose among playlist matches' 'Preview without side effects' 'Output JSON' 'Non-interactive mode' 'Plain output' 'Playlist name' 'Playlist ID' 'Room name' 'Shuffle toggle' 'Volume 0-100') ;;
+    'options:plan play') candidates=('--backend' '--choose' '--dry-run' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume'); descriptions=('Playback backend' 'Choose interactively' 'Preview without side effects' 'Output JSON' 'Non-interactive mode' 'Plain output' 'Playlist name' 'Playlist ID' 'Room name' 'Shuffle toggle' 'Volume 0-100') ;;
     'options:plan run') candidates=('--dry-run' '--json' '--plain'); descriptions=('Preview without side effects' 'Output JSON' 'Plain output') ;;
     'options:plan vol') candidates=('--backend' '--dry-run' '--json' '--plain' '--room' '--value' '--volume'); descriptions=('Playback backend' 'Preview without side effects' 'Output JSON' 'Plain output' 'Room name' 'Volume 0-100' 'Volume 0-100') ;;
     'options:plan volume') candidates=('--backend' '--dry-run' '--json' '--plain' '--room' '--value' '--volume'); descriptions=('Playback backend' 'Preview without side effects' 'Output JSON' 'Plain output' 'Room name' 'Volume 0-100' 'Volume 0-100') ;;
-    'options:play') candidates=('--backend' '--choose' '--dry-run' '--help' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume' '-h'); descriptions=('Playback backend' 'Choose among playlist matches' 'Preview without side effects' 'Show help' 'Output JSON' 'Non-interactive mode' 'Plain output' 'Playlist name' 'Playlist ID' 'Room name' 'Shuffle toggle' 'Volume 0-100' 'Show help') ;;
+    'options:play') candidates=('--backend' '--choose' '--dry-run' '--help' '--json' '--no-input' '--plain' '--playlist' '--playlist-id' '--room' '--shuffle' '--volume' '-h'); descriptions=('Playback backend' 'Choose interactively' 'Preview without side effects' 'Show help' 'Output JSON' 'Non-interactive mode' 'Plain output' 'Playlist name' 'Playlist ID' 'Room name' 'Shuffle toggle' 'Volume 0-100' 'Show help') ;;
     'options:playlists') candidates=('--help' '--json' '--limit' '--plain' '--query' '-h'); descriptions=('Show help' 'Output JSON' 'Maximum results' 'Plain output' 'Playlist filter' 'Show help') ;;
     'options:prev') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
     'options:root') candidates=('--help' '--quiet' '--verbose' '--version' '-h' '-q' '-v'); descriptions=('Show help' 'Suppress non-essential success output' 'Verbose diagnostics' 'Show version' 'Show help' 'Suppress non-essential success output' 'Verbose diagnostics') ;;
     'options:run') candidates=('--dry-run' '--help' '--json' '--plain' '-h'); descriptions=('Preview without side effects' 'Show help' 'Output JSON' 'Plain output' 'Show help') ;;
     'options:schema') candidates=('--help' '--json' '-h'); descriptions=('Show help' 'Output JSON' 'Show help') ;;
-    'options:setup') candidates=('--backend' '--help' '--json' '--no-input' '--room' '-h'); descriptions=('Playback backend' 'Show help' 'Output JSON' 'Non-interactive mode' 'Room name' 'Show help') ;;
+    'options:setup') candidates=('--backend' '--choose' '--help' '--json' '--no-input' '--playlist-id' '--room' '-h'); descriptions=('Playback backend' 'Choose interactively' 'Show help' 'Output JSON' 'Non-interactive mode' 'Playlist ID' 'Room name' 'Show help') ;;
     'options:status') candidates=('--help' '--json' '--plain' '--watch' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Poll interval' 'Show help') ;;
     'options:stop') candidates=('--help' '--json' '--plain' '-h'); descriptions=('Show help' 'Output JSON' 'Plain output' 'Show help') ;;
     'options:version') candidates=('--help' '-h'); descriptions=('Show help' 'Show help') ;;
