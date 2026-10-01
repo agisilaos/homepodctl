@@ -168,7 +168,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 			if len(matches) == 0 {
 				die(fmt.Errorf("alias %q playlist %q not found (tip: set playlistId to pin an exact playlist)", aliasName, a.Playlist))
 			}
-			best, _ := music.PickBestPlaylist(a.Playlist, matches)
+			best := matches[0]
 			id = best.PersistentID
 			if len(matches) > 1 {
 				fmt.Fprintf(os.Stderr, "picked %q (%s) for alias %q (set playlistId to pin)\n", best.Name, best.PersistentID, aliasName)

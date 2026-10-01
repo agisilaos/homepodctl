@@ -213,6 +213,7 @@ end tell
 	return playlists, nil
 }
 
+// SearchUserPlaylists returns fuzzy matches in best-first order.
 func SearchUserPlaylists(ctx context.Context, query string) ([]UserPlaylist, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -259,30 +260,6 @@ func SearchUserPlaylists(ctx context.Context, query string) ([]UserPlaylist, err
 		out = append(out, s.p)
 	}
 	return out, nil
-}
-
-func PickBestPlaylist(query string, matches []UserPlaylist) (UserPlaylist, bool) {
-	if len(matches) == 0 {
-		return UserPlaylist{}, false
-	}
-	if len(matches) == 1 {
-		return matches[0], true
-	}
-	target := strings.ToLower(canonicalizeName(query))
-	best := matches[0]
-	bestScore := scoreMatch(target, strings.ToLower(canonicalizeName(best.Name)))
-	bestLen := len([]rune(canonicalizeName(best.Name)))
-
-	for _, p := range matches[1:] {
-		score := scoreMatch(target, strings.ToLower(canonicalizeName(p.Name)))
-		l := len([]rune(canonicalizeName(p.Name)))
-		if score > bestScore || (score == bestScore && l < bestLen) || (score == bestScore && l == bestLen && strings.ToLower(p.Name) < strings.ToLower(best.Name)) {
-			best = p
-			bestScore = score
-			bestLen = l
-		}
-	}
-	return best, true
 }
 
 func Pause(ctx context.Context) error {

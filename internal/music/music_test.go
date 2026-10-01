@@ -53,41 +53,6 @@ func TestParseBool(t *testing.T) {
 	}
 }
 
-func TestPickBestPlaylist(t *testing.T) {
-	t.Parallel()
-
-	matches := []UserPlaylist{
-		{PersistentID: "1", Name: "Chill"},
-		{PersistentID: "2", Name: "Chill Vibes"},
-		{PersistentID: "3", Name: "Super Chill Mix"},
-		{PersistentID: "4", Name: "CHILL"}, // canonical exact match should still win
-	}
-
-	best, ok := PickBestPlaylist("chill", matches)
-	if !ok {
-		t.Fatalf("expected ok=true")
-	}
-	if best.Name != "Chill" && best.Name != "CHILL" {
-		t.Fatalf("best = %q, want exact canonical match", best.Name)
-	}
-
-	best, ok = PickBestPlaylist("chill v", matches)
-	if !ok {
-		t.Fatalf("expected ok=true")
-	}
-	if best.Name != "Chill Vibes" {
-		t.Fatalf("best = %q, want %q", best.Name, "Chill Vibes")
-	}
-
-	best, ok = PickBestPlaylist("spr chll", matches) // subsequence should match Super Chill Mix
-	if !ok {
-		t.Fatalf("expected ok=true")
-	}
-	if best.Name != "Super Chill Mix" {
-		t.Fatalf("best = %q, want %q", best.Name, "Super Chill Mix")
-	}
-}
-
 func TestShouldRetryAppleScript(t *testing.T) {
 	t.Parallel()
 
@@ -215,25 +180,56 @@ func TestSearchUserPlaylists_Ranking(t *testing.T) {
 	origExec := runAppleScriptExec
 	t.Cleanup(func() { runAppleScriptExec = origExec })
 
-	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
-		return []byte(strings.Join([]string{
-			"P001\tChill\tfalse\tfalse",
-			"P002\tMorning Chill\tfalse\tfalse",
-			"P003\tSuper Chill Mix\tfalse\tfalse",
-			"P004\tParty\tfalse\tfalse",
-			"",
-		}, "\n")), nil
+	library := []UserPlaylist{
+		{PersistentID: "1", Name: "Chill"},
+		{PersistentID: "2", Name: "Chill Vibes"},
+		{PersistentID: "3", Name: "Super Chill Mix"},
+		{PersistentID: "4", Name: "Party"},
 	}
-
-	got, err := SearchUserPlaylists(context.Background(), "chill")
-	if err != nil {
-		t.Fatalf("SearchUserPlaylists: %v", err)
-	}
-	if len(got) < 3 {
-		t.Fatalf("len(got)=%d, want >=3", len(got))
-	}
-	if got[0].Name != "Chill" {
-		t.Fatalf("top result=%q, want Chill", got[0].Name)
+	for _, tc := range []struct {
+		name      string
+		query     string
+		playlists []UserPlaylist
+		wantIDs   []string
+	}{
+		{name: "exact before prefix and contains", query: " chill ", playlists: library, wantIDs: []string{"1", "2", "3"}},
+		{name: "prefix", query: "chill v", playlists: library, wantIDs: []string{"2"}},
+		{name: "subsequence", query: "spr chll", playlists: library, wantIDs: []string{"3"}},
+		{name: "shorter name breaks score tie", query: "chill", playlists: []UserPlaylist{
+			{PersistentID: "long", Name: "Chill Weekend"},
+			{PersistentID: "short", Name: "Chill Mix"},
+		}, wantIDs: []string{"short", "long"}},
+		{name: "name order breaks length tie", query: "chill", playlists: []UserPlaylist{
+			{PersistentID: "B", Name: "Chill B"},
+			{PersistentID: "A", Name: "Chill A"},
+		}, wantIDs: []string{"A", "B"}},
+		{name: "equal names preserve library order", query: "chill", playlists: []UserPlaylist{
+			{PersistentID: "first", Name: "CHILL"},
+			{PersistentID: "second", Name: "Chill"},
+		}, wantIDs: []string{"first", "second"}},
+		{name: "no match", query: "missing", playlists: library},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runAppleScriptExec = func(context.Context, string) ([]byte, error) {
+				var rows []string
+				for _, p := range tc.playlists {
+					rows = append(rows, p.PersistentID+"\t"+p.Name+"\tfalse\tfalse")
+				}
+				return []byte(strings.Join(rows, "\n")), nil
+			}
+			got, err := SearchUserPlaylists(context.Background(), tc.query)
+			if err != nil {
+				t.Fatalf("SearchUserPlaylists: %v", err)
+			}
+			if len(got) != len(tc.wantIDs) {
+				t.Fatalf("matches=%v, want IDs %v", got, tc.wantIDs)
+			}
+			for i, id := range tc.wantIDs {
+				if got[i].PersistentID != id {
+					t.Fatalf("result[%d]=%q, want %q", i, got[i].PersistentID, id)
+				}
+			}
+		})
 	}
 }
 
