@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agisilaos/homepodctl/internal/music"
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
@@ -63,11 +62,10 @@ func (st automationPlay) execute(ctx context.Context, cfg *native.Config) error 
 			if err != nil {
 				return err
 			}
-			best, ok := music.PickBestPlaylist(st.Query, matches)
-			if !ok {
+			if len(matches) == 0 {
 				return fmt.Errorf("no playlists match %q", st.Query)
 			}
-			id = best.PersistentID
+			id = matches[0].PersistentID
 		}
 		rooms := append([]string(nil), st.Rooms...)
 		if len(rooms) > 0 {
