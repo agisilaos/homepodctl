@@ -13,14 +13,13 @@ entry point for the ordinary checks and development build. Module validation
 uses temporary alternate files and leaves the checkout unchanged on errors.
 
 Fish completion checks remain part of the Go suite. Fish is optional locally;
-both macOS CI jobs install it. Ordinary CI runs `make verify` with the minimum
-Go version declared in `go.mod`; release CI uses Go 1.27.1 and
+both macOS CI jobs install it. Ordinary CI runs `make verify` with Go 1.27.1
+from `go.mod`; release CI uses the same version and
 `make release-check-ci`, which allows a historical top section and tag.
 
 Release commands select `go1.27.1` through `GOTOOLCHAIN`, as pinned in
 `scripts/release-config.sh`. Go downloads and verifies that toolchain if it is
-not installed. Ordinary local verification retains the active toolchain, so
-`GOTOOLCHAIN=go1.22.12 make verify` checks minimum-version compatibility.
+not installed. The module and all CI jobs require Go 1.27.1.
 
 ## Prepare the changelog
 

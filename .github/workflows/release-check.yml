@@ -16,7 +16,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          # Preserve ordinary validation on the repository's minimum Go version.
+          # Use the same Go version as release CI.
           go-version-file: go.mod
 
       - name: Install Fish
