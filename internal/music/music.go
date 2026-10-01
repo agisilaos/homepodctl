@@ -30,13 +30,6 @@ type UserPlaylist struct {
 	Genius       bool   `json:"genius"`
 }
 
-type Status struct {
-	PlayerState string `json:"playerState"`
-	TrackName   string `json:"trackName,omitempty"`
-	Artist      string `json:"artist,omitempty"`
-	Album       string `json:"album,omitempty"`
-}
-
 type NowPlaying struct {
 	PlayerState     string          `json:"playerState"`
 	PlayerPositionS float64         `json:"playerPositionSeconds"`
@@ -162,50 +155,6 @@ tell application "Music"
 end tell
 `, quoteAppleScriptString(persistentID)))
 	return err
-}
-
-func FindUserPlaylistPersistentIDByName(ctx context.Context, name string) (string, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return "", fmt.Errorf("playlist name is required")
-	}
-
-	playlists, err := ListUserPlaylists(ctx, "", 0)
-	if err != nil {
-		return "", err
-	}
-
-	target := canonicalizeName(name)
-
-	// Prefer an exact canonical match.
-	for _, p := range playlists {
-		if canonicalizeName(p.Name) == target {
-			return p.PersistentID, nil
-		}
-	}
-
-	// Fall back to a contains match (canonical, case-insensitive).
-	var matches []UserPlaylist
-	for _, p := range playlists {
-		if strings.Contains(strings.ToLower(canonicalizeName(p.Name)), strings.ToLower(target)) {
-			matches = append(matches, p)
-		}
-	}
-
-	if len(matches) == 1 {
-		return matches[0].PersistentID, nil
-	}
-	if len(matches) > 1 {
-		var b strings.Builder
-		fmt.Fprintf(&b, "playlist name %q is ambiguous; matches:\n", name)
-		for _, m := range matches {
-			fmt.Fprintf(&b, "  %s\t%s\n", m.PersistentID, m.Name)
-		}
-		fmt.Fprint(&b, "use --playlist-id to disambiguate")
-		return "", fmt.Errorf("%s", b.String())
-	}
-
-	return "", fmt.Errorf("playlist not found: %q (tip: run `homepodctl playlists --query %q` and use --playlist-id)", name, name)
 }
 
 func FindUserPlaylistNameByPersistentID(ctx context.Context, persistentID string) (string, error) {
@@ -370,36 +319,6 @@ tell application "Music"
 end tell
 `)
 	return err
-}
-
-func GetStatus(ctx context.Context) (Status, error) {
-	out, err := runAppleScript(ctx, `
-tell application "Music"
-	set ps to (player state as text)
-	set tName to ""
-	set tArtist to ""
-	set tAlbum to ""
-	try
-		set tName to (name of current track as text)
-		set tArtist to (artist of current track as text)
-		set tAlbum to (album of current track as text)
-	end try
-	return ps & tab & tName & tab & tArtist & tab & tAlbum
-end tell
-`)
-	if err != nil {
-		return Status{}, err
-	}
-	parts := strings.Split(strings.TrimSpace(out), "\t")
-	for len(parts) < 4 {
-		parts = append(parts, "")
-	}
-	return Status{
-		PlayerState: strings.TrimSpace(parts[0]),
-		TrackName:   strings.TrimSpace(parts[1]),
-		Artist:      strings.TrimSpace(parts[2]),
-		Album:       strings.TrimSpace(parts[3]),
-	}, nil
 }
 
 func GetNowPlaying(ctx context.Context) (NowPlaying, error) {
@@ -647,11 +566,4 @@ func isSubsequence(needle, haystack string) bool {
 		}
 	}
 	return false
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -211,38 +211,6 @@ func TestListUserPlaylists_QueryAndLimit(t *testing.T) {
 	}
 }
 
-func TestFindUserPlaylistPersistentIDByName(t *testing.T) {
-	origExec := runAppleScriptExec
-	t.Cleanup(func() { runAppleScriptExec = origExec })
-
-	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
-		return []byte(strings.Join([]string{
-			"P001\tFocus\tfalse\tfalse",
-			"P002\tDeep Focus\tfalse\tfalse",
-			"P003\tFocus Mix\tfalse\tfalse",
-			"",
-		}, "\n")), nil
-	}
-
-	id, err := FindUserPlaylistPersistentIDByName(context.Background(), " Focus ")
-	if err != nil {
-		t.Fatalf("exact match: %v", err)
-	}
-	if id != "P001" {
-		t.Fatalf("id=%q, want P001", id)
-	}
-
-	_, err = FindUserPlaylistPersistentIDByName(context.Background(), "fo")
-	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
-		t.Fatalf("ambiguous query expected error, got %v", err)
-	}
-
-	_, err = FindUserPlaylistPersistentIDByName(context.Background(), "missing")
-	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "not found") {
-		t.Fatalf("missing query expected not found, got %v", err)
-	}
-}
-
 func TestSearchUserPlaylists_Ranking(t *testing.T) {
 	origExec := runAppleScriptExec
 	t.Cleanup(func() { runAppleScriptExec = origExec })
