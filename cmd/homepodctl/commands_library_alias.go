@@ -125,7 +125,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				die(err)
 			}
 		}
-		writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+		writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 			DryRun:   opts.DryRun,
 			Backend:  backend,
 			Rooms:    rooms,
@@ -143,7 +143,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 			volume = cfg.Defaults.Volume
 		}
 		if opts.DryRun {
-			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 				DryRun:     true,
 				Backend:    backend,
 				Rooms:      rooms,
@@ -194,7 +194,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 		}
 		np, err := getNowPlaying(ctx)
 		if err == nil {
-			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 				Backend:    backend,
 				Rooms:      rooms,
 				PlaylistID: a.PlaylistID,
@@ -203,7 +203,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 				Backend:    backend,
 				Rooms:      rooms,
 				PlaylistID: a.PlaylistID,
@@ -223,7 +223,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 			if name == "" {
 				name = a.PlaylistID
 			}
-			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 				DryRun:   true,
 				Backend:  backend,
 				Rooms:    rooms,
@@ -240,7 +240,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 		if err := runNativePlaylistShortcuts(ctx, cfg, rooms, name); err != nil {
 			die(fmt.Errorf("%w (edit config)", err))
 		}
-		writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+		writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 			DryRun:   opts.DryRun,
 			Backend:  backend,
 			Rooms:    rooms,

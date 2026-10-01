@@ -30,18 +30,6 @@ type actionResult struct {
 	NowPlaying *music.NowPlaying `json:"nowPlaying,omitempty"`
 }
 
-type actionOutput struct {
-	Backend    string
-	DryRun     bool
-	Rooms      []string
-	Playlist   string
-	PlaylistID string
-	Shortcut   string
-	Volume     *int
-	Shuffle    *bool
-	NowPlaying *music.NowPlaying
-}
-
 type outputOptions struct {
 	JSON   bool
 	Plain  bool
@@ -76,21 +64,11 @@ func parseOutputOptions(flags parsedArgs) (outputOptions, error) {
 	}, nil
 }
 
-func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOutput) {
+func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionResult) {
 	if jsonOut {
-		writeJSON(actionResult{
-			OK:         true,
-			Action:     action,
-			DryRun:     out.DryRun,
-			Backend:    out.Backend,
-			Rooms:      out.Rooms,
-			Playlist:   out.Playlist,
-			PlaylistID: out.PlaylistID,
-			Shortcut:   out.Shortcut,
-			Volume:     out.Volume,
-			Shuffle:    out.Shuffle,
-			NowPlaying: out.NowPlaying,
-		})
+		out.OK = true
+		out.Action = action
+		writeJSON(out)
 		return
 	}
 	if out.NowPlaying != nil {

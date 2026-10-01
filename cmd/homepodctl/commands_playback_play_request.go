@@ -146,8 +146,8 @@ func parsePlayTarget(flags parsedArgs, positionals []string) (playTarget, error)
 	return target, nil
 }
 
-func (req playRequest) actionOutput() actionOutput {
-	out := actionOutput{
+func (req playRequest) actionResult() actionResult {
+	out := actionResult{
 		Backend: string(req.backend),
 		Rooms:   req.rooms,
 		DryRun:  req.output.DryRun,

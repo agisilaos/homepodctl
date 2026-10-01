@@ -13,7 +13,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
-	out := req.actionOutput()
+	out := req.actionResult()
 	if req.output.DryRun {
 		writeActionOutput("play", req.output.JSON, req.output.Plain, out)
 		return
