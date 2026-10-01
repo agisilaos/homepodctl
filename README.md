@@ -367,11 +367,14 @@ See the [automation exit and output contract](docs/automation-v1-cli-spec.md#exi
 
 This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `shortcuts`).
 
-- **Continuous verification:** `make verify` runs tests, vet, docs, module metadata, formatting, and a development-stamped build without requiring a release version.
-- **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` runs the same continuous verification and additionally validates that the release version is unpublished and matches the top changelog entry.
-- **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds release artifacts only (no changelog/tag/push/release/tap writes).
+- **Continuous verification:** `make verify` accepts development changes and checks the pinned helpers, module metadata, formatting, vet, tests, docs/help, a development-stamped binary and release fixtures without requiring a release version.
+- **Prepare release notes:** `make changelog-context VERSION=vX.Y.Z` gathers evidence through `scripts/changelog-context.sh`; prepare and review a concrete top changelog section with linked list items, then commit it.
+- **Release preflight:** `make release-check VERSION=vX.Y.Z` runs verification and additionally requires a clean checkout, an unpublished version and its reviewed top changelog section. `make release-check-ci` validates the historical top version and allows its existing tag.
+- **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds and validates both archives, checksums, approved notes and the Ruby Homebrew formula without publication writes.
 - **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.
+- **Release toolchain:** Go 1.27.1, selected by release commands; the module minimum remains Go 1.22.
 - **Release scripts:** `scripts/release-check.sh` and `scripts/release.sh`
+- **Release guide:** [Preparation, validation and publishing](RELEASING.md). Actual publication requires `main`; the selected tap branch and formula are prepared before tag/GitHub writes.
 - **Interrupted release:** the script reports the stopped step and command outcomes. Preserve the original artifacts and follow [manual recovery](docs/release-recovery.md); rerunning does not resume publication.
 - **`go install` (after publishing):** `go install github.com/agisilaos/homepodctl/cmd/homepodctl@latest`
 

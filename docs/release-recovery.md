@@ -1,8 +1,8 @@
 # Recovering an interrupted release
 
-`scripts/release.sh` publishes a version tag, then a GitHub release with assets, then the Homebrew formula. If a step fails, it stops and reports which commands succeeded, which were not attempted, and which have an unknown outcome. These are observations from that invocation, not a fresh inspection of the servers. A command can succeed remotely and still return an error locally.
+`scripts/release.sh` first validates artifacts, notes and the formula, then clones the selected existing tap branch and prepares its formula commit. Only then does it publish the version tag, GitHub release/assets and Homebrew formula. If a step fails, it stops and reports which commands succeeded, which were not attempted, and which have an unknown outcome. These are observations from that invocation, not a fresh inspection of the servers. A command can succeed remotely and still return an error locally.
 
-There is no automatic resume. Keep the failure output and the original `dist/` archives and `SHA256SUMS`. Do not rerun release or release-dry-run to recover: both rebuild archives, and their bytes and checksums can change. A prepared Homebrew work directory is also retained after failure for inspection; do not blindly push it. Remove it manually once recovery is complete. The separate module-restoration behavior in preflight is unchanged.
+There is no automatic resume. Keep the failure output and the original `dist/` archives, `SHA256SUMS`, `NOTES.md` and rendered formula. Do not rerun release or release-dry-run to recover: both rebuild archives, and their bytes and checksums can change. A prepared Homebrew work directory is also retained after failure for inspection; do not blindly push it. Remove it manually once recovery is complete. Module checks use temporary alternate files and do not write the checkout.
 
 ## Inspect before making changes
 
@@ -10,13 +10,14 @@ Run checks from the same checkout and GitHub CLI environment as the failed attem
 
 ```bash
 VERSION=vX.Y.Z
+GITHUB_REPO=agisilaos/homepodctl
 git rev-parse HEAD
 git rev-parse "refs/tags/$VERSION^{commit}"
 git ls-remote origin "refs/tags/$VERSION" "refs/tags/$VERSION^{}"
-gh release view "$VERSION" --json url,assets
+gh release view "$VERSION" --repo "$GITHUB_REPO" --json url,assets
 ```
 
-Compare the local and remote tag commits with the full expected release commit printed by the failure report. For an annotated remote tag, compare the peeled `^{}` commit. A missing local tag makes `rev-parse` fail; an absent remote tag produces no matching refs only when `ls-remote` itself succeeds. Resolve authentication, repository-selection, and network errors before concluding anything is absent. Confirm that GitHub asset URLs and the intended formula refer to the same release repository; `GITHUB_REPO` currently controls formula URLs, while the GitHub CLI selects its publishing repository from its environment and checkout.
+Compare the local and remote tag commits with the full expected release commit printed by the failure report. For an annotated remote tag, compare the peeled `^{}` commit. A missing local tag makes `rev-parse` fail; an absent remote tag produces no matching refs only when `ls-remote` itself succeeds. Resolve authentication, repository-selection, and network errors before concluding anything is absent. Set `GITHUB_REPO` to the target from the failed invocation before inspection; it controls formula URLs and the explicit GitHub CLI publishing repository. Tag pushes still use `origin`; confirm that both identify the intended repository.
 
 Never force-move or delete a tag to make the release script pass. If commits disagree, stop and investigate.
 
@@ -24,10 +25,10 @@ Never force-move or delete a tag to make the release script pass. If commits dis
 
 | Interrupted step | Manual next action after inspection |
 | --- | --- |
-| Preflight or artifact preparation | This run attempted no publication. Fix the reported problem; before rebuilding, ensure an earlier attempt has not already published this version. |
+| Preflight, artifacts, formula preparation, tap clone or tap commit | This run attempted no publication. Fix the reported problem; before rebuilding, ensure an earlier attempt has not already published this version. |
 | Local tag creation or tag push | Verify any existing tag against the expected commit. If the local tag is missing, create it at that exact commit. If the remote tag is absent, push the matching local tag without force; if present and matching, leave it alone. |
 | GitHub release/assets | Inspect the release and each asset. If the release is confirmed absent, create it using the existing remote tag and original retained files. If partially populated, verify existing assets against the originals and upload only missing files, without overwriting anything. |
-| Homebrew clone, formula preparation, commit, or push | Verify the complete GitHub release first. Read the latest formula on the configured tap branch. If its version, URLs, and hashes already match, no work remains. If it is newer, leave it alone. Otherwise update only the missing Homebrew work using hashes of the downloaded published archives. |
+| Homebrew push | Verify the complete GitHub release first. Read the latest formula on the configured tap branch. If its version, URLs, and hashes already match, no work remains. If it is newer, leave it alone. Otherwise update only the missing Homebrew work using hashes of the downloaded published archives. |
 
 ## Verify bytes before uploading or updating Homebrew
 
@@ -43,7 +44,7 @@ Download existing GitHub assets into a separate empty directory, leaving `dist/`
 
 ```bash
 download_dir="$(mktemp -d)"
-gh release download "$VERSION" --dir "$download_dir"
+gh release download "$VERSION" --repo "$GITHUB_REPO" --dir "$download_dir"
 ```
 
 Compare downloaded files byte-for-byte with the corresponding retained originals using `cmp`. Any mismatch, including a differing published `SHA256SUMS`, requires investigation; do not overwrite it. For a partial release, upload only absent original files, then repeat the download commands above with a new empty directory to verify the complete set. The expected files are both `homepodctl_<version-without-v>_darwin_amd64.tar.gz` and `homepodctl_<version-without-v>_darwin_arm64.tar.gz`, plus `SHA256SUMS`.
