@@ -150,18 +150,6 @@ func (p parsedArgs) string(key string) string {
 	return v[len(v)-1]
 }
 
-func (p parsedArgs) int(key string, def int) int {
-	s := strings.TrimSpace(p.string(key))
-	if s == "" {
-		return def
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return def
-	}
-	return n
-}
-
 func (p parsedArgs) intStrict(key string) (int, bool, error) {
 	return p.intStrictBase(key, 10)
 }
