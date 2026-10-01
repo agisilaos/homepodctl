@@ -19,6 +19,7 @@ R11 provides command-specific flag specifications. R12 uses those specifications
 - `cmd/homepodctl/cli_flag_specs.go` owns command flag names and whether they take values. `flagsForCommand` handles command aliases. The `f` entry represents `-f`, not `--f`.
 - Help flags are handled outside the individual flag maps. Root options are handled by `parseGlobalOptions` and must not be treated as universally valid command flags.
 - Top-level names are collected from command flag specifications and their aliases; command execution remains in the existing dispatch switch. Descriptions and positional hints belong to completion metadata.
+- Bash and Zsh share one single-quoted word encoder. Fish uses its own escaping rules.
 - Plan target names and preset names come from the same tables used by their runtime handlers. Preset construction still returns fresh mutable values, and error text is preserved.
 - The compatibility contract in [ADR 0001](adr/0001-reject-irrelevant-command-flags.md) remains unchanged. R12 changes suggestions, not accepted invocations.
 

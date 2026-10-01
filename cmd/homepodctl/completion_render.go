@@ -19,15 +19,15 @@ func boolNumber(value bool) int {
 	return 0
 }
 
-func renderCompletionShell(v completionVocabulary, quote func([]string) string) string {
+func renderCompletionShell(v completionVocabulary) string {
 	var contexts, groups, boolPatterns, candidates strings.Builder
 	for _, c := range v.contexts {
 		fmt.Fprintf(&contexts, "    %s)\n      options=(%s)\n      value_flags=(%s)\n      position_flags=(%s)\n      boolean_flags=(%s)\n      terminal=(%s)\n      children=(%s)\n      positional=%s start=%d repeat=%d stop=%d legacy=%d literal=%d ;;\n",
-			quote([]string{c.name}), quote(c.options), quote(c.values), quote(c.positionFlags), quote(c.booleans), quote(c.terminal), quote(c.children),
-			quote([]string{c.positional}), c.start, boolNumber(c.repeat), boolNumber(c.stop), boolNumber(c.legacy), boolNumber(c.literal))
+			shellArrayLiteral([]string{c.name}), shellArrayLiteral(c.options), shellArrayLiteral(c.values), shellArrayLiteral(c.positionFlags), shellArrayLiteral(c.booleans), shellArrayLiteral(c.terminal), shellArrayLiteral(c.children),
+			shellArrayLiteral([]string{c.positional}), c.start, boolNumber(c.repeat), boolNumber(c.stop), boolNumber(c.legacy), boolNumber(c.literal))
 	}
 	for _, flag := range sortedKeys(completionValueGroups) {
-		fmt.Fprintf(&groups, "    %s) value_group=%s ;;\n", quote([]string{flag}), quote([]string{completionValueGroups[flag]}))
+		fmt.Fprintf(&groups, "    %s) value_group=%s ;;\n", shellArrayLiteral([]string{flag}), shellArrayLiteral([]string{completionValueGroups[flag]}))
 	}
 	for i, word := range sortedKeys(booleanWords) {
 		if i > 0 {
@@ -44,7 +44,7 @@ func renderCompletionShell(v completionVocabulary, quote func([]string) string) 
 	for _, name := range sortedKeys(v.groups) {
 		values := v.groups[name]
 		descriptions := completionGroupDescriptions(name, values)
-		fmt.Fprintf(&candidates, "    %s) candidates=(%s); descriptions=(%s) ;;\n", quote([]string{name}), quote(values), quote(descriptions))
+		fmt.Fprintf(&candidates, "    %s) candidates=(%s); descriptions=(%s) ;;\n", shellArrayLiteral([]string{name}), shellArrayLiteral(values), shellArrayLiteral(descriptions))
 	}
 	return strings.NewReplacer("{{CONTEXTS}}", contexts.String(), "{{VALUE_GROUPS}}", groups.String(),
 		"{{BOOLEAN_WORDS}}", boolPatterns.String(), "{{CANDIDATES}}", candidates.String()).Replace(sharedCompletionShell)
@@ -62,7 +62,7 @@ func completionGroupDescriptions(group string, values []string) []string {
 }
 
 func renderBashCompletion(values completionValues) string {
-	return "# bash completion for homepodctl\n" + renderCompletionShell(newCompletionVocabulary(values), bashArrayLiteral) + `
+	return "# bash completion for homepodctl\n" + renderCompletionShell(newCompletionVocabulary(values)) + `
 _homepodctl_unquote() {
   local raw="$1" quote='' char next
   unquoted='' word_prefix=''
@@ -151,7 +151,7 @@ complete -F _homepodctl_completion homepodctl
 }
 
 func renderZshCompletion(values completionValues) string {
-	return "#compdef homepodctl\n" + renderCompletionShell(newCompletionVocabulary(values), zshArrayLiteral) + `
+	return "#compdef homepodctl\n" + renderCompletionShell(newCompletionVocabulary(values)) + `
 _homepodctl() {
   emulate -L zsh
   local group current candidate word index=1
