@@ -372,7 +372,7 @@ This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `s
 - **Release preflight:** `make release-check VERSION=vX.Y.Z` runs verification and additionally requires a clean checkout, an unpublished version and its reviewed top changelog section. `make release-check-ci` validates the historical top version and allows its existing tag.
 - **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds and validates both archives, checksums, approved notes and the Ruby Homebrew formula without publication writes.
 - **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.
-- **Release toolchain:** Go 1.27.1, selected by release commands; the module minimum remains Go 1.22.
+- **Release toolchain:** Go 1.27.1 for local builds, release commands and all CI jobs.
 - **Release scripts:** `scripts/release-check.sh` and `scripts/release.sh`
 - **Release guide:** [Preparation, validation and publishing](RELEASING.md). Actual publication requires `main`; the selected tap branch and formula are prepared before tag/GitHub writes.
 - **Interrupted release:** the script reports the stopped step and command outcomes. Preserve the original artifacts and follow [manual recovery](docs/release-recovery.md); rerunning does not resume publication.
