@@ -83,23 +83,6 @@ func ConfigPath() (string, error) {
 	return filepath.Join(dir, "homepodctl", "config.json"), nil
 }
 
-func LoadConfig() (*Config, error) {
-	path, err := ConfigPath()
-	if err != nil {
-		return nil, &ConfigError{Op: "resolve", Err: err}
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, &ConfigError{Op: "read", Path: path, Err: fmt.Errorf("%w (run `homepodctl config-init`)", err)}
-	}
-	var cfg Config
-	if err := json.Unmarshal(b, &cfg); err != nil {
-		return nil, &ConfigError{Op: "parse", Path: path, Err: err}
-	}
-	normalizeConfig(&cfg)
-	return &cfg, nil
-}
-
 func LoadConfigOptional() (*Config, error) {
 	path, err := ConfigPath()
 	if err != nil {
