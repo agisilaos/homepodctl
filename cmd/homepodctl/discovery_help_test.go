@@ -13,7 +13,7 @@ func TestDiscoveryHelpRoutesOffline(t *testing.T) {
 			cli.env[i] = "PATH=" + t.TempDir()
 		}
 	}
-	for _, command := range []string{"devices", "status", "now"} {
+	for _, command := range []string{"devices", "status", "now", "playlists"} {
 		expected := "homepodctl " + command + " -"
 		if command == "now" {
 			expected = "homepodctl status -"

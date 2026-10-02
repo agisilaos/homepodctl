@@ -1,0 +1,19 @@
+homepodctl playlists - find Music.app user playlists
+
+Usage:
+  homepodctl playlists [--query <substring>] [--limit N] [--json] [--plain]
+
+Notes:
+  - Reads Music.app user playlists without changing playback; macOS may request Automation permission.
+  - --query matches names by case-insensitive substring, not fuzzy search. Omit it to browse without a name filter.
+  - --limit defaults to 50 matches; 0 or a negative value removes the limit.
+  - --json emits an array of persistentID, name, smart and genius fields; no matches produces [].
+  - --plain emits tab-separated ID/name rows without a header; no matches produces no output.
+  - Human output reports an empty library or no matching playlists. Empty results exit successfully.
+  - Copy a persistentID into play --playlist-id to avoid ambiguous names.
+  - A playback preview does not verify that the playlist still exists or change playback.
+
+Examples:
+  homepodctl playlists --query chill
+  homepodctl playlists --limit 0 --json
+  homepodctl play --playlist-id <PERSISTENT_ID> --dry-run --json
