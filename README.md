@@ -73,7 +73,8 @@ envelope; errors before diagnostics retain their usual exit codes and stderr out
 
 ## Quick start (AirPlay)
 
-List available AirPlay outputs (these names are what you pass as “rooms”):
+List available AirPlay outputs (these names are what you pass as “rooms”).
+Use `homepodctl devices --help` for device fields and output options:
 
 ```sh
 homepodctl devices
@@ -103,7 +104,8 @@ If multiple playlists match, auto-picks the best match; to pick interactively:
 homepodctl play autumn --choose
 ```
 
-See status (playback + outputs/route + backend connectivity/auth):
+See status (playback + outputs/route + backend connectivity/auth).
+Use `homepodctl status --help` for output fields and watch behavior:
 
 ```sh
 homepodctl status

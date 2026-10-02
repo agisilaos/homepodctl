@@ -2,3 +2,5 @@
 root.txt	--help
 automation.txt	help automation
 plan.txt	help plan
+devices.txt	help devices
+status.txt	help status

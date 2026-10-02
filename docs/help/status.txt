@@ -1,0 +1,19 @@
+homepodctl status - inspect Music.app playback and output routing
+
+Usage:
+  homepodctl status [--json] [--plain] [--watch <duration>]
+  homepodctl now [--json] [--plain] [--watch <duration>]
+
+Notes:
+  - now is an alias for status. Reading status does not change playback or outputs.
+  - Reports player state, track when present, selected outputs, route and Music/Automation connectivity.
+  - --json emits a status object: ok, player, connection and optional track, volume, outputs and route.
+  - outputs[].deviceName identifies the device; route contains the selected room names.
+  - --plain uses labeled text. --watch repeats at a positive duration such as 1s; Ctrl-C stops it.
+  - --watch with --json prints successive JSON objects, not a single JSON array.
+  - Use homepodctl devices for available outputs or homepodctl doctor for permission diagnostics.
+
+Examples:
+  homepodctl status
+  homepodctl now --json
+  homepodctl status --watch 1s
