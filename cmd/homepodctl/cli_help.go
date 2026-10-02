@@ -72,6 +72,48 @@ func cmdHelp(args []string) {
 		return
 	}
 	switch args[0] {
+	case "devices":
+		fmt.Fprint(os.Stdout, `homepodctl devices - list Music.app AirPlay outputs
+
+Usage:
+  homepodctl devices [--json] [--plain] [--include-network]
+
+Notes:
+  - Read-only discovery through Music.app; macOS may request Automation permission.
+  - Device names are the room names used by --room. Listing does not select outputs.
+  - available, selected and active are Music.app's device properties: availability,
+    output selection and activity respectively. Selection alone does not prove playback.
+  - --json emits an array with name, kind, available, selected, active, volume and persistentID.
+  - --include-network adds networkAddress to JSON when present; it does not expand discovery.
+  - --plain removes the table header. The table shows name, kind, available, selected and volume.
+  - Use homepodctl status to inspect playback and the current output route.
+
+Examples:
+  homepodctl devices
+  homepodctl devices --json
+  homepodctl devices --json --include-network
+`)
+	case "status", "now":
+		fmt.Fprint(os.Stdout, `homepodctl status - inspect Music.app playback and output routing
+
+Usage:
+  homepodctl status [--json] [--plain] [--watch <duration>]
+  homepodctl now [--json] [--plain] [--watch <duration>]
+
+Notes:
+  - now is an alias for status. Reading status does not change playback or outputs.
+  - Reports player state, track when present, selected outputs, route and Music/Automation connectivity.
+  - --json emits a status object: ok, player, connection and optional track, volume, outputs and route.
+  - outputs[].deviceName identifies the device; route contains the selected room names.
+  - --plain uses labeled text. --watch repeats at a positive duration such as 1s; Ctrl-C stops it.
+  - --watch with --json prints successive JSON objects, not a single JSON array.
+  - Use homepodctl devices for available outputs or homepodctl doctor for permission diagnostics.
+
+Examples:
+  homepodctl status
+  homepodctl now --json
+  homepodctl status --watch 1s
+`)
 	case "play":
 		fmt.Fprint(os.Stdout, `homepodctl play - play an Apple Music playlist
 
