@@ -161,7 +161,7 @@ func parseArgs(command string, args []string) (parsedArgs, []string, error) {
 		}
 		if token.name == "help" {
 			switch command {
-			case "devices", "status":
+			case "devices", "status", "playlists":
 				cmdHelp([]string{command})
 			default:
 				usage()

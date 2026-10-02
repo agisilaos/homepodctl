@@ -123,11 +123,17 @@ Watch changes:
 homepodctl status --watch 1s
 ```
 
-Search playlists (for IDs / debugging):
+Search playlists by case-insensitive name substring (use `homepodctl playlists --help`
+for focused guidance):
 
 ```sh
 homepodctl playlists --query chill
 ```
+
+The default limit is 50 matches; `--limit 0` removes the limit. Human output explains
+when no playlists match. `--json` always emits an array, including `[]` for no
+matches (previously `null`); `--plain` retains empty output for no matches. Scripts
+that explicitly check for JSON `null` should now check for an empty array.
 
 If a playlist name is ambiguous or tricky to match (emoji/whitespace), use IDs:
 

@@ -50,7 +50,18 @@ func cmdPlaylists(ctx context.Context, args []string) {
 		die(err)
 	}
 	if jsonOut {
+		if playlists == nil {
+			playlists = []music.UserPlaylist{}
+		}
 		writeJSON(playlists)
+		return
+	}
+	if !plain && len(playlists) == 0 {
+		if strings.TrimSpace(query) != "" {
+			fmt.Println("No playlists matched. Try a broader --query or omit it.")
+		} else {
+			fmt.Println("No user playlists found in Music.app.")
+		}
 		return
 	}
 	if !plain {
