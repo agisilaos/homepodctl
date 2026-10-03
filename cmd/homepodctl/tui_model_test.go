@@ -511,3 +511,49 @@ func TestTUIViewCompactLayoutShowsRequiredStateAndFocusedRoom(t *testing.T) {
 		}
 	}
 }
+
+func TestTUIMutationsRejectAmbiguousOrReplacedRoom(t *testing.T) {
+	for _, change := range []string{"duplicate", "replaced", "unavailable"} {
+		for _, action := range []string{"volume", "route"} {
+			t.Run(change+"/"+action, func(t *testing.T) {
+				service := &fakeTUIPlaybackService{snapshot: sampleTUISnapshot()}
+				m := readyTUIModel(service)
+				m.focusKey = "id:L1"
+				var cmd tea.Cmd
+				if action == "volume" {
+					_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
+				} else {
+					cmd = m.routeActionCmd([]string{"Bedroom"}, selectedRouteSignature(m.snapshot.Devices), "id:B1")
+				}
+				// Change identity after rendering, before the mutation's fresh preflight.
+				fresh := sampleTUISnapshot()
+				index := 0
+				if action == "route" {
+					index = 1
+				}
+				switch change {
+				case "duplicate":
+					duplicate := fresh.Devices[index]
+					duplicate.PersistentID = "DUPLICATE"
+					duplicate.Selected = false
+					fresh.Devices = append(fresh.Devices, duplicate)
+				case "replaced":
+					fresh.Devices[index].PersistentID = "REPLACEMENT"
+				case "unavailable":
+					fresh.Devices[index].Available = false
+				}
+				service.snapshot = fresh
+				if cmd == nil {
+					t.Fatal("missing action command")
+				}
+				msg := cmd().(tuiActionMsg)
+				if msg.err == nil && msg.conflict == nil {
+					t.Fatal("unsafe target accepted")
+				}
+				if len(service.actions) != 0 {
+					t.Fatalf("mutated ambiguous/stale target: %v", service.actions)
+				}
+			})
+		}
+	}
+}

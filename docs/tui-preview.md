@@ -45,3 +45,8 @@ The Midnight + Music palette reserves pink for playback, blue for focus and rout
 Global `--verbose` adds the most recent operation and duration to the status line without writing diagnostics over the alternate screen. Global `--quiet` suppresses routine success notices but never hides errors, stale-state warnings, or observation-boundary messages.
 
 The layout condenses as the terminal narrows. Below 48 columns or 14 rows it shows a minimum-size message instead of rendering a misleading or clipped dashboard. The alternate screen is restored when the program exits.
+
+Room setters address Music devices by name. Before volume or route changes, the
+dashboard refreshes device identity and rejects missing, unavailable or duplicate
+names. Give devices distinct names and refresh before retrying. This preflight
+reduces stale-target risk; it is not an atomic lock on changes made in Music.

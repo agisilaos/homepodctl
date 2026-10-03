@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -348,6 +349,17 @@ func (m tuiModel) adjustFocusedVolume(delta int) (tea.Model, tea.Cmd) {
 		expectedVolume: value,
 	}
 	return m, m.confirmedActionCmd(label, confirmation, func(ctx context.Context) error {
+		snapshot, err := m.service.Snapshot(ctx)
+		if err != nil {
+			return err
+		}
+		current, err := uniqueRoomDevice(snapshot.Devices, device.Name)
+		if err != nil {
+			return err
+		}
+		if deviceKey(current) != deviceKey(device) {
+			return fmt.Errorf("Room identity changed; refresh and retry")
+		}
 		return m.service.SetVolume(ctx, device.Name, value)
 	})
 }
@@ -473,7 +485,22 @@ func (m tuiModel) routeActionCmd(rooms []string, baseRoute, expectedRoute string
 			return tuiActionMsg{action: "Apply route", duration: finished.Sub(started), at: finished, conflict: &snapshot}
 		}
 		if err == nil {
-			err = m.service.SetRoute(ctx, rooms)
+			var targets []music.AirPlayDevice
+			for _, room := range rooms {
+				var device music.AirPlayDevice
+				device, err = uniqueRoomDevice(snapshot.Devices, room)
+				if err != nil {
+					break
+				}
+				device.Selected = true
+				targets = append(targets, device)
+			}
+			if err == nil && selectedRouteSignature(targets) != expectedRoute {
+				err = fmt.Errorf("Room identities changed; refresh and stage the route again")
+			}
+			if err == nil {
+				err = m.service.SetRoute(ctx, rooms)
+			}
 		}
 		finished := time.Now()
 		return tuiActionMsg{
@@ -567,4 +594,24 @@ func tuiErrorText(err error, verboseOutput bool) string {
 		}
 	}
 	return err.Error()
+}
+
+// Native setters address devices by name, so ID-based UI selection must resolve
+// to exactly one available device immediately before dispatch.
+func uniqueRoomDevice(devices []music.AirPlayDevice, name string) (music.AirPlayDevice, error) {
+	var result music.AirPlayDevice
+	count := 0
+	for _, device := range devices {
+		if strings.EqualFold(device.Name, name) {
+			result = device
+			count++
+		}
+	}
+	if count != 1 {
+		return music.AirPlayDevice{}, fmt.Errorf("Room %q is missing or ambiguous; use distinct device names and refresh", name)
+	}
+	if !result.Available {
+		return music.AirPlayDevice{}, fmt.Errorf("Room %q is unavailable", name)
+	}
+	return result, nil
 }
