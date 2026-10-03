@@ -209,6 +209,10 @@ func automationValidationErrf(format string, args ...any) error {
 }
 
 func classifyExitCode(err error) int {
+	var output *stdoutError
+	if errors.As(err, &output) {
+		return output.code
+	}
 	if err == nil {
 		return 0
 	}

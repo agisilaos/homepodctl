@@ -75,7 +75,7 @@ func cmdHelp(args []string) {
 	}
 	switch args[0] {
 	case "playlists":
-		fmt.Fprint(os.Stdout, `homepodctl playlists - find Music.app user playlists
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl playlists - find Music.app user playlists
 
 Usage:
   homepodctl playlists [--query <substring>] [--limit N] [--json] [--plain]
@@ -96,7 +96,7 @@ Examples:
   homepodctl play --playlist-id <PERSISTENT_ID> --dry-run --json
 `)
 	case "devices":
-		fmt.Fprint(os.Stdout, `homepodctl devices - list Music.app AirPlay outputs
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl devices - list Music.app AirPlay outputs
 
 Usage:
   homepodctl devices [--json] [--plain] [--include-network]
@@ -117,7 +117,7 @@ Examples:
   homepodctl devices --json --include-network
 `)
 	case "status", "now":
-		fmt.Fprint(os.Stdout, `homepodctl status - inspect Music.app playback and output routing
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl status - inspect Music.app playback and output routing
 
 Usage:
   homepodctl status [--json] [--plain] [--watch <duration>]
@@ -138,7 +138,7 @@ Examples:
   homepodctl status --watch 1s
 `)
 	case "play":
-		fmt.Fprint(os.Stdout, `homepodctl play - play an Apple Music playlist
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl play - play an Apple Music playlist
 
 Usage:
   homepodctl play [<playlist-query>] [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
@@ -168,7 +168,7 @@ Examples:
   homepodctl play --room "YOUR_ROOM_NAME" --playlist-id "YOUR_PLAYLIST_ID"
 `)
 	case "out":
-		fmt.Fprint(os.Stdout, `homepodctl out - list/set Music.app AirPlay outputs
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl out - list/set Music.app AirPlay outputs
 
 Usage:
   homepodctl out list [--json] [--plain] [--include-network]
@@ -185,7 +185,7 @@ Examples:
   homepodctl out set --room "Bedroom" --room "Living Room"
 `)
 	case "volume", "vol":
-		fmt.Fprint(os.Stdout, `homepodctl volume - set output volume
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl volume - set output volume
 
 Usage:
   homepodctl volume <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
@@ -200,7 +200,7 @@ Examples:
   homepodctl volume 35 "Living Room"
 `)
 	case "run":
-		fmt.Fprint(os.Stdout, `homepodctl run - execute a configured alias
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl run - execute a configured alias
 
 Usage:
   homepodctl run <alias> [--json] [--plain] [--dry-run]
@@ -212,7 +212,7 @@ Notes:
   - Native playlist aliases and direct Shortcuts omit volume/shuffle because they do not apply those settings.
 `)
 	case "native-run":
-		fmt.Fprint(os.Stdout, `homepodctl native-run - execute a Shortcut by name
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl native-run - execute a Shortcut by name
 
 Usage:
   homepodctl native-run --shortcut <name> [--json] [--dry-run]
@@ -221,13 +221,13 @@ Notes:
   - --dry-run validates arguments and prints the planned action only.
 `)
 	case "doctor":
-		fmt.Fprint(os.Stdout, `homepodctl doctor - run environment and config diagnostics
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl doctor - run environment and config diagnostics
 
 Usage:
   homepodctl doctor [--json] [--plain]
 `)
 	case "tui":
-		fmt.Fprint(os.Stdout, `homepodctl tui - interactive Music/AirPlay dashboard (Preview)
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl tui - interactive Music/AirPlay dashboard (Preview)
 
 Usage:
   homepodctl tui [--refresh <duration>]
@@ -257,7 +257,7 @@ Notes:
   - Interactive stdin and stdout are required. JSON, plain, and backend flags are not supported.
 `)
 	case "setup":
-		fmt.Fprint(os.Stdout, `homepodctl setup - onboard and verify local environment
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl setup - onboard and verify local environment
 
 Usage:
   homepodctl setup [--backend airplay|native] [--room <name> ...] [--playlist-id <id>] [--choose] [--json] [--no-input]
@@ -288,7 +288,7 @@ Examples:
   homepodctl setup --room "YOUR_ROOM_NAME" --playlist-id "YOUR_PLAYLIST_ID" --no-input
 `)
 	case "completion":
-		fmt.Fprint(os.Stdout, `homepodctl completion - generate shell completion scripts
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl completion - generate shell completion scripts
 
 Usage:
   homepodctl completion <bash|zsh|fish>
@@ -296,7 +296,7 @@ Usage:
 `)
 	case "config-init":
 		path, _ := native.ConfigPath()
-		fmt.Fprintf(os.Stdout, `homepodctl config-init - create a starter config file
+		fmt.Fprintf(checkedOutput{os.Stdout}, `homepodctl config-init - create a starter config file
 
 Writes a starter config to:
   %s
@@ -308,7 +308,7 @@ Notes:
   - Run homepodctl setup --choose to save discovered rooms and a playlist, or setup --room <name> --playlist-id <id> --no-input.
 `, path)
 	case "automation":
-		fmt.Fprint(os.Stdout, `homepodctl automation - declarative playback routines (v1)
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl automation - declarative playback routines (v1)
 
 Usage:
   homepodctl automation init --preset <morning|focus|winddown|party|reset> [--name <string>] [--json]
@@ -342,7 +342,7 @@ Exit codes:
   Backend errors, missing preconditions, and wait timeouts during execution exit 1, not 4.
 `)
 	case "plan":
-		fmt.Fprint(os.Stdout, `homepodctl plan - preview resolved command execution
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl plan - preview resolved command execution
 
 Usage:
   homepodctl plan <run|play|volume|vol|native-run|out set|automation run> [args] [--json]
@@ -355,7 +355,7 @@ Notes:
   - use --json for a machine-friendly envelope containing the planned action.
 `)
 	case "schema":
-		fmt.Fprint(os.Stdout, `homepodctl schema - inspect machine-readable JSON contracts
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl schema - inspect machine-readable JSON contracts
 
 Usage:
   homepodctl schema [<name>] [--json]
@@ -365,7 +365,7 @@ Examples:
   homepodctl schema action-result --json
 `)
 	case "config":
-		fmt.Fprint(os.Stdout, `homepodctl config - inspect and update config values
+		fmt.Fprint(checkedOutput{os.Stdout}, `homepodctl config - inspect and update config values
 
 Usage:
   homepodctl config validate [--json]

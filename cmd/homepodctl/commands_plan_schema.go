@@ -51,9 +51,9 @@ func cmdSchema(args []string) {
 			writeJSON(schemaIndex{Schemas: names})
 			return
 		}
-		fmt.Println("Available schemas:")
+		fmt.Fprintln(checkedOutput{os.Stdout}, "Available schemas:")
 		for _, name := range names {
-			fmt.Printf("- %s\n", name)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "- %s\n", name)
 		}
 		return
 	}
@@ -67,7 +67,7 @@ func cmdSchema(args []string) {
 		writeJSON(schemaEnvelope{Name: name, Schema: schema})
 		return
 	}
-	fmt.Printf("schema=%s\n", name)
+	fmt.Fprintf(checkedOutput{os.Stdout}, "schema=%s\n", name)
 	writeJSON(schema)
 }
 
@@ -243,7 +243,7 @@ func printPlanResponse(resp planResponse) {
 		mode, _ := resp.Plan["mode"].(string)
 		ok, _ := resp.Plan["ok"].(bool)
 		steps := anyObjects(resp.Plan["steps"])
-		fmt.Printf("plan command=automation name=%q mode=%s ok=%t steps=%d\n", name, mode, ok, len(steps))
+		fmt.Fprintf(checkedOutput{os.Stdout}, "plan command=automation name=%q mode=%s ok=%t steps=%d\n", name, mode, ok, len(steps))
 		return
 	}
 	action, _ := resp.Plan["action"].(string)
@@ -252,7 +252,7 @@ func printPlanResponse(resp planResponse) {
 	playlistID, _ := resp.Plan["playlistId"].(string)
 	shortcut, _ := resp.Plan["shortcut"].(string)
 	rooms := anyStrings(resp.Plan["rooms"])
-	fmt.Printf("plan command=%s action=%s backend=%s dry_run=true rooms=%s playlist=%q playlist_id=%q shortcut=%q",
+	fmt.Fprintf(checkedOutput{os.Stdout}, "plan command=%s action=%s backend=%s dry_run=true rooms=%s playlist=%q playlist_id=%q shortcut=%q",
 		resp.Command,
 		action,
 		backend,
@@ -262,12 +262,12 @@ func printPlanResponse(resp planResponse) {
 		shortcut,
 	)
 	if volume, ok := resp.Plan["volume"].(float64); ok {
-		fmt.Printf(" volume=%.0f", volume)
+		fmt.Fprintf(checkedOutput{os.Stdout}, " volume=%.0f", volume)
 	}
 	if shuffle, ok := resp.Plan["shuffle"].(bool); ok {
-		fmt.Printf(" shuffle=%t", shuffle)
+		fmt.Fprintf(checkedOutput{os.Stdout}, " shuffle=%t", shuffle)
 	}
-	fmt.Println()
+	fmt.Fprintln(checkedOutput{os.Stdout})
 }
 
 func anyObjects(v any) []map[string]any {

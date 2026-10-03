@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/agisilaos/homepodctl/internal/native"
@@ -43,16 +44,19 @@ func cmdConfigValidate(args []string) {
 		Path:   path,
 		Errors: issues,
 	}
+	if !res.OK {
+		defer preserveOutputStatus(exitConfig)
+	}
 	if jsonOut {
 		writeJSON(res)
 	} else if res.OK {
 		if !quiet {
-			fmt.Printf("config ok: %s\n", res.Path)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "config ok: %s\n", res.Path)
 		}
 	} else {
-		fmt.Printf("config invalid: %s\n", res.Path)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "config invalid: %s\n", res.Path)
 		for _, issue := range res.Errors {
-			fmt.Printf("- %s\n", issue)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "- %s\n", issue)
 		}
 	}
 	if !res.OK {
@@ -87,9 +91,9 @@ func cmdConfigGet(args []string) {
 	}
 	switch v := value.(type) {
 	case []string:
-		fmt.Println(strings.Join(v, "\t"))
+		fmt.Fprintln(checkedOutput{os.Stdout}, strings.Join(v, "\t"))
 	default:
-		fmt.Printf("%v\n", v)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "%v\n", v)
 	}
 }
 
@@ -120,6 +124,6 @@ func cmdConfigSet(args []string) {
 	}
 	if !quiet {
 		path, _ := configPath()
-		fmt.Printf("Updated %s (%s)\n", path, key)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "Updated %s (%s)\n", path, key)
 	}
 }

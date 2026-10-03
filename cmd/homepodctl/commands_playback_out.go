@@ -31,7 +31,9 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 			writeJSON(devs)
 			return
 		}
-		printDevicesTable(os.Stdout, devs, plain)
+		if err := printDevicesTable(os.Stdout, devs, plain); err != nil {
+			die(&stdoutError{cause: err, code: exitGeneric})
+		}
 	case "set":
 		flags, positionals, err := parseArgs("out set", args[1:])
 		if err != nil {

@@ -223,23 +223,25 @@ func cmdSetup(ctx context.Context, args []string) {
 	if opts.jsonOut {
 		writeJSON(res)
 	} else if !quiet {
-		fmt.Printf("setup ok=%t config=%s updated=%t\n", res.OK, res.ConfigPath, res.ConfigUpdated)
-		fmt.Printf("defaults backend=%s rooms=%q playlist_id=%q\n", cfg.Defaults.Backend, cfg.Defaults.Rooms, cfg.Defaults.PlaylistID)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "setup ok=%t config=%s updated=%t\n", res.OK, res.ConfigPath, res.ConfigUpdated)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "defaults backend=%s rooms=%q playlist_id=%q\n", cfg.Defaults.Backend, cfg.Defaults.Rooms, cfg.Defaults.PlaylistID)
 		printDoctorReport(doctor, false)
 		if devErr != nil {
-			fmt.Printf("devices error=%q\n", res.DeviceError)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "devices error=%q\n", res.DeviceError)
 		} else {
-			printDevicesTable(os.Stdout, devices, false)
+			if err := printDevicesTable(os.Stdout, devices, false); err != nil {
+				die(&stdoutError{cause: err, code: exitGeneric})
+			}
 		}
 		for _, warning := range res.Warnings {
-			fmt.Printf("warning: %s\n", warning)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "warning: %s\n", warning)
 		}
 		for _, playlist := range res.Playlists {
-			fmt.Printf("playlist: %q (%s)\n", playlist.Name, playlist.PersistentID)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "playlist: %q (%s)\n", playlist.Name, playlist.PersistentID)
 		}
-		fmt.Println("next:")
+		fmt.Fprintln(checkedOutput{os.Stdout}, "next:")
 		for _, step := range res.Next {
-			fmt.Printf("- %s\n", step)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "- %s\n", step)
 		}
 	}
 	if !res.OK {

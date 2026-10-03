@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -137,30 +138,30 @@ func inferStatusConnection(err error) statusConnection {
 }
 
 func printStatus(res statusResult) {
-	fmt.Printf("ok=%t player=%s", res.OK, res.Player)
+	fmt.Fprintf(checkedOutput{os.Stdout}, "ok=%t player=%s", res.OK, res.Player)
 	if res.Track != nil && strings.TrimSpace(res.Track.Name) != "" {
-		fmt.Printf(" track=%q", res.Track.Name)
+		fmt.Fprintf(checkedOutput{os.Stdout}, " track=%q", res.Track.Name)
 	}
 	if res.Track != nil && strings.TrimSpace(res.Track.Artist) != "" {
-		fmt.Printf(" artist=%q", res.Track.Artist)
+		fmt.Fprintf(checkedOutput{os.Stdout}, " artist=%q", res.Track.Artist)
 	}
-	fmt.Println()
+	fmt.Fprintln(checkedOutput{os.Stdout})
 	if len(res.Outputs) > 0 {
 		parts := make([]string, 0, len(res.Outputs))
 		for _, o := range res.Outputs {
 			parts = append(parts, fmt.Sprintf("%s(vol=%d)", o.DeviceName, o.Volume))
 		}
-		fmt.Printf("outputs=%s\n", strings.Join(parts, ", "))
+		fmt.Fprintf(checkedOutput{os.Stdout}, "outputs=%s\n", strings.Join(parts, ", "))
 	}
 	if len(res.Route) > 0 {
-		fmt.Printf("route=%s\n", strings.Join(res.Route, ", "))
+		fmt.Fprintf(checkedOutput{os.Stdout}, "route=%s\n", strings.Join(res.Route, ", "))
 	}
 	if res.Volume != nil {
-		fmt.Printf("volume=%d\n", *res.Volume)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "volume=%d\n", *res.Volume)
 	}
-	fmt.Printf("music=%s automation=%s\n", res.Connection.Music, res.Connection.Automation)
+	fmt.Fprintf(checkedOutput{os.Stdout}, "music=%s automation=%s\n", res.Connection.Music, res.Connection.Automation)
 	if strings.TrimSpace(res.Connection.Message) != "" {
-		fmt.Printf("message=%q\n", res.Connection.Message)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "message=%q\n", res.Connection.Message)
 	}
 }
 
@@ -181,7 +182,7 @@ func printStatusPlain(res statusResult) {
 	for _, o := range res.Outputs {
 		outputs = append(outputs, fmt.Sprintf("%s=%d", o.DeviceName, o.Volume))
 	}
-	fmt.Printf("%t\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+	fmt.Fprintf(checkedOutput{os.Stdout}, "%t\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 		res.OK,
 		res.Player,
 		track,
@@ -193,7 +194,7 @@ func printStatusPlain(res statusResult) {
 		res.Connection.Automation,
 	)
 	if len(outputs) > 0 {
-		fmt.Printf("outputs\t%s\n", strings.Join(outputs, ","))
+		fmt.Fprintf(checkedOutput{os.Stdout}, "outputs\t%s\n", strings.Join(outputs, ","))
 	}
 }
 
@@ -232,10 +233,10 @@ func cmdStatus(ctx context.Context, args []string) {
 		} else {
 			if watch > 0 {
 				if snapshots > 0 {
-					fmt.Println()
+					fmt.Fprintln(checkedOutput{os.Stdout})
 				}
 				snapshots++
-				fmt.Println(formatStatusSnapshotHeader(time.Now(), snapshots))
+				fmt.Fprintln(checkedOutput{os.Stdout}, formatStatusSnapshotHeader(time.Now(), snapshots))
 			}
 			printStatus(res)
 		}

@@ -133,7 +133,7 @@ func main() {
 	}
 
 	if opts.version {
-		fmt.Printf("homepodctl %s (%s) %s\n", version, commit, date)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "homepodctl %s (%s) %s\n", version, commit, date)
 		return
 	}
 
@@ -178,7 +178,7 @@ func main() {
 		cmdHelp(args)
 	case "version":
 		parseFlagOnlyArgs("version", args)
-		fmt.Printf("homepodctl %s (%s) %s\n", version, commit, date)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "homepodctl %s (%s) %s\n", version, commit, date)
 	case "automation":
 		cmdAutomation(ctx, loadCfg(), args)
 	case "config":

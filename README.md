@@ -609,3 +609,13 @@ guidance before loading configuration. This also applies to `volume`/`vol`,
 `run`, `native-run`, and `setup`, including `-h`. Help remains available when
 configuration is missing or malformed and does not invoke Music or Shortcuts.
 Option values such as `--playlist --help` and arguments after `--` remain data.
+
+### Output delivery failures
+
+Failed or short stdout writes exit nonzero with a diagnostic on stderr. A
+previously successful command becomes a runtime failure (exit 1); configuration
+validation retains exit 3 even if its report cannot print. Output can be partial.
+Completed configuration changes or playback actions remain applied: inspect state
+before retrying. The CLI does not retry writes or actions to recover a receipt,
+and status watching stops when stdout fails. TUI terminal rendering uses its own
+existing error handling.

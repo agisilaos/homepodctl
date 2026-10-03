@@ -29,7 +29,9 @@ func cmdDevices(ctx context.Context, args []string) {
 		writeJSON(devs)
 		return
 	}
-	printDevicesTable(os.Stdout, devs, plain)
+	if err := printDevicesTable(os.Stdout, devs, plain); err != nil {
+		die(&stdoutError{cause: err, code: exitGeneric})
+	}
 }
 
 func cmdPlaylists(ctx context.Context, args []string) {
@@ -58,17 +60,17 @@ func cmdPlaylists(ctx context.Context, args []string) {
 	}
 	if !plain && len(playlists) == 0 {
 		if strings.TrimSpace(query) != "" {
-			fmt.Println("No playlists matched. Try a broader --query or omit it.")
+			fmt.Fprintln(checkedOutput{os.Stdout}, "No playlists matched. Try a broader --query or omit it.")
 		} else {
-			fmt.Println("No user playlists found in Music.app.")
+			fmt.Fprintln(checkedOutput{os.Stdout}, "No user playlists found in Music.app.")
 		}
 		return
 	}
 	if !plain {
-		fmt.Println("PERSISTENT_ID\tNAME")
+		fmt.Fprintln(checkedOutput{os.Stdout}, "PERSISTENT_ID\tNAME")
 	}
 	for _, p := range playlists {
-		fmt.Printf("%s\t%s\n", p.PersistentID, p.Name)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "%s\t%s\n", p.PersistentID, p.Name)
 	}
 }
 
@@ -85,18 +87,20 @@ func cmdAliases(cfg *native.Config, args []string) {
 		path, _ := native.ConfigPath()
 		if path != "" {
 			if _, err := os.Stat(path); err != nil {
-				fmt.Printf("No aliases configured. Run `homepodctl config-init` to create %s\n", path)
+				fmt.Fprintf(checkedOutput{os.Stdout}, "No aliases configured. Run `homepodctl config-init` to create %s\n", path)
 				return
 			}
 		}
-		fmt.Println("No aliases configured in config.json")
+		fmt.Fprintln(checkedOutput{os.Stdout}, "No aliases configured in config.json")
 		return
 	}
 	if jsonOut {
 		writeJSON(rows)
 		return
 	}
-	printAliasesTable(os.Stdout, rows, plain)
+	if err := printAliasesTable(os.Stdout, rows, plain); err != nil {
+		die(&stdoutError{cause: err, code: exitGeneric})
+	}
 }
 
 func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
@@ -284,7 +288,7 @@ func cmdNativeRun(ctx context.Context, args []string) {
 			Shortcut: shortcutName,
 		})
 	} else if dryRun && !quiet {
-		fmt.Printf("dry-run action=native-run shortcut=%q\n", shortcutName)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "dry-run action=native-run shortcut=%q\n", shortcutName)
 	}
 }
 
@@ -294,6 +298,6 @@ func cmdConfigInit() {
 		die(err)
 	}
 	if !quiet {
-		fmt.Printf("Wrote %s\n", path)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "Wrote %s\n", path)
 	}
 }

@@ -11,9 +11,11 @@ import (
 )
 
 func writeJSON(v any) {
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(checkedOutput{os.Stdout})
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		die(fmt.Errorf("encode stdout JSON: %w", err))
+	}
 }
 
 type actionResult struct {
@@ -86,7 +88,7 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionRes
 		if quiet {
 			return
 		}
-		fmt.Printf("dry-run action=%s backend=%s rooms=%s playlist=%q playlist_id=%q shortcut=%q",
+		fmt.Fprintf(checkedOutput{os.Stdout}, "dry-run action=%s backend=%s rooms=%s playlist=%q playlist_id=%q shortcut=%q",
 			action,
 			out.Backend,
 			strings.Join(out.Rooms, ","),
@@ -95,12 +97,12 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionRes
 			out.Shortcut,
 		)
 		if out.Volume != nil {
-			fmt.Printf(" volume=%d", *out.Volume)
+			fmt.Fprintf(checkedOutput{os.Stdout}, " volume=%d", *out.Volume)
 		}
 		if out.Shuffle != nil {
-			fmt.Printf(" shuffle=%t", *out.Shuffle)
+			fmt.Fprintf(checkedOutput{os.Stdout}, " shuffle=%t", *out.Shuffle)
 		}
-		fmt.Println()
+		fmt.Fprintln(checkedOutput{os.Stdout})
 	}
 }
 

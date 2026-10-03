@@ -31,7 +31,7 @@ func cmdCompletion(args []string) {
 	if err != nil {
 		die(err)
 	}
-	fmt.Print(script)
+	fmt.Fprint(checkedOutput{os.Stdout}, script)
 }
 
 func cmdCompletionInstall(args []string) {
@@ -49,7 +49,7 @@ func cmdCompletionInstall(args []string) {
 		die(err)
 	}
 	if !quiet {
-		fmt.Printf("Installed %s completion: %s\n", shell, installedPath)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "Installed %s completion: %s\n", shell, installedPath)
 	}
 }
 
