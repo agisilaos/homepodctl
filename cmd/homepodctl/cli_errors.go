@@ -126,7 +126,15 @@ func errorModeFromFlag(token flagToken, err error, previous bool) bool {
 	return ok && value
 }
 
+func outcomeUncertain(err error) bool {
+	var outcome interface{ OutcomeUncertain() bool }
+	return errors.As(err, &outcome) && outcome.OutcomeUncertain()
+}
+
 func classifyErrorCode(err error) string {
+	if outcomeUncertain(err) {
+		return "OUTCOME_UNCERTAIN"
+	}
 	var autoValErr *automationValidationError
 	if errors.As(err, &autoValErr) {
 		return "AUTOMATION_VALIDATION_ERROR"
@@ -144,6 +152,9 @@ func classifyErrorCode(err error) string {
 }
 
 func formatError(err error) string {
+	if outcomeUncertain(err) {
+		return formatUncertainOutcome(err, verbose)
+	}
 	if verbose {
 		return err.Error()
 	}
@@ -234,4 +245,11 @@ func debugf(format string, args ...any) {
 func envTruthy(v string) bool {
 	value, ok := parseBoolWord(v)
 	return ok && value
+}
+
+func formatUncertainOutcome(err error, verboseOutput bool) string {
+	if verboseOutput {
+		return err.Error()
+	}
+	return "Playback or Shortcut outcome is uncertain. Inspect playback and the target room before retrying; no automatic retry was attempted."
 }

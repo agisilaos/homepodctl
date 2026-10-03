@@ -112,7 +112,7 @@ func TestCLIExitCodeContracts(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(backendDir, name), []byte(`#!/bin/sh
 echo called >> "$HOMEPODCTL_TEST_BACKEND_LOG"
 if [ "$HOMEPODCTL_TEST_BACKEND_FAIL" = 1 ]; then
-  echo 'synthetic backend failure' >&2
+  echo 'synthetic backend failure: AppleEvent timed out (-1712)' >&2
   exit 1
 fi
 echo stopped
@@ -133,7 +133,8 @@ echo stopped
 		{name: "config usage", args: []string{"config", "get", "defaults.backend", "unexpected"}, want: 2, errorCode: "USAGE_ERROR"},
 		{name: "schema unknown", args: []string{"schema", "not-real"}, want: 2, errorCode: "USAGE_ERROR"},
 		{name: "plan unsupported", args: []string{"plan", "pause"}, want: 2, errorCode: "USAGE_ERROR"},
-		{name: "standalone backend failure", args: []string{"native-run", "--shortcut", "Example"}, want: 4, errorCode: "BACKEND_ERROR", backendFail: true, backendCall: true},
+		{name: "next timeout", args: []string{"next"}, want: 4, errorCode: "OUTCOME_UNCERTAIN", backendFail: true, backendCall: true},
+		{name: "standalone backend failure", args: []string{"native-run", "--shortcut", "Example"}, want: 4, errorCode: "OUTCOME_UNCERTAIN", backendFail: true, backendCall: true},
 		{name: "missing file flag", args: []string{"automation", "run"}, want: 2, errorCode: "USAGE_ERROR"},
 		{name: "unsupported dry-run alias", args: []string{"automation", "run", "-f", stop, "-n"}, want: 2, errorCode: "USAGE_ERROR"},
 		{name: "invalid dry-run value", args: []string{"automation", "run", "-f", stop, "--dry-run=maybe"}, want: 2, errorCode: "USAGE_ERROR"},
@@ -177,6 +178,9 @@ echo stopped
 					}
 					if (len(log) > 0) != tc.backendCall {
 						t.Fatalf("backend calls=%q want called=%t", log, tc.backendCall)
+					}
+					if tc.errorCode == "OUTCOME_UNCERTAIN" && strings.Count(string(log), "called") != 1 {
+						t.Fatalf("ambiguous write repeated: %q", log)
 					}
 					if tc.errorCode != "" {
 						if result.Stdout != "" || result.Stderr == "" {

@@ -578,6 +578,9 @@ func (confirmation tuiConfirmation) matches(snapshot music.PlaybackSnapshot) boo
 }
 
 func tuiErrorText(err error, verboseOutput bool) string {
+	if outcomeUncertain(err) {
+		return formatUncertainOutcome(err, verboseOutput)
+	}
 	if err == nil {
 		return ""
 	}
