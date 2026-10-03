@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestReplaceStateRoundTripAndPermissions(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.json")
+func TestReplaceConfigRoundTripAndPermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
 	if err := replaceConfig(path, []byte("first")); err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestReplaceStateRoundTripAndPermissions(t *testing.T) {
 		t.Fatal(files)
 	}
 }
-func TestReplaceStateRefusesSymlinkAndDirectory(t *testing.T) {
+func TestReplaceConfigRefusesSymlinkAndDirectory(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "target")
 	if err := os.WriteFile(target, []byte("original"), 0600); err != nil {
