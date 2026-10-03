@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -58,8 +59,9 @@ type NowPlayingTrack struct {
 }
 
 type ScriptError struct {
-	Err    error
-	Output string
+	Uncertain bool
+	Err       error
+	Output    string
 }
 
 var (
@@ -72,10 +74,16 @@ var (
 )
 
 func (e *ScriptError) Error() string {
-	return fmt.Sprintf("osascript failed: %v: %s", e.Err, e.Output)
+	message := fmt.Sprintf("osascript failed: %v: %s", e.Err, e.Output)
+	if e.Uncertain {
+		message += "; playback outcome is uncertain; inspect playback and routing before retrying"
+	}
+	return message
 }
 
 func (e *ScriptError) Unwrap() error { return e.Err }
+
+func (e *ScriptError) OutcomeUncertain() bool { return e.Uncertain }
 
 func ListAirPlayDevices(ctx context.Context) ([]AirPlayDevice, error) {
 	out, err := runAppleScript(ctx, `
@@ -119,7 +127,7 @@ func SetCurrentAirPlayDevices(ctx context.Context, deviceNames []string) error {
 	for _, name := range deviceNames {
 		refs = append(refs, fmt.Sprintf(`AirPlay device %s`, quoteAppleScriptString(name)))
 	}
-	_, err := runAppleScript(ctx, fmt.Sprintf(`
+	_, err := runAppleScriptMutation(ctx, fmt.Sprintf(`
 tell application "Music"
 	set current AirPlay devices to {%s}
 end tell
@@ -131,7 +139,7 @@ func SetAirPlayDeviceVolume(ctx context.Context, deviceName string, volume int) 
 	if volume < 0 || volume > 100 {
 		return fmt.Errorf("volume must be 0-100")
 	}
-	_, err := runAppleScript(ctx, fmt.Sprintf(`
+	_, err := runAppleScriptMutation(ctx, fmt.Sprintf(`
 tell application "Music"
 	set sound volume of (AirPlay device %s) to %d
 end tell
@@ -144,7 +152,7 @@ func SetShuffleEnabled(ctx context.Context, enabled bool) error {
 	if enabled {
 		val = "true"
 	}
-	_, err := runAppleScript(ctx, fmt.Sprintf(`
+	_, err := runAppleScriptMutation(ctx, fmt.Sprintf(`
 tell application "Music"
 	set shuffle enabled to %s
 end tell
@@ -157,7 +165,7 @@ func PlayUserPlaylistByPersistentID(ctx context.Context, persistentID string) er
 	if persistentID == "" {
 		return fmt.Errorf("persistentID is required")
 	}
-	_, err := runAppleScript(ctx, fmt.Sprintf(`
+	_, err := runAppleScriptMutation(ctx, fmt.Sprintf(`
 tell application "Music"
 	play (some user playlist whose persistent ID is %s)
 end tell
@@ -271,7 +279,7 @@ func SearchUserPlaylists(ctx context.Context, query string) ([]UserPlaylist, err
 }
 
 func Pause(ctx context.Context) error {
-	_, err := runAppleScript(ctx, `
+	_, err := runAppleScriptMutation(ctx, `
 tell application "Music"
 	pause
 end tell
@@ -280,7 +288,7 @@ end tell
 }
 
 func PlayPause(ctx context.Context) error {
-	_, err := runAppleScript(ctx, `
+	_, err := runAppleScriptMutation(ctx, `
 tell application "Music"
 	playpause
 end tell
@@ -289,7 +297,7 @@ end tell
 }
 
 func Stop(ctx context.Context) error {
-	_, err := runAppleScript(ctx, `
+	_, err := runAppleScriptMutation(ctx, `
 tell application "Music"
 	stop
 end tell
@@ -298,7 +306,7 @@ end tell
 }
 
 func NextTrack(ctx context.Context) error {
-	_, err := runAppleScript(ctx, `
+	_, err := runAppleScriptMutation(ctx, `
 tell application "Music"
 	next track
 end tell
@@ -307,7 +315,7 @@ end tell
 }
 
 func PreviousTrack(ctx context.Context) error {
-	_, err := runAppleScript(ctx, `
+	_, err := runAppleScriptMutation(ctx, `
 tell application "Music"
 	previous track
 end tell
@@ -405,6 +413,20 @@ func GetNowPlaying(ctx context.Context) (NowPlaying, error) {
 		nowPlaying.Outputs = selectedOutputs(devices)
 	}
 	return nowPlaying, nil
+}
+
+// Mutations are dispatched once: an AppleEvent timeout does not prove no effect.
+func runAppleScriptMutation(ctx context.Context, script string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	out, err := runAppleScriptExec(ctx, script)
+	if err == nil {
+		return string(out), nil
+	}
+	var launchErr *exec.Error
+	var pathErr *os.PathError
+	return "", &ScriptError{Err: err, Output: strings.TrimSpace(string(out)), Uncertain: !errors.As(err, &launchErr) && !errors.As(err, &pathErr)}
 }
 
 func runAppleScript(ctx context.Context, script string) (string, error) {

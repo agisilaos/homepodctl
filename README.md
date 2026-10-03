@@ -589,3 +589,11 @@ its permissions. New files use 0600. Symlink and directory config targets are
 rejected; use a regular config file. Run one config-writing process at a time.
 Atomic replacement does not promise power-loss durability or concurrent-writer
 coordination.
+
+### Uncertain playback outcomes
+
+Playback writes and configured Shortcuts run once. A timeout or other failure after
+launch may still have changed playback or routing; inspect the target room before
+retrying. CLI JSON errors use `OUTCOME_UNCERTAIN` and retain the backend failure exit
+code. The dashboard shows the same inspection guidance. Read-only Music discovery
+may retry transient errors; cancellation before dispatch starts no write.

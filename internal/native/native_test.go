@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func TestLoadConfigOptional_MissingConfig(t *testing.T) {
@@ -91,65 +90,22 @@ func TestLoadConfigOptional_ValidConfig(t *testing.T) {
 	}
 }
 
-func TestShouldRetryShortcut(t *testing.T) {
-	t.Parallel()
-
-	if !shouldRetryShortcut(errors.New("exit"), "The operation timed out. Please try again.") {
-		t.Fatalf("expected timeout output to be retryable")
-	}
-	if shouldRetryShortcut(context.Canceled, "timed out") {
-		t.Fatalf("context cancellation should not be retried")
-	}
-	if shouldRetryShortcut(errors.New("exit"), "No shortcut named Bedroom Play") {
-		t.Fatalf("missing shortcut should not be retried")
-	}
-}
-
-func TestRunShortcut_RetriesTransientThenSucceeds(t *testing.T) {
-	origExec := runShortcutExec
-	origSleep := sleepWithContextFn
-	t.Cleanup(func() {
-		runShortcutExec = origExec
-		sleepWithContextFn = origSleep
-	})
-
-	attempts := 0
-	runShortcutExec = func(context.Context, string) ([]byte, error) {
-		attempts++
-		if attempts < 3 {
-			return []byte("The operation timed out. Please try again."), errors.New("boom")
+func TestShortcutFailureNeverRetries(t *testing.T) {
+	old := runShortcutExec
+	defer func() { runShortcutExec = old }()
+	for _, message := range []string{"The operation timed out. Please try again.", "No shortcut named Bedroom Play"} {
+		calls := 0
+		runShortcutExec = func(context.Context, string) ([]byte, error) { calls++; return []byte(message), errors.New("exit 1") }
+		err := RunShortcut(context.Background(), "Demo")
+		var se *ShortcutError
+		if !errors.As(err, &se) || !se.Uncertain || calls != 1 {
+			t.Fatalf("calls=%d error=%v", calls, err)
 		}
-		return []byte("ok"), nil
 	}
-	sleepWithContextFn = func(context.Context, time.Duration) error { return nil }
-
-	if err := RunShortcut(context.Background(), "Demo"); err != nil {
-		t.Fatalf("RunShortcut: %v", err)
-	}
-	if attempts != 3 {
-		t.Fatalf("attempts=%d, want 3", attempts)
-	}
-}
-
-func TestRunShortcut_FailFastOnPermanentError(t *testing.T) {
-	origExec := runShortcutExec
-	origSleep := sleepWithContextFn
-	t.Cleanup(func() {
-		runShortcutExec = origExec
-		sleepWithContextFn = origSleep
-	})
-
-	attempts := 0
-	runShortcutExec = func(context.Context, string) ([]byte, error) {
-		attempts++
-		return []byte("No shortcut named Bedroom Play"), errors.New("boom")
-	}
-	sleepWithContextFn = func(context.Context, time.Duration) error { return nil }
-
-	if err := RunShortcut(context.Background(), "Missing"); err == nil {
-		t.Fatalf("expected error")
-	}
-	if attempts != 1 {
-		t.Fatalf("attempts=%d, want 1", attempts)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	runShortcutExec = func(context.Context, string) ([]byte, error) { t.Fatal("cancelled call dispatched"); return nil, nil }
+	if err := RunShortcut(ctx, "Demo"); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
 	}
 }
