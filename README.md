@@ -581,6 +581,15 @@ Canonical presets included:
 
 This project is not affiliated with Apple.
 
+### Configuration save failures
+
+Configuration updates are written to a same-directory temporary file, synced and
+closed before atomic replacement. Failed staging preserves the prior config and
+its permissions. New files use 0600. Symlink and directory config targets are
+rejected; use a regular config file. Run one config-writing process at a time.
+Atomic replacement does not promise power-loss durability or concurrent-writer
+coordination.
+
 ### Uncertain playback outcomes
 
 Playback writes and configured Shortcuts run once. A timeout or other failure after

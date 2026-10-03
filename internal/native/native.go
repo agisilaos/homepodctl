@@ -128,7 +128,7 @@ func SaveConfig(cfg *Config) error {
 	if err != nil {
 		return &ConfigError{Op: "encode", Path: path, Err: err}
 	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
+	if err := replaceConfig(path, b); err != nil {
 		return &ConfigError{Op: "write", Path: path, Err: err}
 	}
 	return nil
