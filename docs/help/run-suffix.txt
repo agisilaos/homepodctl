@@ -1,0 +1,10 @@
+homepodctl run - execute a configured alias
+
+Usage:
+  homepodctl run <alias> [--json] [--plain] [--dry-run]
+
+Notes:
+  - Aliases come from config.json (see homepodctl aliases).
+  - --dry-run resolves backend/rooms/targets without executing backend calls.
+  - AirPlay previews include alias volume (falling back to defaults.volume) and explicitly configured alias shuffle; unset shuffle is unchanged.
+  - Native playlist aliases and direct Shortcuts omit volume/shuffle because they do not apply those settings.

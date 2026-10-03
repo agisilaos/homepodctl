@@ -1,0 +1,28 @@
+homepodctl play - play an Apple Music playlist
+
+Usage:
+  homepodctl play [<playlist-query>] [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
+  homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
+
+Notes:
+  - With no target, uses defaults.playlistId; save it with setup --choose or setup --playlist-id <id>.
+  - An explicit query, --playlist, or --playlist-id overrides the default; supply only one form. Blank targets are usage errors.
+  - AirPlay searches Music.app user playlists; native uses an exact configured name (or looks up a name by ID).
+  - If --room is omitted, homepodctl uses defaults.rooms from config.json; if that is empty it falls back to Music.app’s currently selected AirPlay outputs (airplay backend).
+  - AirPlay --choose prompts only for multiple matches and requires interactive stdin without --no-input; direct IDs bypass selection.
+  - --volume must be 0-100. AirPlay requires resolved rooms for explicit volume; a default volume without rooms is skipped.
+  - Native play ignores volume, shuffle, and --choose after validating option values.
+  - --dry-run shares argument/default validation and room inference, but skips playlist lookup, prompting, and native mapping checks.
+  - AirPlay previews show effective shuffle and volume (including false and 0); volume is omitted when unchanged. Native previews omit both.
+  - Aliases and automation steps retain their own targets; defaults.playlistId applies to play and plan play only.
+  - A missing saved playlist fails before changing outputs, volume, or shuffle; run playlists and setup --choose to select a replacement.
+  - Replace the example names and IDs below with values from devices and playlists.
+
+Examples:
+  homepodctl play
+  homepodctl status
+  homepodctl play --dry-run
+  homepodctl playlists
+  homepodctl play --playlist "YOUR_PLAYLIST_NAME"
+  homepodctl play "YOUR_SEARCH_TEXT" --choose
+  homepodctl play --room "YOUR_ROOM_NAME" --playlist-id "YOUR_PLAYLIST_ID"

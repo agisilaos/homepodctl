@@ -1,0 +1,7 @@
+homepodctl native-run - execute a Shortcut by name
+
+Usage:
+  homepodctl native-run --shortcut <name> [--json] [--dry-run]
+
+Notes:
+  - --dry-run validates arguments and prints the planned action only.

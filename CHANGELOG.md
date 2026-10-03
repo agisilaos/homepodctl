@@ -8,6 +8,8 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
+- Playback and setup suffix help now matches focused topic help before configuration loading, including `vol` and `-h`. Flag-looking values remain data.
+
 - Playlist discovery preserves names and boolean metadata through JSON transport, rejecting incomplete or malformed records before filtering.
 
 - Configuration saves now replace the file atomically, preserving the previous config on write failure. Symlink and non-file destinations are rejected.

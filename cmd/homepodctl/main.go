@@ -145,6 +145,15 @@ func main() {
 		return
 	}
 
+	// Use the execution parser so flag-looking values and literal tails stay data.
+	if hasOfflineHelp(cmd) {
+		_, _, help, parseErr := parseCommandArgs(cmd, args)
+		if parseErr == nil && help {
+			cmdHelp([]string{cmd})
+			return
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

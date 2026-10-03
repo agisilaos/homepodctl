@@ -601,3 +601,11 @@ may retry transient errors; cancellation before dispatch starts no write.
 Playlist discovery preserves names verbatim, including whitespace, tabs, newlines,
 and Unicode, through native JSON transport. Malformed or incomplete playlist
 metadata fails the command rather than returning a partial or corrupted list.
+
+### Offline playback help
+
+`homepodctl play --help` and `homepodctl help play` show the same focused
+guidance before loading configuration. This also applies to `volume`/`vol`,
+`run`, `native-run`, and `setup`, including `-h`. Help remains available when
+configuration is missing or malformed and does not invoke Music or Shortcuts.
+Option values such as `--playlist --help` and arguments after `--` remain data.
