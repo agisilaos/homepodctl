@@ -41,6 +41,7 @@ var commandFlagSpecs = map[string]commandFlagSpec{
 	"run":                 flagSpec("", "json plain dry-run"),
 	"doctor":              flagSpec("", "json plain"),
 	"status":              flagSpec("watch", "json plain"),
+	"tui":                 flagSpec("refresh", ""),
 	"pause":               flagSpec("", "json plain"),
 	"volume":              flagSpec("backend room value volume", "json plain dry-run"),
 	"out set":             flagSpec("backend room", "json plain dry-run"),

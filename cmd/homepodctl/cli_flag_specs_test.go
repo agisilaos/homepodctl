@@ -15,6 +15,7 @@ func TestCLIRejectsIrrelevantFlags(t *testing.T) {
 	for _, command := range []string{
 		"setup", "play", "run", "doctor", "devices", "playlists", "aliases",
 		"pause", "stop", "next", "prev", "volume", "vol", "native-run",
+		"tui",
 		"out list", "out set", "automation run", "automation validate",
 		"automation plan", "automation init", "config get", "config validate",
 		"config set", "schema", "version", "config-init", "help", "completion",
@@ -44,6 +45,7 @@ func TestCLIRejectsIrrelevantFlags(t *testing.T) {
 		{"out", "list", "unexpected"}, {"playlists", "unexpected"},
 		{"config", "validate", "unexpected"}, {"version", "unexpected"},
 		{"config-init", "unexpected"}, {"help", "play", "unexpected"},
+		{"tui", "--json"}, {"tui", "--plain"}, {"tui", "--backend", "airplay"},
 	} {
 		result := cli.run(t, args...)
 		if result.ExitCode != exitUsage || result.Stdout != "" {

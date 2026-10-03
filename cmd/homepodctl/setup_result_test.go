@@ -30,11 +30,11 @@ func TestSetupDiagnosticExitStatus(t *testing.T) {
 		} {
 			t.Run(tc.name+"/"+mode.name, func(t *testing.T) {
 				oldInit, oldLoad, oldPath := initConfig, loadConfigOptional, configPath
-				oldLook, oldNow, oldDevices, oldQuiet := lookPath, getNowPlaying, listAirPlayDevices, quiet
+				oldLook, oldNow, oldDevices, oldQuiet := lookPath, playbackApp.nowPlayingFn, listAirPlayDevices, quiet
 				oldPlaylists := listUserPlaylists
 				t.Cleanup(func() {
 					initConfig, loadConfigOptional, configPath = oldInit, oldLoad, oldPath
-					lookPath, getNowPlaying, listAirPlayDevices, quiet = oldLook, oldNow, oldDevices, oldQuiet
+					lookPath, playbackApp.nowPlayingFn, listAirPlayDevices, quiet = oldLook, oldNow, oldDevices, oldQuiet
 					listUserPlaylists = oldPlaylists
 				})
 				quiet = mode.quiet
@@ -48,7 +48,7 @@ func TestSetupDiagnosticExitStatus(t *testing.T) {
 					}
 					return "/test/" + name, nil
 				}
-				getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+				playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 					if tc.warnings {
 						return music.NowPlaying{}, errors.New("unreachable")
 					}

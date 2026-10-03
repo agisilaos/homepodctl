@@ -308,14 +308,14 @@ func TestParseAutomationBytes_JSON(t *testing.T) {
 }
 
 func TestExecuteAutomationVolume_AirplayUsesGivenRooms(t *testing.T) {
-	origSetDeviceVolume := setDeviceVolume
-	t.Cleanup(func() { setDeviceVolume = origSetDeviceVolume })
+	origSetDeviceVolume := playbackApp.setVolumeFn
+	t.Cleanup(func() { playbackApp.setVolumeFn = origSetDeviceVolume })
 
 	calls := 0
-	setDeviceVolume = func(_ context.Context, room string, value int) error {
+	playbackApp.setVolumeFn = func(_ context.Context, room string, value int) error {
 		calls++
 		if room != "Bedroom" || value != 35 {
-			t.Fatalf("unexpected setDeviceVolume args room=%q value=%d", room, value)
+			t.Fatalf("unexpected playbackApp.setVolumeFn args room=%q value=%d", room, value)
 		}
 		return nil
 	}
@@ -325,19 +325,19 @@ func TestExecuteAutomationVolume_AirplayUsesGivenRooms(t *testing.T) {
 		t.Fatalf("executeAutomationVolume: %v", err)
 	}
 	if calls != 1 {
-		t.Fatalf("setDeviceVolume calls=%d, want 1", calls)
+		t.Fatalf("playbackApp.setVolumeFn calls=%d, want 1", calls)
 	}
 }
 
 func TestExecuteAutomationWait_SuccessAndTimeout(t *testing.T) {
-	origGetNowPlaying := getNowPlaying
+	origGetNowPlaying := playbackApp.nowPlayingFn
 	origSleepFn := sleepFn
 	t.Cleanup(func() {
-		getNowPlaying = origGetNowPlaying
+		playbackApp.nowPlayingFn = origGetNowPlaying
 		sleepFn = origSleepFn
 	})
 
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{PlayerState: "playing"}, nil
 	}
 	sleepFn = func(time.Duration) {}
@@ -345,7 +345,7 @@ func TestExecuteAutomationWait_SuccessAndTimeout(t *testing.T) {
 		t.Fatalf("executeAutomationWait success: %v", err)
 	}
 
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) {
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) {
 		return music.NowPlaying{PlayerState: "paused"}, nil
 	}
 	err := (automationWait{State: "playing", timeout: 20 * time.Millisecond}).execute(context.Background(), nil)

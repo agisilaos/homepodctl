@@ -24,7 +24,7 @@ func resolveExistingPlaylistID(ctx context.Context, id string) (string, error) {
 
 func setVolumeForRooms(ctx context.Context, rooms []string, value int) error {
 	for _, room := range rooms {
-		if err := setDeviceVolume(ctx, room, value); err != nil {
+		if err := playbackApp.SetVolume(ctx, room, value); err != nil {
 			return err
 		}
 	}
@@ -100,7 +100,7 @@ func runNativeVolumeShortcuts(ctx context.Context, cfg *native.Config, rooms []s
 }
 
 func inferSelectedOutputs(ctx context.Context) []string {
-	np, err := getNowPlaying(ctx)
+	np, err := playbackApp.NowPlaying(ctx)
 	if err != nil {
 		return nil
 	}

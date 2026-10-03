@@ -18,16 +18,16 @@ func setupWorkflowEnvironment(t *testing.T) string {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	oldLook, oldNow, oldDevices, oldPlaylists := lookPath, getNowPlaying, listAirPlayDevices, listUserPlaylists
+	oldLook, oldNow, oldDevices, oldPlaylists := lookPath, playbackApp.nowPlayingFn, listAirPlayDevices, listUserPlaylists
 	oldTerminal, oldQuiet := setupInputIsTerminal, quiet
 	t.Cleanup(func() {
-		lookPath, getNowPlaying, listAirPlayDevices, listUserPlaylists = oldLook, oldNow, oldDevices, oldPlaylists
+		lookPath, playbackApp.nowPlayingFn, listAirPlayDevices, listUserPlaylists = oldLook, oldNow, oldDevices, oldPlaylists
 		setupInputIsTerminal, quiet = oldTerminal, oldQuiet
 	})
 	quiet = false
 	setupInputIsTerminal = func() bool { return true }
 	lookPath = func(name string) (string, error) { return "/test/" + name, nil }
-	getNowPlaying = func(context.Context) (music.NowPlaying, error) { return music.NowPlaying{}, nil }
+	playbackApp.nowPlayingFn = func(context.Context) (music.NowPlaying, error) { return music.NowPlaying{}, nil }
 	listAirPlayDevices = func(ctx context.Context) ([]music.AirPlayDevice, error) {
 		if _, ok := ctx.Deadline(); !ok {
 			t.Error("device discovery has no deadline")
