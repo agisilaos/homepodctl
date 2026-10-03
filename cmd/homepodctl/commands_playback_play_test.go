@@ -21,6 +21,8 @@ type playBackendRecorder struct {
 	nowPlaying   music.NowPlaying
 	nowErr       error
 	searchErr    error
+	lookupErr    error
+	volumeErr    error
 	playlistName string
 }
 
@@ -46,7 +48,7 @@ func recordPlayBackend(t *testing.T) *playBackendRecorder {
 	}
 	findPlaylistNameByID = func(_ context.Context, id string) (string, error) {
 		r.calls = append(r.calls, "lookup:"+id)
-		return r.playlistName, nil
+		return r.playlistName, r.lookupErr
 	}
 	playbackApp.setRouteFn = func(_ context.Context, rooms []string) error {
 		r.calls = append(r.calls, "outputs:"+strings.Join(rooms, ","))
@@ -54,7 +56,7 @@ func recordPlayBackend(t *testing.T) *playBackendRecorder {
 	}
 	playbackApp.setVolumeFn = func(_ context.Context, room string, volume int) error {
 		r.calls = append(r.calls, fmt.Sprintf("volume:%s:%d", room, volume))
-		return nil
+		return r.volumeErr
 	}
 	setShuffle = func(_ context.Context, shuffle bool) error {
 		r.calls = append(r.calls, fmt.Sprintf("shuffle:%t", shuffle))
@@ -140,7 +142,9 @@ func TestCmdPlayTargets(t *testing.T) {
 					if !dryRun {
 						if backend == "airplay" {
 							wantID = "A"
-							if !target.id {
+							if target.id {
+								wantCalls = append(wantCalls, "lookup:A")
+							} else {
 								wantCalls = append(wantCalls, "search:Focus Mix")
 							}
 							wantCalls = append(wantCalls, "outputs:Bedroom", "shuffle:false", "play:A", "now")
@@ -292,7 +296,7 @@ func TestCmdPlayVolume(t *testing.T) {
 				if !tc.wantErr && (err != nil || req.volume != tc.wantVolume) {
 					t.Fatalf("volume=%+v error=%v, want=%+v", req.volume, err, tc.wantVolume)
 				}
-				_, err = runPlayJSON(t, cfg, args, dryRun)
+				out, err := runPlayJSON(t, cfg, args, dryRun)
 				if tc.wantErr {
 					if err == nil || classifyExitCode(err) != exitUsage || len(r.calls) != 0 {
 						t.Fatalf("error=%v calls=%v, want usage error without backend calls", err, r.calls)
@@ -302,9 +306,16 @@ func TestCmdPlayVolume(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if tc.wantVolume.source == playVolumeAbsent {
+					if out.Volume != nil {
+						t.Fatalf("absent volume reported as %d", *out.Volume)
+					}
+				} else if out.Volume == nil || *out.Volume != tc.wantVolume.value {
+					t.Fatalf("output volume=%v, want %d", out.Volume, tc.wantVolume.value)
+				}
 				var wantCalls []string
 				if !dryRun {
-					wantCalls = append(wantCalls, "outputs:Bedroom")
+					wantCalls = append(wantCalls, "lookup:A", "outputs:Bedroom")
 					if tc.wantCall != "" {
 						wantCalls = append(wantCalls, tc.wantCall)
 					}
@@ -369,10 +380,25 @@ func TestCmdPlayRoomResolution(t *testing.T) {
 					if !slices.Equal(out.Rooms, tc.wantRooms) {
 						t.Fatalf("rooms=%v, want=%v", out.Rooms, tc.wantRooms)
 					}
+					if tc.backend == "airplay" {
+						if out.Shuffle == nil || *out.Shuffle {
+							t.Fatalf("expected explicit shuffle=false, got %v", out.Shuffle)
+						}
+						var wantVolume *int
+						if len(tc.wantRooms) > 0 {
+							wantVolume = tc.defaultVolume
+						}
+						if !reflect.DeepEqual(out.Volume, wantVolume) {
+							t.Fatalf("volume=%v, want %v", out.Volume, wantVolume)
+						}
+					} else if out.Volume != nil || out.Shuffle != nil {
+						t.Fatalf("native output includes ignored settings: %+v", out)
+					}
 					if !dryRun {
 						if tc.backend == "native" {
 							wantCalls = append(wantCalls, "lookup:A", "shortcut:Kitchen Focus", "shortcut:Office Focus")
 						} else {
+							wantCalls = append(wantCalls, "lookup:A")
 							if len(tc.wantRooms) > 0 {
 								wantCalls = append(wantCalls, "outputs:"+strings.Join(tc.wantRooms, ","))
 								if tc.defaultVolume != nil {
@@ -429,7 +455,7 @@ func TestCmdPlaySelectionOptions(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/dry=%t", tc.name, dryRun), func(t *testing.T) {
 				r := recordPlayBackend(t)
 				if tc.multiple {
-					r.matches = append([]music.UserPlaylist{{Name: "Focus Mix Extended", PersistentID: "B"}}, r.matches...)
+					r.matches = append(r.matches, music.UserPlaylist{Name: "Focus Mix Extended", PersistentID: "B"})
 				}
 				if tc.noMatches {
 					r.matches = nil
@@ -476,7 +502,7 @@ func TestCmdPlayIDBypassesChoose(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := []string{"outputs:Bedroom", "shuffle:false", "play:A", "now"}
+			want := []string{"lookup:A", "outputs:Bedroom", "shuffle:false", "play:A", "now"}
 			if backend == "native" {
 				want = []string{"lookup:A", "shortcut:Play Focus"}
 			}

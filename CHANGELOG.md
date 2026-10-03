@@ -15,6 +15,17 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 - Playback commands and the TUI now share one in-process application boundary. Interactive snapshots require complete device state while existing status and action output contracts retain their selected-output behavior.
 - The TUI keeps retrying after backend failures, marks retained snapshots stale, disables mutations until state is current, honors `NO_COLOR`, and distinguishes Music/AirPlay observation from unobservable native Shortcut playback.
 
+## [v0.3.1] - 2026-09-29
+
+### Fixed
+
+- `setup` now exits `1` when diagnostics report `ok=false`, including JSON and quiet modes. Reports and saved configuration are retained; warnings alone remain nonfatal.
+- AirPlay `play`, aliases, and automation play steps now resolve playlist queries or verify persistent IDs before changing outputs, volume, or shuffle. Failed lookups leave that command or step's settings unchanged; later runtime failures still retain completed changes.
+- `doctor` now explains how to repair config errors or preserve the existing file as a backup before creating a fresh config, instead of suggesting that rerunning `config-init` repairs it.
+- `volume`/`vol` and AirPlay alias `run` previews now show the volume and shuffle settings they apply, including zero and false. Their JSON results expose the same fields; native playlist and direct Shortcut aliases omit ignored settings.
+- `config validate` now exits `3` for invalid config values in both text and JSON modes. Previously JSON mode incorrectly exited `0`, while text mode exited `2`. Validation reports remain on stdout; scripts checking the former exit codes should be updated.
+- AirPlay playback previews now expose effective volume and shuffle in text and JSON, including zero and false values. `plan play` and successful `play --json` results include the same optional fields; ignored native settings and unchanged volume are omitted.
+
 ## [v0.3.0] - 2026-08-31
 
 ### Changed

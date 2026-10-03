@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agisilaos/homepodctl/internal/music"
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
@@ -51,6 +50,23 @@ func (st automationTransport) execute(ctx context.Context, _ *native.Config) err
 func (st automationPlay) execute(ctx context.Context, cfg *native.Config) error {
 	switch st.Backend {
 	case "airplay":
+		id := st.PlaylistID
+		if id != "" {
+			var err error
+			id, err = resolveExistingPlaylistID(ctx, id)
+			if err != nil {
+				return err
+			}
+		} else {
+			matches, err := searchPlaylists(ctx, st.Query)
+			if err != nil {
+				return err
+			}
+			if len(matches) == 0 {
+				return fmt.Errorf("no playlists match %q", st.Query)
+			}
+			id = matches[0].PersistentID
+		}
 		rooms := append([]string(nil), st.Rooms...)
 		if len(rooms) > 0 {
 			if err := playbackApp.SetRoute(ctx, rooms); err != nil {
@@ -66,18 +82,6 @@ func (st automationPlay) execute(ctx context.Context, cfg *native.Config) error 
 			if err := setShuffle(ctx, *st.Shuffle); err != nil {
 				return err
 			}
-		}
-		id := st.PlaylistID
-		if id == "" {
-			matches, err := searchPlaylists(ctx, st.Query)
-			if err != nil {
-				return err
-			}
-			best, ok := music.PickBestPlaylist(st.Query, matches)
-			if !ok {
-				return fmt.Errorf("no playlists match %q", st.Query)
-			}
-			id = best.PersistentID
 		}
 		return playPlaylistByID(ctx, id)
 	case "native":

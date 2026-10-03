@@ -60,7 +60,7 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 		}
 		debugf("out set: backend=%s rooms=%v", backend, rooms)
 		if opts.DryRun {
-			writeActionOutput("out.set", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("out.set", opts.JSON, opts.Plain, actionResult{
 				DryRun:  true,
 				Backend: backend,
 				Rooms:   rooms,
@@ -71,13 +71,13 @@ func cmdOut(ctx context.Context, cfg *native.Config, args []string) {
 			die(err)
 		}
 		if np, err := playbackApp.NowPlaying(ctx); err == nil {
-			writeActionOutput("out.set", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("out.set", opts.JSON, opts.Plain, actionResult{
 				Backend:    backend,
 				Rooms:      rooms,
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput("out.set", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("out.set", opts.JSON, opts.Plain, actionResult{
 				Backend: backend,
 				Rooms:   rooms,
 			})

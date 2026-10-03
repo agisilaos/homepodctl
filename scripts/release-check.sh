@@ -1,170 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 cd "$(dirname "$0")/.."
-
-die() {
-  echo "error: $*" >&2
-  exit 1
-}
-
-if [[ "$(uname -s)" != "Darwin" ]]; then
-  die "release-check.sh must be run on macOS (Darwin)"
-fi
-
-mode="verify"
-version=""
-
-if [[ $# -eq 1 ]]; then
-  mode="preflight"
-  version="$1"
-  if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    die "version must match vX.Y.Z (got: $version)"
-  fi
-elif [[ $# -ne 0 ]]; then
-  echo "usage: scripts/release-check.sh [vX.Y.Z]" >&2
-  exit 2
-fi
-
-for tool in go git python3; do
-  command -v "$tool" >/dev/null 2>&1 || die "$tool is required"
-done
-
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not inside a git work tree"
-git diff --quiet || die "working tree has unstaged changes"
-git diff --cached --quiet || die "index has staged changes"
-
-if [[ "$mode" == "preflight" ]] && git rev-parse -q --verify "refs/tags/$version" >/dev/null 2>&1; then
-  die "tag already exists: $version"
-fi
-
-[[ -f README.md ]] || die "README.md not found"
-[[ -f CHANGELOG.md ]] || die "CHANGELOG.md not found"
-
-if grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
-  die "CHANGELOG.md must not contain ## [Unreleased]"
-fi
-
-first_release_heading="$(grep -m1 -E '^## \[v[0-9]+\.[0-9]+\.[0-9]+\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$' CHANGELOG.md || true)"
-if [[ -z "$first_release_heading" ]]; then
-  die "CHANGELOG.md must contain at least one release heading in format: ## [vX.Y.Z] - YYYY-MM-DD"
-fi
-if [[ "$mode" == "preflight" && "$first_release_heading" != "## [$version] - "* ]]; then
-  die "CHANGELOG.md top release heading must be ## [$version] - YYYY-MM-DD before release"
-fi
-
-# Keep release-check CI portable on stock GitHub runners.
-# Do not require non-default tooling such as rg/jq/yq/fd in checked scripts.
-if grep -R -nE '(^|[[:space:]])(r[g]|j[q]|y[q]|f[d])([[:space:]]|$)' scripts >/dev/null; then
-  die "scripts/ uses non-portable tooling (rg/jq/yq/fd). Use grep/sed/awk or install tools explicitly in workflow."
-fi
-
-echo "[release-check] running tests"
-go test ./...
-
-echo "[release-check] running vet"
-go vet ./...
-
-echo "[release-check] running docs check"
-./scripts/docs-check.sh
-
-echo "[release-check] checking go module metadata"
-if go help mod tidy 2>/dev/null | grep -Fq -- "-diff"; then
-  go mod tidy -diff
+source ./scripts/release-config.sh
+source ./scripts/cli-shared/release-core.sh
+if [[ $# -eq 0 ]]; then
+  # Ordinary verification deliberately accepts development changes.
+  [[ "$(uname -s)" == Darwin ]] || cli_release_die "release-check.sh must be run on macOS (Darwin)"
+  make verify-core
+  cli_release_build_check dev dist/verify
+  echo "  mode: verify"
 else
-  module_backup_dir=""
-  snapshots_ready=0
-  had_sum=0
-
-  restore_module_files() {
-    local restore_failed=0
-    # Finish restoration even if another termination signal arrives.
-    trap '' HUP INT TERM
-    trap - EXIT
-    if [[ "$snapshots_ready" -eq 1 ]]; then
-      if ! cp "$module_backup_dir/go.mod" go.mod; then
-        restore_failed=1
-      fi
-      if [[ "$had_sum" -eq 1 ]]; then
-        if ! cp "$module_backup_dir/go.sum" go.sum; then
-          restore_failed=1
-        fi
-      elif ! rm -f go.sum; then
-        restore_failed=1
-      fi
-    fi
-    if [[ "$restore_failed" -ne 0 ]]; then
-      echo "error: could not restore module files; backups retained at $module_backup_dir" >&2
-      return 1
-    fi
-    if [[ -n "$module_backup_dir" ]]; then
-      if ! rm -rf "$module_backup_dir"; then
-        echo "error: could not remove module backups at $module_backup_dir" >&2
-        return 1
-      fi
-    fi
-  }
-
-  trap restore_module_files EXIT
-  trap 'exit 129' HUP
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-
-  module_backup_dir="$(mktemp -d "${TMPDIR:-/tmp}/homepodctl-release-check.XXXXXX")"
-  before_mod="$module_backup_dir/go.mod"
-  before_sum="$module_backup_dir/go.sum"
-  cp go.mod "$before_mod"
-  if [[ -f go.sum ]]; then
-    cp go.sum "$before_sum"
-    had_sum=1
-  fi
-  snapshots_ready=1
-
-  go mod tidy
-  if ! diff -u "$before_mod" go.mod >/dev/null || ( [[ "$had_sum" -eq 1 ]] && ! diff -u "$before_sum" go.sum >/dev/null ) || ( [[ "$had_sum" -eq 0 ]] && [[ -f go.sum ]] ); then
-    diff -u "$before_mod" go.mod >&2 || true
-    if [[ "$had_sum" -eq 1 ]]; then
-      diff -u "$before_sum" go.sum >&2 || true
-    fi
-    die "go.mod/go.sum drift detected; run go mod tidy"
-  fi
-
-  restore_module_files
-  trap - EXIT HUP INT TERM
+  export GOTOOLCHAIN="$RELEASE_GO_TOOLCHAIN"
+  cli_release_preflight "$@"
+  make verify
+  cli_release_build_check "$version"
+  if [[ "$ci_mode" -eq 1 ]]; then echo "  mode: ci"; else echo "  mode: preflight"; fi
 fi
-
-echo "[release-check] checking format"
-if [[ -n "$(gofmt -l cmd internal)" ]]; then
-  die "gofmt reported formatting drift in cmd/ or internal/"
-fi
-
-commit="$(git rev-parse --short=12 HEAD)"
-build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-build_version="dev"
-out_dir="dist/verify"
-if [[ "$mode" == "preflight" ]]; then
-  build_version="$version"
-  out_dir="dist/release-check"
-fi
-out_bin="$out_dir/homepodctl"
-
-mkdir -p "$out_dir"
-
-echo "[release-check] building version-stamped binary"
-go build \
-  -ldflags "-X main.version=$build_version -X main.commit=$commit -X main.date=$build_date" \
-  -o "$out_bin" \
-  ./cmd/homepodctl
-
-version_out="$($out_bin version)"
-expected_version_out="homepodctl $build_version ($commit) $build_date"
-if [[ "$version_out" != "$expected_version_out" ]]; then
-  die "version output mismatch: $version_out"
-fi
-
-echo "[release-check] ok"
-echo "  mode:      $mode"
-echo "  version:   $build_version"
-echo "  commit:    $commit"
-echo "  buildDate: $build_date"
-echo "  binary:    $out_bin"

@@ -50,7 +50,18 @@ func cmdPlaylists(ctx context.Context, args []string) {
 		die(err)
 	}
 	if jsonOut {
+		if playlists == nil {
+			playlists = []music.UserPlaylist{}
+		}
 		writeJSON(playlists)
+		return
+	}
+	if !plain && len(playlists) == 0 {
+		if strings.TrimSpace(query) != "" {
+			fmt.Println("No playlists matched. Try a broader --query or omit it.")
+		} else {
+			fmt.Println("No user playlists found in Music.app.")
+		}
 		return
 	}
 	if !plain {
@@ -125,7 +136,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				die(err)
 			}
 		}
-		writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+		writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 			DryRun:   opts.DryRun,
 			Backend:  backend,
 			Rooms:    rooms,
@@ -138,25 +149,47 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 		if len(rooms) == 0 {
 			die(fmt.Errorf("alias %q requires rooms (set defaults.rooms or alias.rooms)", aliasName))
 		}
+		volume := a.Volume
+		if volume == nil {
+			volume = cfg.Defaults.Volume
+		}
 		if opts.DryRun {
-			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 				DryRun:     true,
 				Backend:    backend,
 				Rooms:      rooms,
 				Playlist:   a.Playlist,
 				PlaylistID: a.PlaylistID,
+				Volume:     volume,
+				Shuffle:    a.Shuffle,
 			})
 			return
+		}
+		id := a.PlaylistID
+		if id != "" {
+			id, err = resolveExistingPlaylistID(ctx, id)
+			if err != nil {
+				die(err)
+			}
+		} else if a.Playlist != "" {
+			matches, err := searchPlaylists(ctx, a.Playlist)
+			if err != nil {
+				die(err)
+			}
+			if len(matches) == 0 {
+				die(fmt.Errorf("alias %q playlist %q not found (tip: set playlistId to pin an exact playlist)", aliasName, a.Playlist))
+			}
+			best := matches[0]
+			id = best.PersistentID
+			if len(matches) > 1 {
+				fmt.Fprintf(os.Stderr, "picked %q (%s) for alias %q (set playlistId to pin)\n", best.Name, best.PersistentID, aliasName)
+			}
 		}
 		if err := playbackApp.SetRoute(ctx, rooms); err != nil {
 			die(err)
 		}
-		if a.Volume != nil {
-			if err := setVolumeForRooms(ctx, rooms, *a.Volume); err != nil {
-				die(err)
-			}
-		} else if cfg.Defaults.Volume != nil {
-			if err := setVolumeForRooms(ctx, rooms, *cfg.Defaults.Volume); err != nil {
+		if volume != nil {
+			if err := setVolumeForRooms(ctx, rooms, *volume); err != nil {
 				die(err)
 			}
 		}
@@ -165,39 +198,28 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 				die(err)
 			}
 		}
-		if a.PlaylistID != "" || a.Playlist != "" {
-			id := a.PlaylistID
-			if id == "" {
-				matches, err := searchPlaylists(ctx, a.Playlist)
-				if err != nil {
-					die(err)
-				}
-				if len(matches) == 0 {
-					die(fmt.Errorf("alias %q playlist %q not found (tip: set playlistId to pin an exact playlist)", aliasName, a.Playlist))
-				}
-				best, _ := music.PickBestPlaylist(a.Playlist, matches)
-				id = best.PersistentID
-				if len(matches) > 1 {
-					fmt.Fprintf(os.Stderr, "picked %q (%s) for alias %q (set playlistId to pin)\n", best.Name, best.PersistentID, aliasName)
-				}
-			}
+		if id != "" {
 			if err := playPlaylistByID(ctx, id); err != nil {
 				die(err)
 			}
 		}
 		np, err := playbackApp.NowPlaying(ctx)
 		if err == nil {
-			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 				Backend:    backend,
 				Rooms:      rooms,
 				PlaylistID: a.PlaylistID,
+				Volume:     volume,
+				Shuffle:    a.Shuffle,
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 				Backend:    backend,
 				Rooms:      rooms,
 				PlaylistID: a.PlaylistID,
+				Volume:     volume,
+				Shuffle:    a.Shuffle,
 			})
 		}
 	case "native":
@@ -212,7 +234,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 			if name == "" {
 				name = a.PlaylistID
 			}
-			writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 				DryRun:   true,
 				Backend:  backend,
 				Rooms:    rooms,
@@ -229,7 +251,7 @@ func cmdRun(ctx context.Context, cfg *native.Config, args []string) {
 		if err := runNativePlaylistShortcuts(ctx, cfg, rooms, name); err != nil {
 			die(fmt.Errorf("%w (edit config)", err))
 		}
-		writeActionOutput("run", opts.JSON, opts.Plain, actionOutput{
+		writeActionOutput("run", opts.JSON, opts.Plain, actionResult{
 			DryRun:   opts.DryRun,
 			Backend:  backend,
 			Rooms:    rooms,

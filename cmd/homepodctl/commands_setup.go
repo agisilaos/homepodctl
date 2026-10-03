@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/agisilaos/homepodctl/internal/music"
 	"github.com/agisilaos/homepodctl/internal/native"
@@ -18,13 +19,19 @@ type setupResult struct {
 	Doctor        doctorReport          `json:"doctor"`
 	Devices       []music.AirPlayDevice `json:"devices,omitempty"`
 	DeviceError   string                `json:"deviceError,omitempty"`
+	Playlists     []music.UserPlaylist  `json:"playlists,omitempty"`
+	PlaylistError string                `json:"playlistError,omitempty"`
+	Warnings      []string              `json:"warnings,omitempty"`
 	Next          []string              `json:"next"`
 }
 
 type setupOptions struct {
-	backend string
-	rooms   []string
-	jsonOut bool
+	backend    string
+	rooms      []string
+	playlistID string
+	jsonOut    bool
+	choose     bool
+	noInput    bool
 }
 
 func parseSetupOptions(args []string) (setupOptions, error) {
@@ -33,19 +40,36 @@ func parseSetupOptions(args []string) (setupOptions, error) {
 		return setupOptions{}, err
 	}
 	if len(positionals) != 0 {
-		return setupOptions{}, usageErrf("usage: homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]")
+		return setupOptions{}, usageErrf("usage: homepodctl setup [--backend airplay|native] [--room <name> ...] [--playlist-id <id>] [--choose] [--json] [--no-input]")
 	}
 	jsonOut, _, err := flags.boolStrict("json")
 	if err != nil {
 		return setupOptions{}, err
 	}
-	if _, _, err := flags.boolStrict("no-input"); err != nil {
+	noInput, _, err := flags.boolStrict("no-input")
+	if err != nil {
+		return setupOptions{}, err
+	}
+	choose, _, err := flags.boolStrict("choose")
+	if err != nil {
 		return setupOptions{}, err
 	}
 	opts := setupOptions{
-		backend: strings.TrimSpace(flags.string("backend")),
-		rooms:   flags.strings("room"),
-		jsonOut: jsonOut,
+		backend:    strings.TrimSpace(flags.string("backend")),
+		rooms:      flags.strings("room"),
+		playlistID: strings.TrimSpace(flags.string("playlist-id")),
+		jsonOut:    jsonOut,
+		choose:     choose,
+		noInput:    noInput,
+	}
+	if flags.has("playlist-id") && opts.playlistID == "" {
+		return setupOptions{}, usageErrf("setup --playlist-id must be non-empty; use config set defaults.playlistId \"\" to clear a saved playlist")
+	}
+	if opts.choose && (opts.noInput || opts.jsonOut || quiet) {
+		return setupOptions{}, usageErrf("setup --choose cannot be combined with --no-input, --json, or --quiet; omit --choose for noninteractive setup")
+	}
+	if opts.choose && opts.backend == "native" {
+		return setupOptions{}, usageErrf("setup --choose supports AirPlay only; use --backend native --room <name> without --choose and configure Shortcut mappings")
 	}
 	if opts.backend != "" && opts.backend != "airplay" && opts.backend != "native" {
 		return setupOptions{}, usageErrf("unknown backend: %q", opts.backend)
@@ -68,7 +92,15 @@ func cmdSetup(ctx context.Context, args []string) {
 		die(err)
 	}
 
-	path, err := initConfig()
+	if opts.choose && !setupInputIsTerminal() {
+		die(usageErrf("setup --choose requires interactive stdin; omit --choose and use --room <name> for noninteractive setup"))
+	}
+	var path string
+	if opts.choose {
+		path, err = configPath()
+	} else {
+		path, err = initConfig()
+	}
 	if err != nil {
 		die(err)
 	}
@@ -76,6 +108,9 @@ func cmdSetup(ctx context.Context, args []string) {
 	if err != nil {
 		die(err)
 	}
+	original := *cfg
+	working := *cfg
+	cfg = &working
 
 	configUpdated := false
 	if opts.backend != "" {
@@ -86,20 +121,83 @@ func cmdSetup(ctx context.Context, args []string) {
 		cfg.Defaults.Rooms = append([]string(nil), opts.rooms...)
 		configUpdated = true
 	}
+	if opts.playlistID != "" {
+		cfg.Defaults.PlaylistID = opts.playlistID
+		configUpdated = true
+	}
 	if issues := validateConfigValues(cfg); len(issues) > 0 {
 		die(usageErrf("setup produced invalid config: %s", strings.Join(issues, "; ")))
 	}
-	if configUpdated {
+	if opts.choose && cfg.Defaults.Backend == "native" {
+		die(usageErrf("setup --choose supports AirPlay only; use --backend airplay to change the default, or omit --choose for native setup"))
+	}
+
+	var devices []music.AirPlayDevice
+	var playlists []music.UserPlaylist
+	var devErr, playlistErr error
+	if opts.choose {
+		fmt.Fprintln(os.Stderr, "Discovering destinations and playlists; playback will stay unchanged. Enter q at a prompt to cancel.")
+		devices, devErr = discoverSetupDevices(ctx)
+		playlists, playlistErr = discoverSetupPlaylists(ctx)
+		if devErr == nil {
+			if playlistErr != nil {
+				fmt.Fprintf(os.Stderr, "Playlist discovery failed: %s. You can still choose rooms.\n", formatError(playlistErr))
+			}
+			selection, err := chooseSetup(os.Stdin, os.Stderr, cfg, devices, playlists, len(opts.rooms) > 0, opts.playlistID != "")
+			if err != nil {
+				die(err)
+			}
+			if selection.RoomsChanged {
+				cfg.Defaults.Rooms = selection.Rooms
+				configUpdated = true
+			}
+			if selection.Playlist != nil {
+				if cfg.Defaults.PlaylistID != selection.Playlist.PersistentID {
+					cfg.Defaults.PlaylistID = selection.Playlist.PersistentID
+					configUpdated = true
+				}
+				playlists = []music.UserPlaylist{*selection.Playlist}
+			}
+			// Create or update configuration only after every prompt completed.
+			if configUpdated {
+				if cfg.Defaults.Rooms == nil {
+					cfg.Defaults.Rooms = []string{}
+				}
+				if err := native.SaveConfig(cfg); err != nil {
+					die(err)
+				}
+			} else {
+				if _, err := initConfig(); err != nil {
+					die(err)
+				}
+				cfg, err = loadConfigOptional()
+				if err != nil {
+					die(err)
+				}
+			}
+		} else {
+			cfg = &original
+			configUpdated = false
+		}
+	} else if configUpdated {
 		if err := native.SaveConfig(cfg); err != nil {
 			die(err)
 		}
 	}
 
 	doctor := runDoctorChecks(ctx)
-	devices, devErr := playbackApp.Devices(ctx)
-	if devErr == nil {
-		for i := range devices {
-			devices[i].NetworkAddress = ""
+	if !opts.choose {
+		devices, devErr = discoverSetupDevices(ctx)
+		if cfg.Defaults.Backend != "native" {
+			playlists, playlistErr = discoverSetupPlaylists(ctx)
+		}
+	}
+	next, warnings := setupGuidance(cfg, devices, playlists, devErr == nil, playlistErr == nil)
+	suggestions := setupPlaylistSuggestions(playlists)
+	for _, playlist := range playlists {
+		if playlist.PersistentID == cfg.Defaults.PlaylistID {
+			suggestions = []music.UserPlaylist{playlist}
+			break
 		}
 	}
 
@@ -110,42 +208,61 @@ func cmdSetup(ctx context.Context, args []string) {
 		Defaults:      cfg.Defaults,
 		Doctor:        doctor,
 		Devices:       devices,
-		Next:          setupNextSteps(cfg),
+		Playlists:     suggestions,
+		Warnings:      warnings,
+		Next:          next,
 	}
 	if devErr != nil {
 		res.DeviceError = formatError(devErr)
 	}
+	if playlistErr != nil {
+		res.PlaylistError = formatError(playlistErr)
+		res.Warnings = append(res.Warnings, "Could not read library playlists: "+res.PlaylistError+". Open Music.app, check Automation permissions, and run homepodctl playlists.")
+	}
 
 	if opts.jsonOut {
 		writeJSON(res)
-		return
+	} else if !quiet {
+		fmt.Printf("setup ok=%t config=%s updated=%t\n", res.OK, res.ConfigPath, res.ConfigUpdated)
+		fmt.Printf("defaults backend=%s rooms=%q playlist_id=%q\n", cfg.Defaults.Backend, cfg.Defaults.Rooms, cfg.Defaults.PlaylistID)
+		printDoctorReport(doctor, false)
+		if devErr != nil {
+			fmt.Printf("devices error=%q\n", res.DeviceError)
+		} else {
+			printDevicesTable(os.Stdout, devices, false)
+		}
+		for _, warning := range res.Warnings {
+			fmt.Printf("warning: %s\n", warning)
+		}
+		for _, playlist := range res.Playlists {
+			fmt.Printf("playlist: %q (%s)\n", playlist.Name, playlist.PersistentID)
+		}
+		fmt.Println("next:")
+		for _, step := range res.Next {
+			fmt.Printf("- %s\n", step)
+		}
 	}
-	if quiet {
-		return
-	}
-	fmt.Printf("setup ok=%t config=%s updated=%t\n", res.OK, res.ConfigPath, res.ConfigUpdated)
-	printDoctorReport(doctor, false)
-	if devErr != nil {
-		fmt.Printf("devices error=%q\n", res.DeviceError)
-	} else {
-		printDevicesTable(os.Stdout, devices, false)
-	}
-	fmt.Println("next:")
-	for _, step := range res.Next {
-		fmt.Printf("- %s\n", step)
+	if !res.OK {
+		exitCode(exitGeneric)
 	}
 }
 
-func setupNextSteps(cfg *native.Config) []string {
-	steps := []string{
-		"homepodctl status",
-		"homepodctl devices",
+func discoverSetupDevices(ctx context.Context) ([]music.AirPlayDevice, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	devices, err := listAirPlayDevices(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if len(cfg.Defaults.Rooms) > 0 {
-		steps = append(steps, "homepodctl play chill")
-	} else {
-		steps = append(steps, "homepodctl out set --room \"Bedroom\"")
+	devices = append([]music.AirPlayDevice(nil), devices...)
+	for i := range devices {
+		devices[i].NetworkAddress = ""
 	}
-	steps = append(steps, "homepodctl doctor --json")
-	return steps
+	return devices, nil
+}
+
+func discoverSetupPlaylists(ctx context.Context) ([]music.UserPlaylist, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return listUserPlaylists(ctx, "", 0)
 }

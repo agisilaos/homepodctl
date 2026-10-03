@@ -62,7 +62,7 @@ func resolvePlayRequest(ctx context.Context, cfg *native.Config, args []string) 
 	if err != nil {
 		return playRequest{}, err
 	}
-	target, err := parsePlayTarget(flags, positionals)
+	target, err := parsePlayTarget(flags, positionals, cfg.Defaults.PlaylistID)
 	if err != nil {
 		return playRequest{}, err
 	}
@@ -126,7 +126,7 @@ func resolvePlayRequest(ctx context.Context, cfg *native.Config, args []string) 
 	return req, nil
 }
 
-func parsePlayTarget(flags parsedArgs, positionals []string) (playTarget, error) {
+func parsePlayTarget(flags parsedArgs, positionals []string, defaultPlaylistID string) (playTarget, error) {
 	if (flags.has("playlist") && flags.has("playlist-id")) ||
 		(len(positionals) > 0 && (flags.has("playlist") || flags.has("playlist-id"))) {
 		return playTarget{}, usageErrf("pass exactly one playlist target: <playlist-query>, --playlist, or --playlist-id")
@@ -137,20 +137,28 @@ func parsePlayTarget(flags parsedArgs, positionals []string) (playTarget, error)
 		target = playTarget{kind: playIDTarget, value: strings.TrimSpace(flags.string("playlist-id"))}
 	case flags.has("playlist"):
 		target = playTarget{kind: playQueryTarget, value: strings.TrimSpace(flags.string("playlist"))}
+	case len(positionals) == 0 && strings.TrimSpace(defaultPlaylistID) != "":
+		target = playTarget{kind: playIDTarget, value: strings.TrimSpace(defaultPlaylistID)}
 	default:
 		target = playTarget{kind: playQueryTarget, value: strings.Join(positionals, " ")}
 	}
 	if strings.TrimSpace(target.value) == "" {
-		return playTarget{}, usageErrf("playlist is required (pass <playlist-query>, --playlist, or --playlist-id)")
+		return playTarget{}, usageErrf("playlist is required (pass <playlist-query>, --playlist, or --playlist-id; or save a default with `homepodctl setup --choose`)")
 	}
 	return target, nil
 }
 
-func (req playRequest) actionOutput() actionOutput {
-	out := actionOutput{
+func (req playRequest) actionResult() actionResult {
+	out := actionResult{
 		Backend: string(req.backend),
 		Rooms:   req.rooms,
 		DryRun:  req.output.DryRun,
+	}
+	if req.backend == playAirplay {
+		out.Shuffle = &req.shuffle
+		if len(req.rooms) > 0 && req.volume.source != playVolumeAbsent {
+			out.Volume = &req.volume.value
+		}
 	}
 	switch req.target.kind {
 	case playQueryTarget:

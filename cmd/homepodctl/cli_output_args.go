@@ -25,17 +25,9 @@ type actionResult struct {
 	Playlist   string            `json:"playlist,omitempty"`
 	PlaylistID string            `json:"playlistId,omitempty"`
 	Shortcut   string            `json:"shortcut,omitempty"`
+	Volume     *int              `json:"volume,omitempty"`
+	Shuffle    *bool             `json:"shuffle,omitempty"`
 	NowPlaying *music.NowPlaying `json:"nowPlaying,omitempty"`
-}
-
-type actionOutput struct {
-	Backend    string
-	DryRun     bool
-	Rooms      []string
-	Playlist   string
-	PlaylistID string
-	Shortcut   string
-	NowPlaying *music.NowPlaying
 }
 
 type outputOptions struct {
@@ -72,19 +64,11 @@ func parseOutputOptions(flags parsedArgs) (outputOptions, error) {
 	}, nil
 }
 
-func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOutput) {
+func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionResult) {
 	if jsonOut {
-		writeJSON(actionResult{
-			OK:         true,
-			Action:     action,
-			DryRun:     out.DryRun,
-			Backend:    out.Backend,
-			Rooms:      out.Rooms,
-			Playlist:   out.Playlist,
-			PlaylistID: out.PlaylistID,
-			Shortcut:   out.Shortcut,
-			NowPlaying: out.NowPlaying,
-		})
+		out.OK = true
+		out.Action = action
+		writeJSON(out)
 		return
 	}
 	if out.NowPlaying != nil {
@@ -102,7 +86,7 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOut
 		if quiet {
 			return
 		}
-		fmt.Printf("dry-run action=%s backend=%s rooms=%s playlist=%q playlist_id=%q shortcut=%q\n",
+		fmt.Printf("dry-run action=%s backend=%s rooms=%s playlist=%q playlist_id=%q shortcut=%q",
 			action,
 			out.Backend,
 			strings.Join(out.Rooms, ","),
@@ -110,6 +94,13 @@ func writeActionOutput(action string, jsonOut bool, plainOut bool, out actionOut
 			out.PlaylistID,
 			out.Shortcut,
 		)
+		if out.Volume != nil {
+			fmt.Printf(" volume=%d", *out.Volume)
+		}
+		if out.Shuffle != nil {
+			fmt.Printf(" shuffle=%t", *out.Shuffle)
+		}
+		fmt.Println()
 	}
 }
 
@@ -135,18 +126,6 @@ func (p parsedArgs) string(key string) string {
 		return ""
 	}
 	return v[len(v)-1]
-}
-
-func (p parsedArgs) int(key string, def int) int {
-	s := strings.TrimSpace(p.string(key))
-	if s == "" {
-		return def
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return def
-	}
-	return n
 }
 
 func (p parsedArgs) intStrict(key string) (int, bool, error) {

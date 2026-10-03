@@ -36,7 +36,7 @@ func legacyFlagSpec(values, booleans string) commandFlagSpec {
 }
 
 var commandFlagSpecs = map[string]commandFlagSpec{
-	"setup":               flagSpec("backend room", "json no-input"),
+	"setup":               flagSpec("backend room playlist-id", "choose json no-input"),
 	"play":                flagSpec("backend room playlist playlist-id volume", "shuffle choose no-input json plain dry-run"),
 	"run":                 flagSpec("", "json plain dry-run"),
 	"doctor":              flagSpec("", "json plain"),
@@ -161,7 +161,12 @@ func parseArgs(command string, args []string) (parsedArgs, []string, error) {
 			return parsedArgs{}, nil, usageErrf("%s: %s", command, err)
 		}
 		if token.name == "help" {
-			usage()
+			switch command {
+			case "devices", "status", "playlists":
+				cmdHelp([]string{command})
+			default:
+				usage()
+			}
 			exitCode(0)
 		}
 		out.kv[token.name] = append(out.kv[token.name], token.value)

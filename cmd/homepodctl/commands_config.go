@@ -45,19 +45,19 @@ func cmdConfigValidate(args []string) {
 	}
 	if jsonOut {
 		writeJSON(res)
-		return
-	}
-	if res.OK {
+	} else if res.OK {
 		if !quiet {
 			fmt.Printf("config ok: %s\n", res.Path)
 		}
-		return
+	} else {
+		fmt.Printf("config invalid: %s\n", res.Path)
+		for _, issue := range res.Errors {
+			fmt.Printf("- %s\n", issue)
+		}
 	}
-	fmt.Printf("config invalid: %s\n", res.Path)
-	for _, issue := range res.Errors {
-		fmt.Printf("- %s\n", issue)
+	if !res.OK {
+		exitCode(exitConfig)
 	}
-	exitCode(exitUsage)
 }
 
 func cmdConfigGet(args []string) {

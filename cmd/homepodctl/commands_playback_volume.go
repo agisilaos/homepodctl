@@ -63,10 +63,11 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 		}
 		debugf("%s: backend=airplay value=%d rooms=%v", name, value, rooms)
 		if opts.DryRun {
-			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionResult{
 				DryRun:  true,
 				Backend: backend,
 				Rooms:   rooms,
+				Volume:  &value,
 			})
 			return
 		}
@@ -74,24 +75,27 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			die(err)
 		}
 		if np, err := playbackApp.NowPlaying(ctx); err == nil {
-			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionResult{
 				Backend:    backend,
 				Rooms:      rooms,
+				Volume:     &value,
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionResult{
 				Backend: backend,
 				Rooms:   rooms,
+				Volume:  &value,
 			})
 		}
 	case "native":
 		debugf("%s: backend=native value=%d rooms=%v", name, value, rooms)
 		if opts.DryRun {
-			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionResult{
 				DryRun:  true,
 				Backend: backend,
 				Rooms:   rooms,
+				Volume:  &value,
 			})
 			return
 		}
@@ -99,15 +103,17 @@ func cmdVolume(ctx context.Context, cfg *native.Config, name string, args []stri
 			die(fmt.Errorf("%w (config-native volume is discrete)", err))
 		}
 		if np, err := playbackApp.NowPlaying(ctx); err == nil {
-			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionResult{
 				Backend:    backend,
 				Rooms:      rooms,
+				Volume:     &value,
 				NowPlaying: &np,
 			})
 		} else {
-			writeActionOutput(name, opts.JSON, opts.Plain, actionOutput{
+			writeActionOutput(name, opts.JSON, opts.Plain, actionResult{
 				Backend: backend,
 				Rooms:   rooms,
+				Volume:  &value,
 			})
 		}
 	default:

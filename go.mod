@@ -1,6 +1,6 @@
 module github.com/agisilaos/homepodctl
 
-go 1.22
+go 1.27.1
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.4

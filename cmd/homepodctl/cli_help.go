@@ -24,7 +24,7 @@ Usage:
   homepodctl schema [<name>] [--json]
   homepodctl completion <bash|zsh|fish>
   homepodctl completion install <bash|zsh|fish> [--path <file-or-dir>]
-  homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]
+  homepodctl setup [--backend airplay|native] [--room <name> ...] [--playlist-id <id>] [--choose] [--json] [--no-input]
   homepodctl doctor [--json] [--plain]
   homepodctl devices [--json] [--plain] [--include-network]
   homepodctl out list [--json] [--plain] [--include-network]
@@ -39,7 +39,7 @@ Usage:
   homepodctl stop [--json] [--plain]
   homepodctl next [--json] [--plain]
   homepodctl prev [--json] [--plain]
-  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
+  homepodctl play [<playlist-query>] [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
   homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
   homepodctl volume <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
   homepodctl vol <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
@@ -49,11 +49,13 @@ Usage:
 Notes:
   - backend=airplay uses Music.app AirPlay selection (Mac is the sender).
   - backend=native runs a Shortcut you map in the config file (HomePod plays natively if your Shortcut/Scene is set up that way).
-  - defaults come from config.json (run homepodctl config-init); commands use defaults when flags/args are omitted.
+  - defaults come from config.json; use homepodctl setup --choose to discover and save rooms and a playlist.
+  - play with no playlist target uses defaults.playlistId; save a default with homepodctl setup --choose.
   - if no rooms are provided and defaults.rooms is empty, airplay commands fall back to Music.app’s currently selected AirPlay outputs (when possible).
   - --verbose (or HOMEPODCTL_VERBOSE=1) prints backend diagnostics to stderr.
   - --quiet suppresses non-essential human-readable success output.
-  - exit codes: 0 success, 1 runtime failures, 2 usage/flag errors, 3 config/automation validation errors, 4 backend command failures outside automation execution.
+  - exit codes: 0 success, 1 runtime failures, 2 usage/flag errors, 3 config/automation validation errors, 4 backend command failures outside setup diagnostics and automation execution.
+  - setup diagnostic failures exit 1 and retain saved configuration, including in JSON and quiet modes.
   - automation execution failures always exit 1, including backend errors, missing preconditions, and timeouts.
 `)
 }
@@ -72,27 +74,98 @@ func cmdHelp(args []string) {
 		return
 	}
 	switch args[0] {
+	case "playlists":
+		fmt.Fprint(os.Stdout, `homepodctl playlists - find Music.app user playlists
+
+Usage:
+  homepodctl playlists [--query <substring>] [--limit N] [--json] [--plain]
+
+Notes:
+  - Reads Music.app user playlists without changing playback; macOS may request Automation permission.
+  - --query matches names by case-insensitive substring, not fuzzy search. Omit it to browse without a name filter.
+  - --limit defaults to 50 matches; 0 or a negative value removes the limit.
+  - --json emits an array of persistentID, name, smart and genius fields; no matches produces [].
+  - --plain emits tab-separated ID/name rows without a header; no matches produces no output.
+  - Human output reports an empty library or no matching playlists. Empty results exit successfully.
+  - Copy a persistentID into play --playlist-id to avoid ambiguous names.
+  - A playback preview does not verify that the playlist still exists or change playback.
+
+Examples:
+  homepodctl playlists --query chill
+  homepodctl playlists --limit 0 --json
+  homepodctl play --playlist-id <PERSISTENT_ID> --dry-run --json
+`)
+	case "devices":
+		fmt.Fprint(os.Stdout, `homepodctl devices - list Music.app AirPlay outputs
+
+Usage:
+  homepodctl devices [--json] [--plain] [--include-network]
+
+Notes:
+  - Read-only discovery through Music.app; macOS may request Automation permission.
+  - Device names are the room names used by --room. Listing does not select outputs.
+  - available, selected and active are Music.app's device properties: availability,
+    output selection and activity respectively. Selection alone does not prove playback.
+  - --json emits an array with name, kind, available, selected, active, volume and persistentID.
+  - --include-network adds networkAddress to JSON when present; it does not expand discovery.
+  - --plain removes the table header. The table shows name, kind, available, selected and volume.
+  - Use homepodctl status to inspect playback and the current output route.
+
+Examples:
+  homepodctl devices
+  homepodctl devices --json
+  homepodctl devices --json --include-network
+`)
+	case "status", "now":
+		fmt.Fprint(os.Stdout, `homepodctl status - inspect Music.app playback and output routing
+
+Usage:
+  homepodctl status [--json] [--plain] [--watch <duration>]
+  homepodctl now [--json] [--plain] [--watch <duration>]
+
+Notes:
+  - now is an alias for status. Reading status does not change playback or outputs.
+  - Reports player state, track when present, selected outputs, route and Music/Automation connectivity.
+  - --json emits a status object: ok, player, connection and optional track, volume, outputs and route.
+  - outputs[].deviceName identifies the device; route contains the selected room names.
+  - --plain uses labeled text. --watch repeats at a positive duration such as 1s; Ctrl-C stops it.
+  - --watch with --json prints successive JSON objects, not a single JSON array.
+  - Use homepodctl devices for available outputs or homepodctl doctor for permission diagnostics.
+
+Examples:
+  homepodctl status
+  homepodctl now --json
+  homepodctl status --watch 1s
+`)
 	case "play":
 		fmt.Fprint(os.Stdout, `homepodctl play - play an Apple Music playlist
 
 Usage:
-  homepodctl play <playlist-query> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
+  homepodctl play [<playlist-query>] [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
   homepodctl play --playlist <name> | --playlist-id <id> [--backend airplay|native] [--room <name> ...] [--shuffle] [--volume 0-100] [--choose] [--no-input] [--json] [--plain] [--dry-run]
 
 Notes:
-  - Supply exactly one target: positional query words, --playlist, or --playlist-id.
+  - With no target, uses defaults.playlistId; save it with setup --choose or setup --playlist-id <id>.
+  - An explicit query, --playlist, or --playlist-id overrides the default; supply only one form. Blank targets are usage errors.
   - AirPlay searches Music.app user playlists; native uses an exact configured name (or looks up a name by ID).
   - If --room is omitted, homepodctl uses defaults.rooms from config.json; if that is empty it falls back to Music.app’s currently selected AirPlay outputs (airplay backend).
   - AirPlay --choose prompts only for multiple matches and requires interactive stdin without --no-input; direct IDs bypass selection.
   - --volume must be 0-100. AirPlay requires resolved rooms for explicit volume; a default volume without rooms is skipped.
   - Native play ignores volume, shuffle, and --choose after validating option values.
   - --dry-run shares argument/default validation and room inference, but skips playlist lookup, prompting, and native mapping checks.
+  - AirPlay previews show effective shuffle and volume (including false and 0); volume is omitted when unchanged. Native previews omit both.
+  - Aliases and automation steps retain their own targets; defaults.playlistId applies to play and plan play only.
+  - A missing saved playlist fails before changing outputs, volume, or shuffle; run playlists and setup --choose to select a replacement.
+  - Replace the example names and IDs below with values from devices and playlists.
 
 Examples:
-  homepodctl play chill
-  homepodctl play "Songs I've been obsessed recently pt. 2"
-  homepodctl play autumn --choose
-  homepodctl play --room "Bedroom" --playlist-id <PERSISTENT_ID>
+  homepodctl play
+  homepodctl status
+  homepodctl play --dry-run
+  homepodctl playlists
+  homepodctl play --playlist "YOUR_PLAYLIST_NAME"
+  homepodctl play "YOUR_SEARCH_TEXT" --choose
+  homepodctl play --room "YOUR_ROOM_NAME" --playlist-id "YOUR_PLAYLIST_ID"
 `)
 	case "out":
 		fmt.Fprint(os.Stdout, `homepodctl out - list/set Music.app AirPlay outputs
@@ -120,6 +193,7 @@ Usage:
 
 Notes:
   - If no rooms are provided, homepodctl uses defaults.rooms; if empty it uses Music.app’s currently selected outputs (airplay).
+  - Previews and JSON results include the requested volume, including 0. Native previews do not check Shortcut mappings.
 
 Examples:
   homepodctl volume 35
@@ -134,6 +208,8 @@ Usage:
 Notes:
   - Aliases come from config.json (see homepodctl aliases).
   - --dry-run resolves backend/rooms/targets without executing backend calls.
+  - AirPlay previews include alias volume (falling back to defaults.volume) and explicitly configured alias shuffle; unset shuffle is unchanged.
+  - Native playlist aliases and direct Shortcuts omit volume/shuffle because they do not apply those settings.
 `)
 	case "native-run":
 		fmt.Fprint(os.Stdout, `homepodctl native-run - execute a Shortcut by name
@@ -184,12 +260,32 @@ Notes:
 		fmt.Fprint(os.Stdout, `homepodctl setup - onboard and verify local environment
 
 Usage:
-  homepodctl setup [--backend airplay|native] [--room <name> ...] [--json] [--no-input]
+  homepodctl setup [--backend airplay|native] [--room <name> ...] [--playlist-id <id>] [--choose] [--json] [--no-input]
 
 Notes:
-  - Ensures config exists (same as config-init behavior).
-  - Runs doctor checks and lists current AirPlay devices.
-  - Optionally updates defaults via --backend and --room.
+  - Creates minimal config: AirPlay, empty rooms, no default playlist/volume or example aliases/mappings.
+  - Preserves existing settings unless --backend, --room, --playlist-id, or a selection replaces them.
+  - Discovers Music.app destinations and library playlists; prints commands using actual names and IDs.
+  - Without saved rooms, suggestions prefer HomePods, then other destinations, then the Mac; no preference is inferred.
+  - --choose opts into AirPlay room selection and an optional default playlist search; the playlist is saved by persistent ID.
+  - --room skips the room prompt; --playlist-id skips the playlist prompt.
+  - Enter preserves rooms or skips playlist search; s skips displayed playlist choices. Skipping preserves the saved playlist.
+  - With an available saved playlist and rooms, prints homepodctl play and homepodctl status to try and check them.
+  - Setup does not start playback or change Music.app's outputs.
+  - q or EOF cancels before writing.
+  - --choose requires terminal stdin and cannot be combined with --no-input, --json, --quiet, or native setup.
+  - Without --choose, setup never asks for input. --no-input does not suppress macOS permission dialogs.
+  - Offline/missing/duplicate room names are reported and preserved; playlist discovery failure is a warning.
+  - Exits 1 when diagnostics report ok=false, including in JSON and quiet modes.
+  - Warnings and an empty device list are nonfatal. Noninteractive configuration is saved before diagnostics.
+  - JSON adds optional playlists, playlistError, and warnings fields; next remains a list of commands.
+
+Examples:
+  homepodctl setup --choose
+  homepodctl play
+  homepodctl status
+  homepodctl setup --no-input --json
+  homepodctl setup --room "YOUR_ROOM_NAME" --playlist-id "YOUR_PLAYLIST_ID" --no-input
 `)
 	case "completion":
 		fmt.Fprint(os.Stdout, `homepodctl completion - generate shell completion scripts
@@ -207,7 +303,9 @@ Writes a starter config to:
 
 Notes:
   - If the file already exists, this command is a no-op.
-  - Edit defaults.rooms to your AirPlay device names (homepodctl devices).
+  - New config uses AirPlay with empty rooms, no default playlist or volume, and empty aliases/Shortcut mappings.
+  - This does not repair invalid config. Repair the file, or move it aside as a backup before creating a new starter config.
+  - Run homepodctl setup --choose to save discovered rooms and a playlist, or setup --room <name> --playlist-id <id> --no-input.
 `, path)
 	case "automation":
 		fmt.Fprint(os.Stdout, `homepodctl automation - declarative playback routines (v1)
@@ -279,6 +377,7 @@ Supported paths:
   defaults.shuffle
   defaults.volume
   defaults.rooms
+  defaults.playlistId
   aliases.<name>.backend
   aliases.<name>.rooms
   aliases.<name>.playlist
@@ -288,6 +387,10 @@ Supported paths:
   aliases.<name>.shortcut
   native.playlists.<room>.<playlist>
   native.volumeShortcuts.<room>.<0-100>
+
+Notes:
+  - defaults.playlistId is a Music.app persistent ID used by play when no target is supplied.
+  - Clear it with: homepodctl config set defaults.playlistId ""
 `)
 	default:
 		usage()

@@ -130,8 +130,8 @@ steps:
 		}
 	}
 	wantCalls := []string{
-		"outputs:Kitchen", "outputs:Office", "volume:Office:20", "shuffle:false",
-		"search:Focus", "play:P1", "volume:Bedroom:0", "state", "stop",
+		"outputs:Kitchen", "search:Focus", "outputs:Office", "volume:Office:20", "shuffle:false",
+		"play:P1", "volume:Bedroom:0", "state", "stop",
 	}
 	if !reflect.DeepEqual(calls, wantCalls) {
 		t.Fatalf("calls=%v, want %v", calls, wantCalls)
@@ -318,8 +318,10 @@ func TestExecuteAutomationPlanTiming(t *testing.T) {
 }
 
 func TestAutomationPlanSnapshotsInputsAndDefaults(t *testing.T) {
+	origLookup := findPlaylistNameByID
 	origOutputs, origVolume, origShuffle, origPlay := playbackApp.setRouteFn, playbackApp.setVolumeFn, setShuffle, playPlaylistByID
 	t.Cleanup(func() {
+		findPlaylistNameByID = origLookup
 		playbackApp.setRouteFn, playbackApp.setVolumeFn, setShuffle, playPlaylistByID = origOutputs, origVolume, origShuffle, origPlay
 	})
 	cfg := &native.Config{Defaults: native.DefaultsConfig{
@@ -345,6 +347,10 @@ func TestAutomationPlanSnapshotsInputsAndDefaults(t *testing.T) {
 	// Even reporting metadata is not an execution source.
 	plan.Steps[0].Input.PlaylistID = "not-an-operation"
 	var calls []string
+	findPlaylistNameByID = func(_ context.Context, id string) (string, error) {
+		calls = append(calls, "lookup:"+id)
+		return "Focus", nil
+	}
 	playbackApp.setRouteFn = func(_ context.Context, rooms []string) error {
 		calls = append(calls, "outputs:"+strings.Join(rooms, ","))
 		return nil
@@ -362,7 +368,7 @@ func TestAutomationPlanSnapshotsInputsAndDefaults(t *testing.T) {
 		return nil
 	}
 	result := executeAutomationPlan(context.Background(), plan)
-	want := []string{"outputs:Office", "volume:Office:20", "shuffle:false", "play:P1", "volume:Kitchen:30"}
+	want := []string{"lookup:P1", "outputs:Office", "volume:Office:20", "shuffle:false", "play:P1", "volume:Kitchen:30"}
 	if !result.OK || result.Name != "snapshot" || !reflect.DeepEqual(calls, want) {
 		t.Fatalf("result=%+v calls=%v want=%v", result, calls, want)
 	}

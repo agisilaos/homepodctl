@@ -268,6 +268,19 @@ func TestFriendlyScriptError(t *testing.T) {
 	if got := friendlyScriptError("can't get AirPlay device \"Bedroom\""); !strings.Contains(strings.ToLower(got), "airplay") {
 		t.Fatalf("friendlyScriptError airplay=%q", got)
 	}
+	for _, output := range []string{
+		"Music got an error: Can't get user playlist whose persistent ID = \"DELETED\". (-1728)",
+		"Music got an error: Can’t get user playlist whose persistent ID = \"DELETED\". (-1728)",
+		"Music got an error: Cannot get user playlist whose persistent ID = \"DELETED\". (-1728)",
+	} {
+		got := friendlyScriptError(output)
+		if !strings.Contains(got, "homepodctl playlists") || !strings.Contains(got, "homepodctl setup --choose") {
+			t.Fatalf("friendlyScriptError(%q)=%q, want playlist recovery commands", output, got)
+		}
+	}
+	if got := friendlyScriptError("Music got an error: Couldn't change user playlist."); got != "" {
+		t.Fatalf("friendlyScriptError unrelated playlist failure=%q, want empty", got)
+	}
 	if got := friendlyScriptError("unmapped backend noise"); got != "" {
 		t.Fatalf("friendlyScriptError default=%q, want empty", got)
 	}
@@ -415,13 +428,17 @@ func TestInstallCompletionWritesFile(t *testing.T) {
 
 func TestWriteActionOutput_DryRunJSON(t *testing.T) {
 	out := captureStdout(t, func() {
-		writeActionOutput("play", true, false, actionOutput{
+		writeActionOutput("play", true, false, actionResult{
+			Action:   "ignored",
 			DryRun:   true,
 			Backend:  "airplay",
 			Rooms:    []string{"Bedroom"},
 			Playlist: "chill",
 		})
 	})
+	if !strings.Contains(out, `"ok": true`) {
+		t.Fatalf("success json missing: %q", out)
+	}
 	if !strings.Contains(out, `"dryRun": true`) {
 		t.Fatalf("dry-run json missing: %q", out)
 	}
@@ -432,7 +449,7 @@ func TestWriteActionOutput_DryRunJSON(t *testing.T) {
 
 func TestWriteActionOutput_DryRunText(t *testing.T) {
 	out := captureStdout(t, func() {
-		writeActionOutput("volume", false, false, actionOutput{
+		writeActionOutput("volume", false, false, actionResult{
 			DryRun:  true,
 			Backend: "airplay",
 			Rooms:   []string{"Bedroom"},
@@ -447,7 +464,7 @@ func TestCmdHelp_PlayExamplesUseQuotes(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdHelp([]string{"play"})
 	})
-	if !strings.Contains(out, `homepodctl play "Songs I've been obsessed recently pt. 2"`) {
+	if !strings.Contains(out, `homepodctl play --playlist "YOUR_PLAYLIST_NAME"`) {
 		t.Fatalf("help output missing quoted example: %q", out)
 	}
 	if strings.Contains(out, `\"`) {

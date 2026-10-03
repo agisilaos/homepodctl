@@ -284,8 +284,8 @@ func cmdTransport(ctx context.Context, args []string, action string, fn func(con
 		die(err)
 	}
 	if np, err := playbackApp.NowPlaying(ctx); err == nil {
-		writeActionOutput(action, jsonOut, plainOut, actionOutput{NowPlaying: &np})
+		writeActionOutput(action, jsonOut, plainOut, actionResult{NowPlaying: &np})
 		return
 	}
-	writeActionOutput(action, jsonOut, plainOut, actionOutput{})
+	writeActionOutput(action, jsonOut, plainOut, actionResult{})
 }

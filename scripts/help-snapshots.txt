@@ -3,3 +3,9 @@ root.txt	--help
 automation.txt	help automation
 plan.txt	help plan
 tui.txt	help tui
+
+play.txt	help play
+setup.txt	help setup
+devices.txt	help devices
+status.txt	help status
+playlists.txt	help playlists

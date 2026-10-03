@@ -18,6 +18,15 @@ func TestCLIDryRunCommands(t *testing.T) {
 	if result := cli.run(t, "config", "set", "defaults.backend", "native"); result.ExitCode != 0 {
 		t.Fatalf("config set defaults.backend native exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
+	if result := cli.run(t, "config", "set", "defaults.rooms", "Living Room"); result.ExitCode != 0 {
+		t.Fatalf("config set defaults.rooms exit=%d stdout=%s", result.ExitCode, result.Stdout)
+	}
+	if result := cli.run(t, "config", "set", "aliases.bed.backend", "airplay"); result.ExitCode != 0 {
+		t.Fatalf("config set aliases.bed.backend exit=%d stdout=%s", result.ExitCode, result.Stdout)
+	}
+	if result := cli.run(t, "config", "set", "aliases.bed.rooms", "Bedroom"); result.ExitCode != 0 {
+		t.Fatalf("config set aliases.bed.rooms exit=%d stdout=%s", result.ExitCode, result.Stdout)
+	}
 
 	assertDryRun := func(args ...string) {
 		t.Helper()
@@ -73,7 +82,7 @@ func TestCLIQuietSuppressesDryRunOutput(t *testing.T) {
 }
 
 func TestCLISetupJSON(t *testing.T) {
-	cli := newCLIHarness(t)
+	cli := setupCLIHarness(t, false)
 
 	result := cli.run(t, "setup", "--json", "--no-input")
 	if result.ExitCode != 0 {
@@ -91,11 +100,11 @@ func TestCLISetupJSON(t *testing.T) {
 	}
 }
 
-func TestCLISetupPersistsDefaults(t *testing.T) {
-	cli := newCLIHarness(t)
+func TestCLISetupPersistsDefaultsAfterDiagnosticFailure(t *testing.T) {
+	cli := setupCLIHarness(t, true)
 
 	result := cli.run(t, "setup", "--backend", "native", "--room", "Bedroom", "--json", "--no-input")
-	if result.ExitCode != 0 {
+	if result.ExitCode != exitGeneric {
 		t.Fatalf("setup persist defaults exit=%d stdout=%s", result.ExitCode, result.Stdout)
 	}
 
@@ -187,11 +196,67 @@ func TestCLIExitBoundary_JSONAndUsagePaths(t *testing.T) {
 	}
 
 	result = cli.run(t, "config", "validate")
-	if result.ExitCode != exitUsage {
-		t.Fatalf("config validate invalid exit=%d want=%d stdout=%s", result.ExitCode, exitUsage, result.Stdout)
+	if result.ExitCode != exitConfig {
+		t.Fatalf("config validate invalid exit=%d want=%d stdout=%s", result.ExitCode, exitConfig, result.Stdout)
 	}
 	if !strings.Contains(strings.ToLower(result.Stdout), "config invalid") || !strings.Contains(result.Stdout, "defaults.backend") {
 		t.Fatalf("validate plain output missing expected diagnostics: %s", result.Stdout)
+	}
+}
+
+func TestCLIConfigValidationExitStatus(t *testing.T) {
+	cli := newCLIHarness(t)
+	initial := cli.run(t, "config", "validate", "--json")
+	var report configValidateResult
+	if err := json.Unmarshal([]byte(initial.Stdout), &report); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(report.Path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, config string
+		wantExit     int
+		parseError   bool
+	}{
+		{"valid", `{"defaults":{"backend":"airplay","volume":0}}`, 0, false},
+		{"invalid backend", `{"defaults":{"backend":"broken"}}`, 3, false},
+		{"invalid volume", `{"defaults":{"volume":101}}`, 3, false},
+		{"malformed JSON", `{broken`, 3, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.WriteFile(report.Path, []byte(tc.config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			for _, jsonOut := range []bool{false, true} {
+				args := []string{"config", "validate"}
+				if jsonOut {
+					args = append(args, "--json")
+				}
+				result := cli.run(t, args...)
+				if result.ExitCode != tc.wantExit {
+					t.Fatalf("exit=%d want=%d: %+v", result.ExitCode, tc.wantExit, result)
+				}
+				if tc.parseError {
+					if result.Stdout != "" || result.Stderr == "" {
+						t.Fatalf("parse errors must use stderr: %+v", result)
+					}
+					continue
+				}
+				if result.Stderr != "" || result.Stdout == "" {
+					t.Fatalf("validation reports must use stdout: %+v", result)
+				}
+				if jsonOut {
+					var got configValidateResult
+					if err := json.Unmarshal([]byte(result.Stdout), &got); err != nil {
+						t.Fatal(err)
+					}
+					if got.OK != (tc.wantExit == 0) || got.Path != report.Path || (len(got.Errors) > 0) != (tc.wantExit != 0) {
+						t.Fatalf("unexpected validation report: %+v", got)
+					}
+				}
+			}
+		})
 	}
 }
 

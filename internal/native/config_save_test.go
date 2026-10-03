@@ -24,7 +24,7 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	path := isolatedConfigPath(t)
 	volume, shuffle := 0, false
 	want := &Config{
-		Defaults: DefaultsConfig{Backend: "native", Rooms: []string{"Bedroom", "Living Room"}, Shuffle: true, Volume: &volume},
+		Defaults: DefaultsConfig{Backend: "native", Rooms: []string{"Bedroom", "Living Room"}, PlaylistID: "DEFAULT123", Shuffle: true, Volume: &volume},
 		Aliases: map[string]Alias{
 			"bed": {
 				Backend: "airplay", Rooms: []string{"Bedroom"}, Playlist: "Sleep",
@@ -39,7 +39,7 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	if err := SaveConfig(want); err != nil {
 		t.Fatal(err)
 	}
-	got, err := LoadConfig()
+	got, err := LoadConfigOptional()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	if err := SaveConfig(want); err != nil {
 		t.Fatal(err)
 	}
-	got, err = LoadConfig()
+	got, err = LoadConfigOptional()
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("replacement round trip: got %#v, err=%v", got, err)
 	}
@@ -178,21 +178,33 @@ func TestSaveConfigErrors(t *testing.T) {
 	}
 }
 
-func TestInitConfigCreatesDefaults(t *testing.T) {
+func TestInitConfigCreatesMinimalConfig(t *testing.T) {
 	path := isolatedConfigPath(t)
 	gotPath, err := InitConfig()
 	if err != nil || gotPath != path {
 		t.Fatalf("InitConfig path=%q, err=%v", gotPath, err)
 	}
-	cfg, err := LoadConfig()
+	cfg, err := LoadConfigOptional()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Defaults.Backend != "airplay" || !reflect.DeepEqual(cfg.Defaults.Rooms, []string{"Living Room"}) || cfg.Defaults.Volume == nil || *cfg.Defaults.Volume != 50 {
-		t.Fatalf("unexpected starter defaults: %+v", cfg.Defaults)
+	want := &Config{
+		Defaults: DefaultsConfig{Backend: "airplay", Rooms: []string{}},
+		Aliases:  map[string]Alias{},
+		Native: NativeConfig{
+			Playlists:       map[string]map[string]string{},
+			VolumeShortcuts: map[string]map[string]string{},
+		},
 	}
-	if len(cfg.Aliases) != 3 || len(cfg.Native.Playlists) != 2 || len(cfg.Native.VolumeShortcuts) != 2 {
-		t.Fatalf("missing starter mappings: %+v", cfg)
+	if !reflect.DeepEqual(cfg, want) {
+		t.Fatalf("unexpected initial config: got %+v, want %+v", cfg, want)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("initial config mode=%#o, want 0600", got)
 	}
 }
 

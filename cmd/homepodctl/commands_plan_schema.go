@@ -252,7 +252,7 @@ func printPlanResponse(resp planResponse) {
 	playlistID, _ := resp.Plan["playlistId"].(string)
 	shortcut, _ := resp.Plan["shortcut"].(string)
 	rooms := anyStrings(resp.Plan["rooms"])
-	fmt.Printf("plan command=%s action=%s backend=%s dry_run=true rooms=%s playlist=%q playlist_id=%q shortcut=%q\n",
+	fmt.Printf("plan command=%s action=%s backend=%s dry_run=true rooms=%s playlist=%q playlist_id=%q shortcut=%q",
 		resp.Command,
 		action,
 		backend,
@@ -261,6 +261,13 @@ func printPlanResponse(resp planResponse) {
 		playlistID,
 		shortcut,
 	)
+	if volume, ok := resp.Plan["volume"].(float64); ok {
+		fmt.Printf(" volume=%.0f", volume)
+	}
+	if shuffle, ok := resp.Plan["shuffle"].(bool); ok {
+		fmt.Printf(" shuffle=%t", shuffle)
+	}
+	fmt.Println()
 }
 
 func anyObjects(v any) []map[string]any {
@@ -306,6 +313,8 @@ var cliSchemas = map[string]map[string]any{
 			"playlist":   map[string]any{"type": "string"},
 			"playlistId": map[string]any{"type": "string"},
 			"shortcut":   map[string]any{"type": "string"},
+			"volume":     map[string]any{"type": "integer", "minimum": 0, "maximum": 100},
+			"shuffle":    map[string]any{"type": "boolean"},
 			"nowPlaying": map[string]any{"type": "object"},
 		},
 	},
