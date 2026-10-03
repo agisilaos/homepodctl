@@ -8,6 +8,8 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
+- Playlist discovery preserves names and boolean metadata through JSON transport, rejecting incomplete or malformed records before filtering.
+
 - Configuration saves now replace the file atomically, preserving the previous config on write failure. Symlink and non-file destinations are rejected.
 - Playback mutations and Shortcuts now run once. Ambiguous failures return `OUTCOME_UNCERTAIN` with inspection guidance before retrying; read-only queries retain retries.
 

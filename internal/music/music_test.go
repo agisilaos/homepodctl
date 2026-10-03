@@ -2,7 +2,9 @@ package music
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -156,12 +158,7 @@ func TestListUserPlaylists_QueryAndLimit(t *testing.T) {
 	t.Cleanup(func() { runAppleScriptExec = origExec })
 
 	runAppleScriptExec = func(context.Context, string) ([]byte, error) {
-		return []byte(strings.Join([]string{
-			"AA11\tFocus\ttrue\tfalse",
-			"BB22\tDeep Focus\tfalse\tfalse",
-			"CC33\tParty\tfalse\ttrue",
-			"",
-		}, "\n")), nil
+		return []byte(`[{"persistentID":"AA11","name":"Focus","smart":true,"genius":false},{"persistentID":"BB22","name":"Deep Focus","smart":false,"genius":false},{"persistentID":"CC33","name":"Party","smart":false,"genius":true}]`), nil
 	}
 
 	got, err := ListUserPlaylists(context.Background(), "focus", 1)
@@ -211,11 +208,7 @@ func TestSearchUserPlaylists_Ranking(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runAppleScriptExec = func(context.Context, string) ([]byte, error) {
-				var rows []string
-				for _, p := range tc.playlists {
-					rows = append(rows, p.PersistentID+"\t"+p.Name+"\tfalse\tfalse")
-				}
-				return []byte(strings.Join(rows, "\n")), nil
+				return json.Marshal(tc.playlists)
 			}
 			got, err := SearchUserPlaylists(context.Background(), tc.query)
 			if err != nil {
@@ -366,5 +359,44 @@ func TestPlayPause_UsesMusicToggle(t *testing.T) {
 
 	if err := PlayPause(context.Background()); err != nil {
 		t.Fatalf("PlayPause: %v", err)
+	}
+}
+
+func TestPlaylistMetadataJSONPreservesNames(t *testing.T) {
+	orig := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = orig })
+	for _, name := range []string{"Focus\tMix", "Focus\nMix", "Focus\r\nMix", " \t ", "quote\" slash\\ nul\x00 café 東京 🎵", ""} {
+		t.Run(name, func(t *testing.T) {
+			want := []UserPlaylist{{PersistentID: "A1", Name: name, Smart: true, Genius: false}, {PersistentID: "B2", Name: "Other", Smart: false, Genius: true}}
+			raw, err := json.Marshal(want)
+			if err != nil {
+				t.Fatal(err)
+			}
+			runAppleScriptExec = func(context.Context, string) ([]byte, error) { return raw, nil }
+			got, err := ListUserPlaylists(context.Background(), "", 0)
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Fatalf("got=%+v want=%+v err=%v", got, want, err)
+			}
+		})
+	}
+}
+
+func TestPlaylistMetadataRejectsMalformedRecords(t *testing.T) {
+	orig := runAppleScriptExec
+	t.Cleanup(func() { runAppleScriptExec = orig })
+	valid := `{"persistentID":"A1","name":"Focus","smart":false,"genius":true}`
+	for _, raw := range []string{"", "null", "{}", "[null]", "[] []", "[", `[{"persistentID":"A1","name":"Focus"}]`,
+		`[{"persistentID":"","name":"Focus","smart":false,"genius":false}]`,
+		`[{"persistentID":"A1","name":null,"smart":false,"genius":false}]`,
+		`[{"persistentID":"A1","name":"Focus","smart":"false","genius":false}]`,
+		`[` + valid + `,{"name":"other"}]`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			runAppleScriptExec = func(context.Context, string) ([]byte, error) { return []byte(raw), nil }
+			got, err := ListUserPlaylists(context.Background(), "focus", 1)
+			if err == nil || got != nil {
+				t.Fatalf("accepted malformed record: %+v err=%v", got, err)
+			}
+		})
 	}
 }
