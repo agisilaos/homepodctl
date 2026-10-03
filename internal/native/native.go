@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 type Config struct {
@@ -57,9 +56,10 @@ func (e *ConfigError) Error() string {
 func (e *ConfigError) Unwrap() error { return e.Err }
 
 type ShortcutError struct {
-	Name   string
-	Err    error
-	Output string
+	Uncertain bool
+	Name      string
+	Err       error
+	Output    string
 }
 
 var (
@@ -67,14 +67,19 @@ var (
 		cmd := exec.CommandContext(ctx, "shortcuts", "run", name)
 		return cmd.CombinedOutput()
 	}
-	sleepWithContextFn = sleepWithContext
 )
 
 func (e *ShortcutError) Error() string {
-	return fmt.Sprintf("shortcuts run %q failed: %v: %s", e.Name, e.Err, e.Output)
+	message := fmt.Sprintf("shortcuts run %q failed: %v: %s", e.Name, e.Err, e.Output)
+	if e.Uncertain {
+		message += "; Shortcut outcome is uncertain; inspect the room before retrying"
+	}
+	return message
 }
 
 func (e *ShortcutError) Unwrap() error { return e.Err }
+
+func (e *ShortcutError) OutcomeUncertain() bool { return e.Uncertain }
 
 func ConfigPath() (string, error) {
 	dir, err := os.UserConfigDir()
@@ -167,77 +172,16 @@ func normalizeConfig(cfg *Config) {
 	}
 }
 
+// A configured Shortcut may mutate playback before returning an error.
 func RunShortcut(ctx context.Context, name string) error {
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		out, err := runShortcutExec(ctx, name)
-		if err == nil {
-			return nil
-		}
-		trimmed := strings.TrimSpace(string(out))
-		lastErr = &ShortcutError{
-			Name:   name,
-			Err:    err,
-			Output: trimmed,
-		}
-		if !shouldRetryShortcut(err, trimmed) || attempt == 2 {
-			return lastErr
-		}
-		if err := sleepWithContextFn(ctx, retryBackoff(attempt)); err != nil {
-			return err
-		}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return lastErr
-}
-
-func shouldRetryShortcut(err error, output string) bool {
+	out, err := runShortcutExec(ctx, name)
 	if err == nil {
-		return false
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
-	msg := strings.ToLower(strings.TrimSpace(output))
-	if msg == "" {
-		var exitErr *exec.ExitError
-		return errors.As(err, &exitErr)
-	}
-	transientMarkers := []string{
-		"timed out",
-		"temporarily unavailable",
-		"connection invalid",
-		"couldn’t communicate",
-		"couldn't communicate",
-		"try again",
-		"4099",
-	}
-	for _, marker := range transientMarkers {
-		if strings.Contains(msg, marker) {
-			return true
-		}
-	}
-	return false
-}
-
-func retryBackoff(attempt int) time.Duration {
-	switch attempt {
-	case 0:
-		return 150 * time.Millisecond
-	default:
-		return 400 * time.Millisecond
-	}
-}
-
-func sleepWithContext(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
 		return nil
 	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
+	var launchErr *exec.Error
+	var pathErr *os.PathError
+	return &ShortcutError{Name: name, Err: err, Output: strings.TrimSpace(string(out)), Uncertain: !errors.As(err, &launchErr) && !errors.As(err, &pathErr)}
 }
