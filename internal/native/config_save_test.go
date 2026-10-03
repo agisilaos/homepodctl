@@ -39,7 +39,7 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	if err := SaveConfig(want); err != nil {
 		t.Fatal(err)
 	}
-	got, err := LoadConfig()
+	got, err := LoadConfigOptional()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	if err := SaveConfig(want); err != nil {
 		t.Fatal(err)
 	}
-	got, err = LoadConfig()
+	got, err = LoadConfigOptional()
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("replacement round trip: got %#v, err=%v", got, err)
 	}
@@ -184,7 +184,7 @@ func TestInitConfigCreatesMinimalConfig(t *testing.T) {
 	if err != nil || gotPath != path {
 		t.Fatalf("InitConfig path=%q, err=%v", gotPath, err)
 	}
-	cfg, err := LoadConfig()
+	cfg, err := LoadConfigOptional()
 	if err != nil {
 		t.Fatal(err)
 	}

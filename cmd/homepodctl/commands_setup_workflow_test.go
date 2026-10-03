@@ -108,7 +108,7 @@ func TestSetupGuidedCompletionSavesPlaybackDefaults(t *testing.T) {
 	if recovered != nil {
 		t.Fatal(recovered)
 	}
-	cfg, err := native.LoadConfig()
+	cfg, err := native.LoadConfigOptional()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestSetupExplicitPlaylistSavesDefaultsWithoutSelection(t *testing.T) {
 			if recovered != nil {
 				t.Fatal(recovered)
 			}
-			cfg, err := native.LoadConfig()
+			cfg, err := native.LoadConfigOptional()
 			if err != nil || cfg.Defaults.PlaylistID != "F" || !reflect.DeepEqual(cfg.Defaults.Rooms, []string{"Kitchen"}) {
 				t.Fatalf("explicit defaults not saved: %+v %v", cfg, err)
 			}
@@ -176,7 +176,7 @@ func TestSetupGuidedSkippingReportsSavedDefaults(t *testing.T) {
 	if recovered != nil {
 		t.Fatal(recovered)
 	}
-	cfg, err := native.LoadConfig()
+	cfg, err := native.LoadConfigOptional()
 	if err != nil || cfg.Defaults.Rooms == nil || len(cfg.Defaults.Rooms) != 0 {
 		t.Fatalf("unexpected fresh defaults: %+v %v", cfg, err)
 	}
@@ -208,7 +208,7 @@ func TestSetupPlaylistFailureIsNonfatalAndPreservesExplicitRooms(t *testing.T) {
 			t.Fatalf("suggested playback despite missing room and playlists: %s", command)
 		}
 	}
-	cfg, err := native.LoadConfig()
+	cfg, err := native.LoadConfigOptional()
 	if err != nil || !reflect.DeepEqual(cfg.Defaults.Rooms, []string{"Offline"}) {
 		t.Fatalf("requested default not saved: %+v %v", cfg, err)
 	}

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Exercise release diagnostics with local Git remotes and controlled tools."""
+"""Preserve all original publication outcomes using local remotes and current helpers."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -17,6 +18,7 @@ VERSION = "v999.999.999"
 
 # No fixture command may contact GitHub. Unexpected tool calls fail the test.
 SHIM = r'''#!/usr/bin/env python3
+import json
 import os
 from pathlib import Path
 import shutil
@@ -33,10 +35,27 @@ if tool == "mktemp":
     assert args == ["-d"], args
     sys.exit(subprocess.call([os.environ["RELEASE_TEST_MKTEMP"], "-d", str(root / "tmp/XXXXXX")]))
 if tool == "go":
+    assert os.environ.get("GOTOOLCHAIN") == "go1.27.1", os.environ.get("GOTOOLCHAIN")
+    if args == ["env", "GOHOSTOS", "GOHOSTARCH"]:
+        print("darwin\narm64")
+        sys.exit(0)
+    if args[:2] == ["version", "-m"]:
+        line = next(line for line in Path(args[2]).read_text().splitlines() if line.startswith("# metadata: "))
+        data = json.loads(line[len("# metadata: "):])
+        print(args[2] + ": go1.26.0")
+        for key, value in data.items():
+            print("\tbuild\t" + key + "=" + (json.dumps(value) if key == "-ldflags" else value))
+        sys.exit(0)
     assert args[0] == "build", args
-    if case == "build":
-        sys.exit(41)
-    Path(args[args.index("-o") + 1]).write_text("original " + os.environ["GOARCH"])
+    if case == "build": sys.exit(41)
+    flags = args[args.index("-ldflags") + 1]
+    stamps = dict(token.split("=", 1) for token in flags.split() if "=" in token)
+    display = f"homepodctl {stamps['main.version']} ({stamps['main.commit']}) {stamps['main.date']}"
+    metadata = {"GOOS": os.environ["GOOS"], "GOARCH": os.environ["GOARCH"],
+                "CGO_ENABLED": os.environ["CGO_ENABLED"], "-ldflags": flags}
+    target = Path(args[args.index("-o") + 1])
+    target.write_text("#!/usr/bin/env python3\n# metadata: " + json.dumps(metadata) + "\nprint(" + repr(display) + ")\n")
+    target.chmod(0o755)
     sys.exit(0)
 if tool == "gh":
     assert args[:2] == ["release", "create"], args
@@ -44,8 +63,8 @@ if tool == "gh":
 elif tool == "git":
     command = args[2:] if args[:1] == ["-C"] else args
     if command[:1] == ["clone"]:
-        assert args[1] == "git@github.com:fixture/tap.git", args
-        args[1] = str(root / "tap.git")
+        assert args[-2] == str(root / "tap.git"), args
+        assert args[1:3] == ["--branch", "main"], args
         event = "clone"
     elif command[:1] == ["push"]:
         event = "tap" if args[:1] == ["-C"] else "tag"
@@ -54,7 +73,7 @@ elif tool == "git":
     elif command[:1] == ["commit"]:
         event = "commit"
     else:
-        assert command[0] in {"rev-parse", "symbolic-ref", "status", "describe", "log", "add", "diff"}, args
+        assert command[0] in {"rev-parse", "symbolic-ref", "status", "check-ref-format", "add", "diff"}, args
 else:
     raise AssertionError(tool)
 
@@ -71,7 +90,10 @@ if event:
 if tool == "gh":
     published = root / "published"
     published.mkdir()
-    assets = args[3:args.index("--title")]
+    assert args[args.index("--repo") + 1] == "fixture/source", args
+    notes = Path(args[args.index("--notes-file") + 1])
+    assert "Reviewed fixture release note" in notes.read_text()
+    assets = args[3:args.index("--repo")]
     for asset in assets:
         shutil.copy2(asset, published)
         if case == "github_partial":
@@ -99,6 +121,7 @@ class ReleasePublicationTest(unittest.TestCase):
                 "GIT_AUTHOR_NAME": "Release test", "GIT_COMMITTER_NAME": "Release test",
                 "GIT_AUTHOR_EMAIL": "test@example.invalid", "GIT_COMMITTER_EMAIL": "test@example.invalid",
                 "GITHUB_REPO": "fixture/source", "HOMEBREW_TAP_REPO": "fixture/tap",
+                "HOMEBREW_TAP_URL": str(root / "tap.git"),
                 "RELEASE_TEST_CASE": case, "RELEASE_TEST_ROOT": str(root),
                 "RELEASE_TEST_GIT": GIT,
                 "RELEASE_TEST_MKTEMP": MKTEMP,
@@ -111,6 +134,12 @@ class ReleasePublicationTest(unittest.TestCase):
             git("-c", "init.defaultBranch=main", "init", "--quiet")
             (repo / "scripts").mkdir()
             shutil.copy2(SOURCE, repo / "scripts/release.sh")
+            for name in ("release-config.sh", "changelog-section.py", "cli-tooling-manifest.json"):
+                shutil.copy2(SOURCE.parent / name, repo / "scripts" / name)
+            shutil.copytree(SOURCE.parent / "cli-shared", repo / "scripts/cli-shared")
+            (repo / "cmd/homepodctl").mkdir(parents=True)
+            (repo / "cmd/homepodctl/main.go").write_text("package main\nfunc main() {}\n")
+            (repo / "CHANGELOG.md").write_text(f"# Changelog\n\n## [{VERSION}] - 2026-09-30\n\n- Reviewed fixture release note. [Source](https://github.com/fixture/source/commit/abcdef123456)\n")
             preflight = repo / "scripts/release-check.sh"
             preflight.write_text('#!/usr/bin/env bash\n'
                                  'if [[ "$RELEASE_TEST_CASE" == preflight ]]; then exit 41; fi\n')
@@ -143,7 +172,7 @@ class ReleasePublicationTest(unittest.TestCase):
             events = events_path.read_text().splitlines() if events_path.exists() else []
 
             # A failing phase must stop later publication, without automatic retries.
-            sequence = ["local_tag", "tag", "github", "clone", "commit", "tap"]
+            sequence = ["clone", "commit", "local_tag", "tag", "github", "tap"]
             if dry_run or case in {"preflight", "build"}:
                 expected_events = []
             elif case == "success":
@@ -166,13 +195,13 @@ class ReleasePublicationTest(unittest.TestCase):
                 phase = "local_tag" if case.startswith("local_tag") else case.split("_")[0]
                 self.assertIn("stopped during: " + phases[phase], output)
                 self.assertIn("Manual recovery: docs/release-recovery.md", output)
-                if case in {"preflight", "build"}:
+                if case in {"preflight", "build", "clone_before", "commit_before"}:
                     self.assertIn("No publication commands were attempted in this run.", output)
                 else:
                     self.assertIn("Expected release commit: " + commit, output)
                     self.assertIn("Do not rerun release.sh", output)
                     self.assertIn("an error does not prove it failed remotely", output)
-                    self.assertIn("Original archives and SHA256SUMS retained in:", output)
+                    self.assertIn("Original archives, SHA256SUMS, NOTES.md and formula retained in:", output)
                     labels = {"local_tag": "Local tag", "tag": "Tag push",
                               "github": "GitHub release/assets", "tap": "Homebrew push"}
                     for event, label in labels.items():
@@ -198,7 +227,7 @@ class ReleasePublicationTest(unittest.TestCase):
                 self.assertEqual(tag.stdout.strip(), commit)
             assets = list((root / "published").glob("*"))
             expected_assets = 1 if case == "github_partial" else (
-                3 if "clone" in events or case == "github_after" else 0)
+                3 if "tap" in events or case == "github_after" else 0)
             self.assertEqual(len(assets), expected_assets, output)
             for asset in assets:
                 self.assertEqual(asset.read_bytes(), (repo / "dist" / asset.name).read_bytes())
@@ -210,7 +239,7 @@ class ReleasePublicationTest(unittest.TestCase):
             tap_after = git("--git-dir", str(root / "tap.git"), "rev-parse", "main").stdout
             self.assertEqual(tap_after != tap_before, case in {"success", "tap_after"} and not dry_run)
             retained = list(scratch.iterdir())
-            if case in {"commit_before", "tap_before", "tap_after"} and not dry_run:
+            if case not in {"success", "preflight", "build", "clone_before"} and not dry_run:
                 self.assertEqual(len(retained), 1, output)
                 self.assertTrue((retained[0] / "Formula/homepodctl.rb").is_file())
                 self.assertIn("Homebrew work directory retained for inspection:", output)

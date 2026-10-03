@@ -139,7 +139,7 @@ func setupGuidance(cfg *native.Config, devices []music.AirPlayDevice, playlists 
 		})
 		if len(candidates) > 0 {
 			playRoom = candidates[0]
-			next = append(next, "homepodctl setup --room="+bashArrayLiteral([]string{playRoom}))
+			next = append(next, "homepodctl setup --room="+shellArrayLiteral([]string{playRoom}))
 		} else {
 			roomsReady = false
 			warnings = append(warnings, "No available destination with a unique name was discovered. Check device availability and give destinations distinct names before selecting default rooms.")
@@ -158,7 +158,7 @@ func setupGuidance(cfg *native.Config, devices []music.AirPlayDevice, playlists 
 		if roomsReady {
 			command := "homepodctl play"
 			if playRoom != "" {
-				command += " --room=" + bashArrayLiteral([]string{playRoom})
+				command += " --room=" + shellArrayLiteral([]string{playRoom})
 			}
 			next = append([]string{command}, next...)
 		}
@@ -172,9 +172,9 @@ func setupGuidance(cfg *native.Config, devices []music.AirPlayDevice, playlists 
 	}
 	if roomsReady {
 		for _, playlist := range suggestions {
-			command := "homepodctl play --backend airplay --playlist-id=" + bashArrayLiteral([]string{playlist.PersistentID})
+			command := "homepodctl play --backend airplay --playlist-id=" + shellArrayLiteral([]string{playlist.PersistentID})
 			if playRoom != "" {
-				command += " --room=" + bashArrayLiteral([]string{playRoom})
+				command += " --room=" + shellArrayLiteral([]string{playRoom})
 			}
 			next = append(next, command)
 		}

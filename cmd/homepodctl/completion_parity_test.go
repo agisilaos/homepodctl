@@ -140,11 +140,11 @@ func completionCandidates(t *testing.T, shell string, values completionValues, w
 		if current := words[len(words)-1]; strings.Contains(current, "=") {
 			prefix = current[:strings.LastIndex(current, "=")+1]
 		}
-		harness := script + fmt.Sprintf("\nCOMP_WORDS=(%s)\nCOMP_CWORD=%d\n_homepodctl_completion\n", bashArrayLiteral(words), len(words)-1) +
+		harness := script + fmt.Sprintf("\nCOMP_WORDS=(%s)\nCOMP_CWORD=%d\n_homepodctl_completion\n", shellArrayLiteral(words), len(words)-1) +
 			decodeBashReplies(prefix, "")
 		output = runShellScript(t, requireShell(t, "bash"), []string{"--noprofile", "--norc"}, harness)
 	case "zsh":
-		harness := zshCompletionHarness("words=("+zshArrayLiteral(words)+")", len(words)) + script +
+		harness := zshCompletionHarness("words=("+shellArrayLiteral(words)+")", len(words)) + script +
 			"if (( ${#captured[@]} )); then printf '%s\\0' \"${captured[@]}\"; fi\n"
 		output = runShellScript(t, requireShell(t, "zsh"), []string{"-f"}, harness)
 	case "fish":
@@ -214,12 +214,12 @@ func TestCompletionRawShellWords(t *testing.T) {
 						quote = "'"
 					}
 					harness := script + fmt.Sprintf("\nCOMP_LINE=%s\nCOMP_WORDS=(%s)\nCOMP_CWORD=%d\n_homepodctl_completion\n",
-						bashArrayLiteral([]string{tc.line}), bashArrayLiteral(tc.words), len(tc.words)-1)
+						shellArrayLiteral([]string{tc.line}), shellArrayLiteral(tc.words), len(tc.words)-1)
 					harness += decodeBashReplies("", quote)
 					output = runShellScript(t, requireShell(t, shell), []string{"--noprofile", "--norc"}, harness)
 				} else {
-					harness := zshCompletionHarness("words=("+zshArrayLiteral(tc.words)+")", len(tc.words)) +
-						"PREFIX=" + zshArrayLiteral([]string{tc.prefix}) + "\n" + script + "\nprintf '%s\\0' \"${captured[@]}\"\n"
+					harness := zshCompletionHarness("words=("+shellArrayLiteral(tc.words)+")", len(tc.words)) +
+						"PREFIX=" + shellArrayLiteral([]string{tc.prefix}) + "\n" + script + "\nprintf '%s\\0' \"${captured[@]}\"\n"
 					output = runShellScript(t, requireShell(t, shell), []string{"-f"}, harness)
 				}
 				assertNULValues(t, output, []string{tc.want})
@@ -232,7 +232,7 @@ func TestCompletionRawShellWords(t *testing.T) {
 // candidate and executing the command. Hostile fixtures assert no substitution
 // runs and each decoded candidate remains exactly one argument.
 func decodeBashReplies(prefix, quote string) string {
-	return "decoded=()\nprefix=" + bashArrayLiteral([]string{prefix}) + "\nquote_marker=" + bashArrayLiteral([]string{quote}) + `
+	return "decoded=()\nprefix=" + shellArrayLiteral([]string{prefix}) + "\nquote_marker=" + shellArrayLiteral([]string{quote}) + `
 for reply in "${COMPREPLY[@]}"; do
   eval "set -- $quote_marker$reply$quote_marker"
   for value in "$@"; do decoded+=("$prefix$value"); done

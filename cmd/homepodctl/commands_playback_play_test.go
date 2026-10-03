@@ -455,7 +455,7 @@ func TestCmdPlaySelectionOptions(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/dry=%t", tc.name, dryRun), func(t *testing.T) {
 				r := recordPlayBackend(t)
 				if tc.multiple {
-					r.matches = append([]music.UserPlaylist{{Name: "Focus Mix Extended", PersistentID: "B"}}, r.matches...)
+					r.matches = append(r.matches, music.UserPlaylist{Name: "Focus Mix Extended", PersistentID: "B"})
 				}
 				if tc.noMatches {
 					r.matches = nil

@@ -4,3 +4,6 @@ automation.txt	help automation
 plan.txt	help plan
 play.txt	help play
 setup.txt	help setup
+devices.txt	help devices
+status.txt	help status
+playlists.txt	help playlists

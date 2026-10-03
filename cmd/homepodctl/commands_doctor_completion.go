@@ -277,15 +277,8 @@ func renderCompletion(shell string, values completionValues) (string, error) {
 	}
 }
 
-func bashArrayLiteral(values []string) string {
-	literals := make([]string, 0, len(values))
-	for _, value := range values {
-		literals = append(literals, "'"+strings.ReplaceAll(value, "'", `'\''`)+"'")
-	}
-	return strings.Join(literals, " ")
-}
-
-func zshArrayLiteral(values []string) string {
+// shellArrayLiteral encodes words for Bash and Zsh using single quotes.
+func shellArrayLiteral(values []string) string {
 	literals := make([]string, 0, len(values))
 	for _, value := range values {
 		literals = append(literals, "'"+strings.ReplaceAll(value, "'", `'\''`)+"'")

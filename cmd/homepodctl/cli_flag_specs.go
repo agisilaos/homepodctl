@@ -160,7 +160,12 @@ func parseArgs(command string, args []string) (parsedArgs, []string, error) {
 			return parsedArgs{}, nil, usageErrf("%s: %s", command, err)
 		}
 		if token.name == "help" {
-			usage()
+			switch command {
+			case "devices", "status", "playlists":
+				cmdHelp([]string{command})
+			default:
+				usage()
+			}
 			exitCode(0)
 		}
 		out.kv[token.name] = append(out.kv[token.name], token.value)

@@ -73,6 +73,69 @@ func cmdHelp(args []string) {
 		return
 	}
 	switch args[0] {
+	case "playlists":
+		fmt.Fprint(os.Stdout, `homepodctl playlists - find Music.app user playlists
+
+Usage:
+  homepodctl playlists [--query <substring>] [--limit N] [--json] [--plain]
+
+Notes:
+  - Reads Music.app user playlists without changing playback; macOS may request Automation permission.
+  - --query matches names by case-insensitive substring, not fuzzy search. Omit it to browse without a name filter.
+  - --limit defaults to 50 matches; 0 or a negative value removes the limit.
+  - --json emits an array of persistentID, name, smart and genius fields; no matches produces [].
+  - --plain emits tab-separated ID/name rows without a header; no matches produces no output.
+  - Human output reports an empty library or no matching playlists. Empty results exit successfully.
+  - Copy a persistentID into play --playlist-id to avoid ambiguous names.
+  - A playback preview does not verify that the playlist still exists or change playback.
+
+Examples:
+  homepodctl playlists --query chill
+  homepodctl playlists --limit 0 --json
+  homepodctl play --playlist-id <PERSISTENT_ID> --dry-run --json
+`)
+	case "devices":
+		fmt.Fprint(os.Stdout, `homepodctl devices - list Music.app AirPlay outputs
+
+Usage:
+  homepodctl devices [--json] [--plain] [--include-network]
+
+Notes:
+  - Read-only discovery through Music.app; macOS may request Automation permission.
+  - Device names are the room names used by --room. Listing does not select outputs.
+  - available, selected and active are Music.app's device properties: availability,
+    output selection and activity respectively. Selection alone does not prove playback.
+  - --json emits an array with name, kind, available, selected, active, volume and persistentID.
+  - --include-network adds networkAddress to JSON when present; it does not expand discovery.
+  - --plain removes the table header. The table shows name, kind, available, selected and volume.
+  - Use homepodctl status to inspect playback and the current output route.
+
+Examples:
+  homepodctl devices
+  homepodctl devices --json
+  homepodctl devices --json --include-network
+`)
+	case "status", "now":
+		fmt.Fprint(os.Stdout, `homepodctl status - inspect Music.app playback and output routing
+
+Usage:
+  homepodctl status [--json] [--plain] [--watch <duration>]
+  homepodctl now [--json] [--plain] [--watch <duration>]
+
+Notes:
+  - now is an alias for status. Reading status does not change playback or outputs.
+  - Reports player state, track when present, selected outputs, route and Music/Automation connectivity.
+  - --json emits a status object: ok, player, connection and optional track, volume, outputs and route.
+  - outputs[].deviceName identifies the device; route contains the selected room names.
+  - --plain uses labeled text. --watch repeats at a positive duration such as 1s; Ctrl-C stops it.
+  - --watch with --json prints successive JSON objects, not a single JSON array.
+  - Use homepodctl devices for available outputs or homepodctl doctor for permission diagnostics.
+
+Examples:
+  homepodctl status
+  homepodctl now --json
+  homepodctl status --watch 1s
+`)
 	case "play":
 		fmt.Fprint(os.Stdout, `homepodctl play - play an Apple Music playlist
 

@@ -12,7 +12,7 @@ func TestGoldenHelpRun(t *testing.T) {
 }
 
 func TestHelpDocumentationSnapshots(t *testing.T) {
-	for _, command := range []string{"automation", "plan", "play", "setup"} {
+	for _, command := range []string{"automation", "plan", "play", "setup", "devices", "status", "playlists"} {
 		t.Run(command, func(t *testing.T) {
 			got := captureStdout(t, func() { cmdHelp([]string{command}) })
 			path := filepath.Join("..", "..", "docs", "help", command+".txt")

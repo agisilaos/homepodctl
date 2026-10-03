@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/agisilaos/homepodctl/internal/music"
 	"github.com/agisilaos/homepodctl/internal/native"
 )
 
@@ -14,7 +13,7 @@ func cmdPlay(ctx context.Context, cfg *native.Config, args []string) {
 	if err != nil {
 		die(err)
 	}
-	out := req.actionOutput()
+	out := req.actionResult()
 	if req.output.DryRun {
 		writeActionOutput("play", req.output.JSON, req.output.Plain, out)
 		return
@@ -88,10 +87,7 @@ func resolveAirplayPlaylist(ctx context.Context, req playRequest) (string, error
 		}
 		return selected.PersistentID, nil
 	}
-	best, ok := music.PickBestPlaylist(query, matches)
-	if !ok {
-		return "", fmt.Errorf("no playlists match %q", query)
-	}
+	best := matches[0]
 	if len(matches) > 1 {
 		fmt.Fprintf(os.Stderr, "picked %q (%s) (use --choose to select)\n", best.Name, best.PersistentID)
 	}

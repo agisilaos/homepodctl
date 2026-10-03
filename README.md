@@ -147,7 +147,8 @@ homepodctl status
 On later runs, start with `homepodctl play`; setup is only needed to change your
 preferences or check discovery. To play a different playlist or destination,
 supply an explicit target or room.
-List available AirPlay outputs (these names are what you pass as “rooms”):
+List available AirPlay outputs (these names are what you pass as “rooms”).
+Use `homepodctl devices --help` for device fields and output options:
 
 ```sh
 homepodctl devices
@@ -179,7 +180,8 @@ query picks the best match; to choose among multiple matches interactively:
 homepodctl play 'YOUR_SEARCH_TEXT' --choose
 ```
 
-See status (playback + outputs/route + backend connectivity/auth):
+See status (playback + outputs/route + backend connectivity/auth).
+Use `homepodctl status --help` for output fields and watch behavior:
 
 ```sh
 homepodctl status
@@ -197,11 +199,17 @@ Watch changes:
 homepodctl status --watch 1s
 ```
 
-Search playlists (for IDs / debugging):
+Search playlists by case-insensitive name substring (use `homepodctl playlists --help`
+for focused guidance):
 
 ```sh
 homepodctl playlists --query 'YOUR_SEARCH_TEXT'
 ```
+
+The default limit is 50 matches; `--limit 0` removes the limit. Human output explains
+when no playlists match. `--json` always emits an array, including `[]` for no
+matches (previously `null`); `--plain` retains empty output for no matches. Scripts
+that explicitly check for JSON `null` should now check for an empty array.
 
 If a playlist name is ambiguous or tricky to match (emoji/whitespace), use IDs:
 
@@ -507,11 +515,14 @@ See the [automation exit and output contract](docs/automation-v1-cli-spec.md#exi
 
 This tool is macOS-only (it relies on `osascript` + Music.app, and optionally `shortcuts`).
 
-- **Continuous verification:** `make verify` runs tests, vet, docs, module metadata, formatting, and a development-stamped build without requiring a release version.
-- **Release preflight (recommended):** `make release-check VERSION=vX.Y.Z` runs the same continuous verification and additionally validates that the release version is unpublished and matches the top changelog entry.
-- **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds release artifacts only (no changelog/tag/push/release/tap writes).
+- **Continuous verification:** `make verify` accepts development changes and checks the pinned helpers, module metadata, formatting, vet, tests, docs/help, a development-stamped binary and release fixtures without requiring a release version.
+- **Prepare release notes:** `make changelog-context VERSION=vX.Y.Z` gathers evidence through `scripts/changelog-context.sh`; prepare and review a concrete top changelog section with linked list items, then commit it.
+- **Release preflight:** `make release-check VERSION=vX.Y.Z` runs verification and additionally requires a clean checkout, an unpublished version and its reviewed top changelog section. `make release-check-ci` validates the historical top version and allows its existing tag.
+- **Release dry run:** `make release-dry-run VERSION=vX.Y.Z` builds and validates both archives, checksums, approved notes and the Ruby Homebrew formula without publication writes.
 - **Prebuilt binaries:** `make release VERSION=vX.Y.Z` publishes a GitHub Release and updates the Homebrew formula in `agisilaos/homebrew-tap`.
+- **Release toolchain:** Go 1.27.1 for local builds, release commands and all CI jobs.
 - **Release scripts:** `scripts/release-check.sh` and `scripts/release.sh`
+- **Release guide:** [Preparation, validation and publishing](RELEASING.md). Actual publication requires `main`; the selected tap branch and formula are prepared before tag/GitHub writes.
 - **Interrupted release:** the script reports the stopped step and command outcomes. Preserve the original artifacts and follow [manual recovery](docs/release-recovery.md); rerunning does not resume publication.
 - **`go install` (after publishing):** `go install github.com/agisilaos/homepodctl/cmd/homepodctl@latest`
 

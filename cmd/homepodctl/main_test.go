@@ -428,13 +428,17 @@ func TestInstallCompletionWritesFile(t *testing.T) {
 
 func TestWriteActionOutput_DryRunJSON(t *testing.T) {
 	out := captureStdout(t, func() {
-		writeActionOutput("play", true, false, actionOutput{
+		writeActionOutput("play", true, false, actionResult{
+			Action:   "ignored",
 			DryRun:   true,
 			Backend:  "airplay",
 			Rooms:    []string{"Bedroom"},
 			Playlist: "chill",
 		})
 	})
+	if !strings.Contains(out, `"ok": true`) {
+		t.Fatalf("success json missing: %q", out)
+	}
 	if !strings.Contains(out, `"dryRun": true`) {
 		t.Fatalf("dry-run json missing: %q", out)
 	}
@@ -445,7 +449,7 @@ func TestWriteActionOutput_DryRunJSON(t *testing.T) {
 
 func TestWriteActionOutput_DryRunText(t *testing.T) {
 	out := captureStdout(t, func() {
-		writeActionOutput("volume", false, false, actionOutput{
+		writeActionOutput("volume", false, false, actionResult{
 			DryRun:  true,
 			Backend: "airplay",
 			Rooms:   []string{"Bedroom"},

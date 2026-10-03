@@ -20,6 +20,7 @@
 ## Release
 
 - Unified release workflow commands and scripts: `../README.md#release`
+- Preparation and publication: [Release guide](../RELEASING.md)
 - Release history: `../CHANGELOG.md`
 - Interrupted releases: [Manual recovery](release-recovery.md)
 - R14 scope decision: [Report release failures for manual recovery](adr/0002-report-release-failures-for-manual-recovery.md)
