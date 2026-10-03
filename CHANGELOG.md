@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on *Keep a Changelog*, and this project adheres to *Semantic Versioning*.
 
+## [v0.3.2] - 2026-10-03
+
+### Fixed
+
+- Configuration saves now replace the file atomically, preserving the previous config on write failure. Symlink and non-file destinations are rejected.
+
 ## [v0.3.1] - 2026-09-29
 
 ### Fixed
