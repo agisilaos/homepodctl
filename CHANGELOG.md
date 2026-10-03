@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on *Keep a Changelog*, and this project adheres to *Semantic Versioning*.
 
+## [v0.3.2] - 2026-10-03
+
+### Fixed
+
+- Playback mutations and Shortcuts now run once. Ambiguous failures return `OUTCOME_UNCERTAIN` with inspection guidance before retrying; read-only queries retain retries.
+
 ## [v0.3.1] - 2026-09-29
 
 ### Fixed

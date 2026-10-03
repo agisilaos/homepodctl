@@ -19,3 +19,17 @@ func TestUncertainOutcomeRendering(t *testing.T) {
 		}
 	}
 }
+
+func TestUncertainTUIRespectsItsVerbosity(t *testing.T) {
+	previous := verbose
+	t.Cleanup(func() { verbose = previous })
+	err := &music.ScriptError{Err: errors.New("backend detail"), Uncertain: true}
+	verbose = true
+	if got := tuiErrorText(err, false); strings.Contains(got, "backend detail") {
+		t.Fatalf("verbose detail leaked: %s", got)
+	}
+	verbose = false
+	if got := tuiErrorText(err, true); !strings.Contains(got, "backend detail") {
+		t.Fatalf("verbose detail missing: %s", got)
+	}
+}

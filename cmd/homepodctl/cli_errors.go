@@ -153,10 +153,7 @@ func classifyErrorCode(err error) string {
 
 func formatError(err error) string {
 	if outcomeUncertain(err) {
-		if verbose {
-			return err.Error()
-		}
-		return "Playback or Shortcut outcome is uncertain. Inspect playback and the target room before retrying; no automatic retry was attempted."
+		return formatUncertainOutcome(err, verbose)
 	}
 	if verbose {
 		return err.Error()
@@ -248,4 +245,11 @@ func debugf(format string, args ...any) {
 func envTruthy(v string) bool {
 	value, ok := parseBoolWord(v)
 	return ok && value
+}
+
+func formatUncertainOutcome(err error, verboseOutput bool) string {
+	if verboseOutput {
+		return err.Error()
+	}
+	return "Playback or Shortcut outcome is uncertain. Inspect playback and the target room before retrying; no automatic retry was attempted."
 }
