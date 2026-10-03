@@ -11,7 +11,9 @@ func TestPlaylistDiscoveryOutput(t *testing.T) {
 	backendDir := t.TempDir()
 	backend := filepath.Join(backendDir, "osascript")
 	cli.env = append(cli.env, "PATH="+backendDir)
-	if err := os.WriteFile(backend, []byte("#!/bin/sh\nprintf 'A1\\tFocus\\tfalse\\tfalse\\nB2\\tFocus Mix\\ttrue\\tfalse\\n'\n"), 0700); err != nil {
+	if err := os.WriteFile(backend, []byte(`#!/bin/sh
+printf '%s\n' '[{"persistentID":"A1","name":"Focus","smart":false,"genius":false},{"persistentID":"B2","name":"Focus Mix","smart":true,"genius":false}]'
+`), 0700); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
@@ -32,7 +34,7 @@ func TestPlaylistDiscoveryOutput(t *testing.T) {
 			}
 		})
 	}
-	if err := os.WriteFile(backend, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+	if err := os.WriteFile(backend, []byte("#!/bin/sh\nprintf '[]\\n'\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {

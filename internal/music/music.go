@@ -2,6 +2,7 @@ package music
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -189,39 +190,60 @@ end tell
 	return out, nil
 }
 
-func ListUserPlaylists(ctx context.Context, query string, limit int) ([]UserPlaylist, error) {
-	query = strings.TrimSpace(query)
-	needle := strings.ToLower(query)
+const playlistJSONHandler = `
+use framework "Foundation"
+use scripting additions
 
-	out, err := runAppleScript(ctx, `
+on playlistJSON(rows)
+ set playlistRecords to current application's NSMutableArray's array()
+ repeat with row in rows
+  set playlistRecord to current application's NSDictionary's dictionaryWithObjects:(contents of row) forKeys:{"persistentID", "name", "smart", "genius"}
+  playlistRecords's addObject:playlistRecord
+ end repeat
+ set jsonData to current application's NSJSONSerialization's dataWithJSONObject:(playlistRecords) |options|:0 |error|:(missing value)
+ if jsonData is missing value then error "Could not serialize playlist metadata"
+ return (current application's NSString's alloc()'s initWithData:jsonData encoding:(current application's NSUTF8StringEncoding)) as text
+end playlistJSON
+`
+
+func ListUserPlaylists(ctx context.Context, query string, limit int) ([]UserPlaylist, error) {
+	needle := strings.ToLower(strings.TrimSpace(query))
+	out, err := runAppleScript(ctx, playlistJSONHandler+`
+set rows to {}
 tell application "Music"
-	set out to ""
-	repeat with p in (every user playlist)
-		set out to out & (persistent ID of p) & tab & (name of p) & tab & (smart of p as text) & tab & (genius of p as text) & linefeed
-	end repeat
-	return out
+ repeat with p in (every user playlist)
+  set end of rows to {persistent ID of p, name of p, smart of p, genius of p}
+ end repeat
 end tell
+return playlistJSON(rows)
 `)
 	if err != nil {
 		return nil, err
 	}
-
-	var playlists []UserPlaylist
-	for _, line := range splitNonEmptyLines(out) {
-		parts := strings.Split(line, "\t")
-		for len(parts) < 4 {
-			parts = append(parts, "")
+	var records []struct {
+		PersistentID *string `json:"persistentID"`
+		Name         *string `json:"name"`
+		Smart        *bool   `json:"smart"`
+		Genius       *bool   `json:"genius"`
+	}
+	if err := json.Unmarshal([]byte(out), &records); err != nil {
+		return nil, fmt.Errorf("decode playlist metadata: %w", err)
+	}
+	if records == nil {
+		return nil, fmt.Errorf("playlist metadata must be an array")
+	}
+	// Validate the complete response before applying query or limit.
+	for i, p := range records {
+		if p.PersistentID == nil || strings.TrimSpace(*p.PersistentID) == "" || p.Name == nil || p.Smart == nil || p.Genius == nil {
+			return nil, fmt.Errorf("playlist metadata record %d requires persistentID, name, smart, and genius", i+1)
 		}
-		p := UserPlaylist{
-			PersistentID: strings.TrimSpace(parts[0]),
-			Name:         strings.TrimSpace(parts[1]),
-			Smart:        parseBool(parts[2]),
-			Genius:       parseBool(parts[3]),
-		}
-		if needle != "" && !strings.Contains(strings.ToLower(p.Name), needle) {
+	}
+	playlists := make([]UserPlaylist, 0)
+	for _, p := range records {
+		if needle != "" && !strings.Contains(strings.ToLower(*p.Name), needle) {
 			continue
 		}
-		playlists = append(playlists, p)
+		playlists = append(playlists, UserPlaylist{PersistentID: *p.PersistentID, Name: *p.Name, Smart: *p.Smart, Genius: *p.Genius})
 		if limit > 0 && len(playlists) >= limit {
 			break
 		}

@@ -597,3 +597,7 @@ launch may still have changed playback or routing; inspect the target room befor
 retrying. CLI JSON errors use `OUTCOME_UNCERTAIN` and retain the backend failure exit
 code. The dashboard shows the same inspection guidance. Read-only Music discovery
 may retry transient errors; cancellation before dispatch starts no write.
+
+Playlist discovery preserves names verbatim, including whitespace, tabs, newlines,
+and Unicode, through native JSON transport. Malformed or incomplete playlist
+metadata fails the command rather than returning a partial or corrupted list.
