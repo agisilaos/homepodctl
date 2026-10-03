@@ -22,19 +22,19 @@ func printNowPlaying(np music.NowPlaying) {
 	if np.ShuffleEnabled {
 		sh = "on"
 	}
-	fmt.Printf("state=%s pos=%s%s shuffle=%s repeat=%s\n", np.PlayerState, pos, dur, sh, np.SongRepeat)
+	fmt.Fprintf(checkedOutput{os.Stdout}, "state=%s pos=%s%s shuffle=%s repeat=%s\n", np.PlayerState, pos, dur, sh, np.SongRepeat)
 	if np.PlaylistName != "" {
-		fmt.Printf("playlist=%q\n", np.PlaylistName)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "playlist=%q\n", np.PlaylistName)
 	}
 	if np.Track.Name != "" {
-		fmt.Printf("track=%q artist=%q album=%q\n", np.Track.Name, np.Track.Artist, np.Track.Album)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "track=%q artist=%q album=%q\n", np.Track.Name, np.Track.Artist, np.Track.Album)
 	}
 	if len(np.Outputs) > 0 {
 		var parts []string
 		for _, o := range np.Outputs {
 			parts = append(parts, fmt.Sprintf("%s(vol=%d)", o.Name, o.Volume))
 		}
-		fmt.Printf("outputs=%s\n", strings.Join(parts, ", "))
+		fmt.Fprintf(checkedOutput{os.Stdout}, "outputs=%s\n", strings.Join(parts, ", "))
 	}
 }
 
@@ -43,7 +43,7 @@ func printNowPlayingPlain(np music.NowPlaying) {
 	for _, o := range np.Outputs {
 		outputNames = append(outputNames, o.Name)
 	}
-	fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\n",
+	fmt.Fprintf(checkedOutput{os.Stdout}, "%s\t%s\t%s\t%s\t%s\t%s\n",
 		np.PlayerState,
 		np.Track.Name,
 		np.Track.Artist,
@@ -100,19 +100,23 @@ func isInteractiveStdin() bool {
 	return (info.Mode() & os.ModeCharDevice) != 0
 }
 
-func printDevicesTable(w io.Writer, devs []music.AirPlayDevice, plain bool) {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+func printDevicesTable(w io.Writer, devs []music.AirPlayDevice, plain bool) error {
+	tw := tabwriter.NewWriter(strictOutput{w}, 0, 0, 2, ' ', 0)
 	if !plain {
-		fmt.Fprintln(tw, "NAME\tKIND\tAVAILABLE\tSELECTED\tVOLUME")
+		if _, err := fmt.Fprintln(tw, "NAME\tKIND\tAVAILABLE\tSELECTED\tVOLUME"); err != nil {
+			return err
+		}
 	}
 	for _, d := range devs {
 		kind := d.Kind
 		if kind == "" {
 			kind = "unknown"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%t\t%t\t%d\n", d.Name, kind, d.Available, d.Selected, d.Volume)
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%t\t%t\t%d\n", d.Name, kind, d.Available, d.Selected, d.Volume); err != nil {
+			return err
+		}
 	}
-	_ = tw.Flush()
+	return tw.Flush()
 }
 
 type aliasRow struct {
@@ -157,13 +161,17 @@ func buildAliasRows(cfg *native.Config) []aliasRow {
 	return rows
 }
 
-func printAliasesTable(w io.Writer, rows []aliasRow, plain bool) {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+func printAliasesTable(w io.Writer, rows []aliasRow, plain bool) error {
+	tw := tabwriter.NewWriter(strictOutput{w}, 0, 0, 2, ' ', 0)
 	if !plain {
-		fmt.Fprintln(tw, "NAME\tBACKEND\tROOMS\tTARGET")
+		if _, err := fmt.Fprintln(tw, "NAME\tBACKEND\tROOMS\tTARGET"); err != nil {
+			return err
+		}
 	}
 	for _, row := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", row.Name, row.Backend, strings.Join(row.Rooms, ","), row.Target)
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", row.Name, row.Backend, strings.Join(row.Rooms, ","), row.Target); err != nil {
+			return err
+		}
 	}
-	_ = tw.Flush()
+	return tw.Flush()
 }

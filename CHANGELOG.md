@@ -8,6 +8,8 @@ The format is based on *Keep a Changelog*, and this project adheres to *Semantic
 
 ### Fixed
 
+- Failed stdout delivery now exits nonzero in command output, including JSON, plain text and buffered tables; completed changes are retained and diagnostics advise inspection before retrying.
+
 - Playback and setup suffix help now matches focused topic help before configuration loading, including `vol` and `-h`. Flag-looking values remain data.
 
 - Playlist discovery preserves names and boolean metadata through JSON transport, rejecting incomplete or malformed records before filtering.

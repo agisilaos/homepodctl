@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -106,18 +107,18 @@ func runDoctorChecks(ctx context.Context) doctorReport {
 
 func printDoctorReport(report doctorReport, plain bool) {
 	if plain {
-		fmt.Println("STATUS\tCHECK\tMESSAGE\tTIP")
+		fmt.Fprintln(checkedOutput{os.Stdout}, "STATUS\tCHECK\tMESSAGE\tTIP")
 		for _, c := range report.Checks {
-			fmt.Printf("%s\t%s\t%s\t%s\n", c.Status, c.Name, c.Message, c.Tip)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "%s\t%s\t%s\t%s\n", c.Status, c.Name, c.Message, c.Tip)
 		}
 		return
 	}
-	fmt.Printf("doctor ok=%t checked_at=%s\n", report.OK, report.CheckedAt)
+	fmt.Fprintf(checkedOutput{os.Stdout}, "doctor ok=%t checked_at=%s\n", report.OK, report.CheckedAt)
 	for _, c := range report.Checks {
 		if c.Tip != "" {
-			fmt.Printf("%s\t%s\t%s (tip: %s)\n", c.Status, c.Name, c.Message, c.Tip)
+			fmt.Fprintf(checkedOutput{os.Stdout}, "%s\t%s\t%s (tip: %s)\n", c.Status, c.Name, c.Message, c.Tip)
 			continue
 		}
-		fmt.Printf("%s\t%s\t%s\n", c.Status, c.Name, c.Message)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "%s\t%s\t%s\n", c.Status, c.Name, c.Message)
 	}
 }

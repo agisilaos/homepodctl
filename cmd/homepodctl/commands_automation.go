@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -226,7 +227,7 @@ func cmdAutomationInit(args []string) {
 		writeJSON(automationInitResult{Preset: preset, Name: doc.Name, Content: string(b)})
 		return
 	}
-	fmt.Print(string(b))
+	fmt.Fprint(checkedOutput{os.Stdout}, string(b))
 }
 
 func parseAutomationFileFlag(flags parsedArgs) (string, error) {
@@ -280,9 +281,9 @@ func emitAutomationResult(result automationCommandResult, jsonOut bool) {
 	if quiet {
 		return
 	}
-	fmt.Printf("automation name=%q mode=%s ok=%t steps=%d\n", result.Name, result.Mode, result.OK, len(result.Steps))
+	fmt.Fprintf(checkedOutput{os.Stdout}, "automation name=%q mode=%s ok=%t steps=%d\n", result.Name, result.Mode, result.OK, len(result.Steps))
 	for _, st := range result.Steps {
-		fmt.Printf("%d/%d %s ok=%t\n", st.Index+1, len(result.Steps), st.Type, st.OK)
+		fmt.Fprintf(checkedOutput{os.Stdout}, "%d/%d %s ok=%t\n", st.Index+1, len(result.Steps), st.Type, st.OK)
 	}
 }
 
