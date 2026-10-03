@@ -137,7 +137,32 @@ func readFlag(spec commandFlagSpec, args []string) (flagToken, error) {
 	return token, nil
 }
 
+func hasOfflineHelp(command string) bool {
+	switch command {
+	case "devices", "status", "now", "playlists", "play", "volume", "vol", "run", "native-run", "setup":
+		return true
+	default:
+		return false
+	}
+}
+
 func parseArgs(command string, args []string) (parsedArgs, []string, error) {
+	out, positionals, help, err := parseCommandArgs(command, args)
+	if err != nil {
+		return out, positionals, err
+	}
+	if help {
+		if hasOfflineHelp(command) {
+			cmdHelp([]string{command})
+		} else {
+			usage()
+		}
+		exitCode(0)
+	}
+	return out, positionals, nil
+}
+
+func parseCommandArgs(command string, args []string) (parsedArgs, []string, bool, error) {
 	spec := flagsForCommand(command)
 	out := parsedArgs{kv: make(map[string][]string)}
 	var positionals []string
@@ -158,21 +183,15 @@ func parseArgs(command string, args []string) (parsedArgs, []string, error) {
 		}
 		token, err := readFlag(spec, args[i:])
 		if err != nil {
-			return parsedArgs{}, nil, usageErrf("%s: %s", command, err)
+			return parsedArgs{}, nil, false, usageErrf("%s: %s", command, err)
 		}
 		if token.name == "help" {
-			switch command {
-			case "devices", "status", "playlists":
-				cmdHelp([]string{command})
-			default:
-				usage()
-			}
-			exitCode(0)
+			return out, positionals, true, nil
 		}
 		out.kv[token.name] = append(out.kv[token.name], token.value)
 		i += token.count
 	}
-	return out, positionals, nil
+	return out, positionals, false, nil
 }
 
 func parseFlagOnlyArgs(command string, args []string) parsedArgs {

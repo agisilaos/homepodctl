@@ -1,0 +1,13 @@
+homepodctl volume - set output volume
+
+Usage:
+  homepodctl volume <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
+  homepodctl vol <0-100> [<room> ...] [--backend airplay|native] [--json] [--plain] [--dry-run]
+
+Notes:
+  - If no rooms are provided, homepodctl uses defaults.rooms; if empty it uses Music.app’s currently selected outputs (airplay).
+  - Previews and JSON results include the requested volume, including 0. Native previews do not check Shortcut mappings.
+
+Examples:
+  homepodctl volume 35
+  homepodctl volume 35 "Living Room"

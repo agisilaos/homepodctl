@@ -9,3 +9,14 @@ setup.txt	help setup
 devices.txt	help devices
 status.txt	help status
 playlists.txt	help playlists
+
+play-suffix.txt	play --help
+volume.txt	help volume
+volume-suffix.txt	volume --help
+vol.txt	help vol
+vol-suffix.txt	vol --help
+run.txt	help run
+run-suffix.txt	run --help
+native-run.txt	help native-run
+native-run-suffix.txt	native-run --help
+setup-suffix.txt	setup --help
