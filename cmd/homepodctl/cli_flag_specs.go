@@ -36,7 +36,7 @@ func legacyFlagSpec(values, booleans string) commandFlagSpec {
 }
 
 var commandFlagSpecs = map[string]commandFlagSpec{
-	"setup":               flagSpec("backend room", "json no-input"),
+	"setup":               flagSpec("backend room playlist-id", "choose json no-input"),
 	"play":                flagSpec("backend room playlist playlist-id volume", "shuffle choose no-input json plain dry-run"),
 	"run":                 flagSpec("", "json plain dry-run"),
 	"doctor":              flagSpec("", "json plain"),

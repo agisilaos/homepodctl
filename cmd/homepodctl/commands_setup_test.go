@@ -26,17 +26,20 @@ func TestParseSetupOptionsPreservesAcceptedInputs(t *testing.T) {
 		{"last backend", []string{"--backend", "invalid", "--backend", "airplay"}, setupOptions{backend: "airplay"}},
 		{"rooms verbatim", []string{"--room", " Bedroom ", "--room", "Kitchen", "--room", " Bedroom "}, setupOptions{rooms: []string{" Bedroom ", "Kitchen", " Bedroom "}}},
 		{"flag-like room", []string{"--room", "--json"}, setupOptions{rooms: []string{"--json"}}},
+		{"playlist ID", []string{"--playlist-id", " F "}, setupOptions{playlistID: "F"}},
 		{"empty equals room", []string{"--room=", "Bedroom"}, setupOptions{rooms: []string{"Bedroom"}}},
-		{"bare booleans", []string{"--json", "--no-input"}, setupOptions{jsonOut: true}},
+		{"bare booleans", []string{"--json", "--no-input"}, setupOptions{jsonOut: true, noInput: true}},
 		{"boolean aliases", []string{"--json=YES", "--no-input=off"}, setupOptions{jsonOut: true}},
 		{"last boolean", []string{"--json=invalid", "--json=false", "--no-input=0"}, setupOptions{}},
+		{"choose", []string{"--choose", "--no-input=false"}, setupOptions{choose: true}},
+		{"choose false", []string{"--choose=false", "--json"}, setupOptions{jsonOut: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := parseSetupOptions(tc.args)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.backend != tc.want.backend || got.jsonOut != tc.want.jsonOut || !slices.Equal(got.rooms, tc.want.rooms) {
+			if got.backend != tc.want.backend || got.playlistID != tc.want.playlistID || got.jsonOut != tc.want.jsonOut || got.choose != tc.want.choose || got.noInput != tc.want.noInput || !slices.Equal(got.rooms, tc.want.rooms) {
 				t.Errorf("options=%#v, want %#v", got, tc.want)
 			}
 		})
@@ -55,6 +58,13 @@ func TestSetupRejectsInvalidInputBeforeConfigAccess(t *testing.T) {
 		{"backend case", []string{"--backend", "AirPlay"}, `unknown backend: "AirPlay"`},
 		{"json", []string{"--json=invalid"}, "invalid --json"},
 		{"no-input", []string{"--no-input=invalid"}, "invalid --no-input"},
+		{"choose invalid", []string{"--choose=invalid"}, "invalid --choose"},
+		{"choose no-input", []string{"--choose", "--no-input"}, "cannot be combined"},
+		{"choose JSON", []string{"--choose", "--json"}, "cannot be combined"},
+		{"choose native", []string{"--choose", "--backend", "native"}, "supports AirPlay only"},
+		{"choose redirected", []string{"--choose"}, "requires interactive stdin"},
+		{"blank playlist ID", []string{"--playlist-id", " \t "}, "--playlist-id must be non-empty"},
+		{"empty playlist ID", []string{"--playlist-id", ""}, "--playlist-id must be non-empty"},
 		{"empty room", []string{"--room", ""}, "defaults.rooms[0] must be non-empty"},
 		{"blank room", []string{"--room", " \t "}, "defaults.rooms[0] must be non-empty"},
 		{"later room", []string{"--room", "Bedroom", "--room", ""}, "defaults.rooms[1] must be non-empty"},

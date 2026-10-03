@@ -170,6 +170,8 @@ func friendlyScriptError(output string) string {
 		return "Could not connect to Music app. Open Music and retry. Use --verbose for backend details."
 	case strings.Contains(o, "airplay device"):
 		return "AirPlay device lookup failed. Run `homepodctl devices` and use the exact room name."
+	case strings.Contains(o, "user playlist") && (strings.Contains(o, "can't get") || strings.Contains(o, "can’t get") || strings.Contains(o, "cannot get")):
+		return "Playlist lookup failed. Run `homepodctl playlists` to find an available playlist, or `homepodctl setup --choose` to update your default."
 	default:
 		return ""
 	}

@@ -54,25 +54,99 @@ On first use, macOS may prompt you to allow your terminal (or the built binary) 
 - **“Rooms” = AirPlay device names** as seen by Music.app (HomePods, Apple TVs, speakers, etc).
 - `out set` changes **Music.app’s current AirPlay outputs** (it does not edit your config).
 - `play` plays a **Music.app user playlist** (by fuzzy search or by ID).
-- `config.json` is only for **defaults and aliases** (so you don’t have to type `--room` every time).
+- `config.json` stores **defaults and aliases** (so `play` can use your saved rooms and playlist).
 
 ## Usage
 
-Bootstrap local config + diagnostics:
+Discover your devices and playlists, then save your default rooms and playlist:
 
 ```sh
-homepodctl setup --room "Bedroom"
+homepodctl setup --choose
 ```
 
-`setup` saves configuration and then reports diagnostics and device discovery.
-It exits `0` when `ok=true` and `1` when `ok=false`, including in JSON and quiet
-modes. Warnings alone are nonfatal; device discovery errors fail setup on either
-backend, while an empty device list is successful. Diagnostic failure retains
-saved configuration. JSON reports remain on stdout without an extra error
-envelope; errors before diagnostics retain their usual exit codes and stderr output.
+The AirPlay chooser lists actual destinations and lets you select multiple
+available rooms by number. Saved default rooms are marked; pressing Enter keeps
+them. Unavailable destinations and duplicate device names cannot be selected.
+Then you can search your Music library and choose a default playlist, saved by
+persistent ID. Playlist selection is optional: skipping preserves an existing
+default. Enter skips playlist search; after matches are shown, Enter searches
+again and `s` skips selection. `q` or EOF cancels the guided flow before saving.
+Setup saves preferences without changing Music.app's outputs or playback.
+
+After saving rooms and a playlist, give them a go:
+
+```sh
+homepodctl play
+homepodctl status
+```
+
+`play` starts your saved playlist through your saved rooms. Check status for the
+playing track and selected outputs, and listen for audio from those destinations.
+If you built from source, use `./homepodctl` for these commands.
+
+To inspect the saved target and rooms before starting playback:
+
+```sh
+homepodctl play --dry-run
+```
+
+This preview does not verify that the playlist or destinations are available;
+`play` followed by `status` checks the actual playback result.
+
+For prompt-free setup, run:
+
+```sh
+homepodctl setup --no-input
+```
+
+Plain `setup` also runs without CLI prompts. It discovers devices and playlists,
+preserves existing defaults, and prints `play` and `status` when your saved
+playlist and rooms are available. Without a saved playlist, it offers up to three
+commands using real playlist IDs. With no saved rooms, examples prefer available
+HomePods, then other destinations, then the Mac's speakers; this suggestion does
+not save a preference.
+Fresh configuration uses AirPlay with empty default rooms and no default
+playlist, volume, aliases, or Shortcut mappings. To save known rooms and a playlist
+directly, use names from `homepodctl devices` and an ID from `homepodctl playlists`:
+
+```sh
+homepodctl setup --no-input --room 'YOUR_ROOM_NAME' --playlist-id 'YOUR_PLAYLIST_ID'
+```
+
+Repeat `--room` to save multiple rooms. Explicit `--room` values replace saved
+default rooms and skip the room chooser; `--playlist-id` replaces the saved
+playlist and skips the playlist chooser, including with `--choose`. Missing or
+offline saved rooms and a missing saved playlist are preserved and reported with
+recovery next steps. Setup does not infer defaults from current outputs or choose
+a default playlist automatically.
+
+`--choose` requires interactive terminal input and AirPlay. Combining it with
+`--no-input`, `--json`, `--quiet`, redirected input, or the native backend exits
+with a usage error before changing configuration. `--no-input` prevents CLI
+prompts; macOS may still display its Automation permission dialogs.
+
+Ordinary setup saves configuration before diagnostics. It exits `0` when
+`ok=true` and `1` when `ok=false`, including in JSON and quiet modes. Warnings alone
+are nonfatal, including playlist discovery failures. Device discovery errors fail
+setup on either backend, while an empty device list is successful. Diagnostic
+failure retains saved configuration. JSON reports remain on stdout without an
+extra error envelope; errors before diagnostics retain their usual exit codes
+and stderr output. If playlists are empty or unavailable, setup provides discovery
+or recovery commands instead of an invented playback example.
 
 ## Quick start (AirPlay)
 
+Choose your default rooms and playlist once, then play and check them:
+
+```sh
+homepodctl setup --choose
+homepodctl play
+homepodctl status
+```
+
+On later runs, start with `homepodctl play`; setup is only needed to change your
+preferences or check discovery. To play a different playlist or destination,
+supply an explicit target or room.
 List available AirPlay outputs (these names are what you pass as “rooms”).
 Use `homepodctl devices --help` for device fields and output options:
 
@@ -80,28 +154,30 @@ Use `homepodctl devices --help` for device fields and output options:
 homepodctl devices
 ```
 
-Pick outputs to play through (sets Music.app’s current outputs):
+List playlists from your Music library:
 
 ```sh
-homepodctl out set --room "Bedroom"
+homepodctl playlists
 ```
 
-Play a playlist by fuzzy query:
+Use the playback command printed by setup, or replace the placeholders below
+with a playlist ID and room name from those lists:
 
 ```sh
-homepodctl play chill
+homepodctl play --playlist-id 'YOUR_PLAYLIST_ID' --room 'YOUR_ROOM_NAME'
 ```
 
-If the playlist name has spaces, quote it:
+Alternatively, play by a quoted playlist name or fuzzy query from your library:
 
 ```sh
-homepodctl play "Songs I've been obsessed recently pt. 2"
+homepodctl play --playlist 'YOUR_PLAYLIST_NAME'
 ```
 
-If multiple playlists match, auto-picks the best match; to pick interactively:
+Replace `YOUR_PLAYLIST_NAME` with a name from `homepodctl playlists`. A positional
+query picks the best match; to choose among multiple matches interactively:
 
 ```sh
-homepodctl play autumn --choose
+homepodctl play 'YOUR_SEARCH_TEXT' --choose
 ```
 
 See status (playback + outputs/route + backend connectivity/auth).
@@ -127,7 +203,7 @@ Search playlists by case-insensitive name substring (use `homepodctl playlists -
 for focused guidance):
 
 ```sh
-homepodctl playlists --query chill
+homepodctl playlists --query 'YOUR_SEARCH_TEXT'
 ```
 
 The default limit is 50 matches; `--limit 0` removes the limit. Human output explains
@@ -138,13 +214,15 @@ that explicitly check for JSON `null` should now check for an empty array.
 If a playlist name is ambiguous or tricky to match (emoji/whitespace), use IDs:
 
 ```sh
-homepodctl playlists --query autumn
-homepodctl play --playlist-id <PERSISTENT_ID>
+homepodctl playlists --query 'YOUR_SEARCH_TEXT'
+homepodctl play --playlist-id 'YOUR_PLAYLIST_ID'
 ```
 
-Supply exactly one playlist target: positional query words, `--playlist <name>`, or
-`--playlist-id <id>`. Combining these forms is a usage error, including during
-`--dry-run`.
+Omit the playlist target to use `defaults.playlistId`. Otherwise, supply exactly
+one target: positional query words, `--playlist <name>`, or `--playlist-id <id>`.
+Explicit targets override the saved playlist. Combining target forms or supplying
+a blank target is a usage error, including during `--dry-run`. If no target or
+default is available, `play` explains how to save or supply one.
 
 For AirPlay playback, `--volume` accepts 0–100 and overrides `defaults.volume`.
 With neither, playback leaves volume unchanged. An explicit volume requires
@@ -158,6 +236,8 @@ that command or step. Aliases without a playlist can still apply settings alone.
 Later backend failures stop execution and may leave completed changes in place;
 playback changes are not rolled back. Automation retains earlier completed steps.
 Native playlist names continue to select configured Shortcut mappings.
+The saved default playlist applies to direct `play` and `plan play`; aliases and
+automation steps retain their own playlist targets.
 
 `play --dry-run` resolves the backend, rooms, options, and target using the same
 validation as execution. It may read Music.app's selected outputs to infer rooms,
@@ -192,13 +272,16 @@ homepodctl volume 35 "Living Room"
 
 ## Config (defaults + aliases)
 
-Create a starter config:
+Create minimal configuration without running discovery:
 
 ```sh
 homepodctl config-init
 ```
 
-This writes `config.json` under your macOS user config dir (typically `~/Library/Application Support/homepodctl/config.json`).
+This writes `config.json` under your macOS user config dir (typically
+`~/Library/Application Support/homepodctl/config.json`). New configuration has an
+AirPlay backend, empty default rooms, no default playlist or volume, and empty
+alias and native Shortcut mappings. Setup uses the same initial configuration.
 
 `config-init` leaves an existing config untouched. New config files are created with
 `0600` permissions; updates preserve existing file permissions. Config persistence
@@ -215,14 +298,45 @@ Defaults are used when flags are omitted. For example, if you set:
 
 - `defaults.backend = "airplay"`
 - `defaults.rooms = ["Bedroom"]`
+- `defaults.playlistId = "YOUR_PLAYLIST_ID"`
 
 …then you can just run:
 
 ```sh
-homepodctl play chill
+homepodctl play
 ```
 
-List configured aliases:
+Save an ID from `homepodctl playlists`, or choose one with `setup --choose`.
+The saved ID is looked up before playback; if the playlist is
+deleted, playback stops before changing outputs, volume, or shuffle. Find another
+playlist and update your defaults:
+
+```sh
+homepodctl playlists
+homepodctl setup --choose
+```
+
+Skipping playlist selection preserves the saved ID, so select a replacement to
+recover from a deleted playlist. To add aliases, edit the `aliases` object
+in `config.json`.
+The following is a manual example; replace its rooms and playlist with your own:
+
+```json
+"aliases": {
+  "bed": {"backend": "airplay", "rooms": ["Bedroom"]},
+  "lr": {"backend": "airplay", "rooms": ["Living Room"]},
+  "bed-example": {
+    "backend": "airplay",
+    "rooms": ["Bedroom"],
+    "playlist": "Example Playlist",
+    "volume": 50
+  }
+}
+```
+
+The `bed` and `lr` aliases only select outputs; `bed-example` also plays the
+configured playlist and sets volume. Run `homepodctl config validate` after
+editing. List configured aliases:
 
 ```sh
 homepodctl aliases
@@ -236,17 +350,37 @@ homepodctl run bed-example
 
 ## Native backend (optional)
 
-Edit `config.json`, map `room -> playlist -> shortcut name`, and run:
+Setup with `--backend native` gives mapping guidance. Create your Shortcuts first,
+then edit `config.json` to map `room -> playlist -> shortcut name`. For example,
+replace the empty `native` object contents with your own rooms, exact playlist
+names, and existing Shortcut names:
+
+```json
+"native": {
+  "playlists": {
+    "Bedroom": {"Example Playlist": "BR Play Example Playlist"},
+    "Living Room": {"Example Playlist": "LR Play Example Playlist"}
+  },
+  "volumeShortcuts": {
+    "Bedroom": {"30": "BR Volume 30"},
+    "Living Room": {"30": "LR Volume 30"}
+  }
+}
+```
+
+These are manual examples, not mappings created by setup or `config-init`.
+Validate your configuration and run your mapped playlist:
 
 ```sh
+homepodctl config validate
 homepodctl play --backend native --room "Bedroom" --playlist "Example Playlist"
 ```
 
 Native playback uses playlist text as an exact configured name. With
-`--playlist-id`, execution looks up the name in Music.app before selecting the
-configured Shortcut. Native `play` does not apply volume or shuffle options and
-does not use `--choose`; those options affect AirPlay playback only. Supplied
-option values are still validated on both backends.
+`--playlist-id` or a saved default playlist ID, execution looks up the name in
+Music.app before selecting the configured Shortcut. Native `play` does not apply
+volume or shuffle options and does not use `--choose`; those options affect
+AirPlay playback only. Supplied option values are still validated on both backends.
 
 Before a multi-room native playlist or volume action runs, `homepodctl` resolves the Shortcut mapping for every requested room. A missing mapping prevents all Shortcut executions. This is not transactional: if a Shortcut fails at runtime, earlier Shortcuts may already have succeeded.
 
@@ -311,9 +445,14 @@ Inspect and update config values:
 ```sh
 homepodctl config validate --json
 homepodctl config get defaults.backend
+homepodctl config get defaults.playlistId
 homepodctl config set defaults.backend airplay
 homepodctl config set defaults.rooms "Bedroom" "Living Room"
+homepodctl config set defaults.playlistId 'YOUR_PLAYLIST_ID'
 ```
+
+Clear the default playlist with `homepodctl config set defaults.playlistId ""`.
+This leaves your other defaults intact.
 
 `config validate` exits `0` for valid configuration and `3` for invalid
 configuration in both text and JSON modes. Validation reports stay on stdout;
@@ -323,7 +462,7 @@ invalid config values should now expect `3`.
 Dry-run mutating commands without side effects:
 
 ```sh
-homepodctl play chill --dry-run --json
+homepodctl play --dry-run --json
 homepodctl out set --room "Bedroom" --dry-run --json
 homepodctl volume 30 --dry-run --json
 homepodctl run bed --dry-run --json
@@ -346,7 +485,7 @@ See the [automation exit and output contract](docs/automation-v1-cli-spec.md#exi
 
 - `homepodctl devices` / `homepodctl out list`: list AirPlay devices
 - `homepodctl out set --room <name> ... [--json|--plain|--dry-run]`: select Music.app outputs
-- `homepodctl play <query> [--json|--plain|--dry-run]` / `homepodctl play --playlist-id <id>`: play a playlist
+- `homepodctl play [<query>] [--json|--plain|--dry-run]` / `homepodctl play --playlist-id <id>`: play the saved default or an explicit playlist
 - `homepodctl playlists --query <text> [--json|--plain]`: search playlists
 - `homepodctl status [--json|--plain]` / `homepodctl now` / `homepodctl status --watch 1s`: playback, route, and connectivity status
 - `homepodctl pause|stop|next|prev [--json|--plain]`: transport controls
@@ -354,8 +493,8 @@ See the [automation exit and output contract](docs/automation-v1-cli-spec.md#exi
 - `homepodctl aliases [--json|--plain]` / `homepodctl run <alias> [--json|--plain|--dry-run]`: config shortcuts
 - `homepodctl native-run --shortcut <name> [--json|--dry-run]`: run a Shortcut directly
 - `homepodctl config validate|get|set ...`: validate and edit config values (`defaults.*`)
-- `homepodctl config-init`: create starter config
-- `homepodctl setup [--backend ...] [--room ...]`: bootstrap config + diagnostics + device discovery
+- `homepodctl config-init`: create minimal configuration
+- `homepodctl setup [--choose|--no-input] [--backend ...] [--room ...] [--playlist-id ...]`: discover devices and playlists, save defaults, and suggest next steps
 - `homepodctl doctor`: diagnostics checklist
 - `homepodctl completion <bash|zsh|fish>`: generate completion script
 - `homepodctl plan <command> ...`: preview resolved execution; target `--dry-run`/`--json` flags are canonicalized to safe values, while arguments after a target `--` stay literal
@@ -369,7 +508,8 @@ See the [automation exit and output contract](docs/automation-v1-cli-spec.md#exi
 - **Boolean values:** command boolean flags accept `true/false`, `1/0`, `yes/no`, `y/n`, and `on/off`, including separate values such as `--json false`. JSON errors follow the last `--json` value and ignore flag-looking values and arguments after `--`.
 - **You built it but it still behaves “old”:** if you run `make build`, the binary is `./homepodctl`. Running `homepodctl ...` might be a different binary on your PATH.
 - **Rooms are not flags:** use `--room "Bedroom"` (repeatable), not `--bedroom` / `--Bedroom`.
-- **`out set` doesn’t edit config:** it only changes Music.app’s current outputs. Use `config-init` + edit `defaults.rooms` if you want persistent defaults.
+- **`out set` doesn’t edit config:** it only changes Music.app’s current outputs. Use `setup --choose`, `setup --room "Bedroom"`, or `config set defaults.rooms` to save default rooms.
+- **`play` needs a playlist:** run `setup --choose` to save one, or provide an explicit playlist target. Setup suggestions alone do not save a default playlist.
 
 ## Release
 

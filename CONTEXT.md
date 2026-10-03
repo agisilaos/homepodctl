@@ -16,8 +16,19 @@ Playlist text used to find a playlist. AirPlay treats it as a fuzzy search, whil
 **Persistent ID**:
 The identifier for a playlist in the Music.app library, distinct from its display name.
 
+**Playlist suggestion**:
+A library playlist offered in a setup next-step command.
+_Avoid_: Default playlist.
+
+**Default playlist**:
+A saved Music.app playlist, identified by its persistent ID, used when a direct playback request supplies no playlist target.
+_Avoid_: Treating a playlist suggestion as a saved preference.
+
 **Room**:
 A named playback destination.
+
+**Default rooms**:
+Saved playback destinations used when a request supplies no rooms. They are a preference, distinct from Music.app's currently selected outputs.
 
 **Settings-only alias**:
 An AirPlay alias that selects rooms and optional volume or shuffle settings without selecting a playlist.

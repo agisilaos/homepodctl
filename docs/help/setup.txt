@@ -1,0 +1,29 @@
+homepodctl setup - onboard and verify local environment
+
+Usage:
+  homepodctl setup [--backend airplay|native] [--room <name> ...] [--playlist-id <id>] [--choose] [--json] [--no-input]
+
+Notes:
+  - Creates minimal config: AirPlay, empty rooms, no default playlist/volume or example aliases/mappings.
+  - Preserves existing settings unless --backend, --room, --playlist-id, or a selection replaces them.
+  - Discovers Music.app destinations and library playlists; prints commands using actual names and IDs.
+  - Without saved rooms, suggestions prefer HomePods, then other destinations, then the Mac; no preference is inferred.
+  - --choose opts into AirPlay room selection and an optional default playlist search; the playlist is saved by persistent ID.
+  - --room skips the room prompt; --playlist-id skips the playlist prompt.
+  - Enter preserves rooms or skips playlist search; s skips displayed playlist choices. Skipping preserves the saved playlist.
+  - With an available saved playlist and rooms, prints homepodctl play and homepodctl status to try and check them.
+  - Setup does not start playback or change Music.app's outputs.
+  - q or EOF cancels before writing.
+  - --choose requires terminal stdin and cannot be combined with --no-input, --json, --quiet, or native setup.
+  - Without --choose, setup never asks for input. --no-input does not suppress macOS permission dialogs.
+  - Offline/missing/duplicate room names are reported and preserved; playlist discovery failure is a warning.
+  - Exits 1 when diagnostics report ok=false, including in JSON and quiet modes.
+  - Warnings and an empty device list are nonfatal. Noninteractive configuration is saved before diagnostics.
+  - JSON adds optional playlists, playlistError, and warnings fields; next remains a list of commands.
+
+Examples:
+  homepodctl setup --choose
+  homepodctl play
+  homepodctl status
+  homepodctl setup --no-input --json
+  homepodctl setup --room "YOUR_ROOM_NAME" --playlist-id "YOUR_PLAYLIST_ID" --no-input

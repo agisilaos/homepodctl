@@ -6,7 +6,7 @@ R11 provides command-specific flag specifications. R12 uses those specifications
 
 ## Agreed behavior
 
-- Suggest flags accepted by the selected command, consistently across the three shells. For example, suggest `--choose` for `play`, but not for `setup`.
+- Suggest flags accepted by the selected command, consistently across the three shells. For example, suggest `--choose` for `play` and `setup`, but not for `status`.
 - Suggest canonical long options and explicit short aliases such as `-f`, `-h`, `-v`, and `-q` only where accepted. Keep accepting legacy spellings such as `-json` without advertising them in completion.
 - Share command, flag, and preset semantics. Preserve safe handling of configuration-derived aliases, rooms, and playlists in each shell.
 - Add cross-shell parity tests; independent snapshots alone do not establish parity.

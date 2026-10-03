@@ -83,7 +83,7 @@ func runDoctorChecks(ctx context.Context) doctorReport {
 					"To start fresh, move the existing file aside as a backup before running `homepodctl config-init`, then restore your defaults and aliases.",
 			})
 		} else if len(cfg.Aliases) == 0 {
-			add(doctorCheck{Name: "config", Status: "warn", Message: "no aliases configured", Tip: "Run `homepodctl config-init` and edit defaults/aliases."})
+			add(doctorCheck{Name: "config", Status: "pass", Message: "config defaults available; aliases are optional"})
 		} else {
 			add(doctorCheck{Name: "config", Status: "pass", Message: fmt.Sprintf("aliases=%d", len(cfg.Aliases))})
 		}

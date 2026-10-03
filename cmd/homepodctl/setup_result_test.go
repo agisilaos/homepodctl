@@ -31,11 +31,14 @@ func TestSetupDiagnosticExitStatus(t *testing.T) {
 			t.Run(tc.name+"/"+mode.name, func(t *testing.T) {
 				oldInit, oldLoad, oldPath := initConfig, loadConfigOptional, configPath
 				oldLook, oldNow, oldDevices, oldQuiet := lookPath, getNowPlaying, listAirPlayDevices, quiet
+				oldPlaylists := listUserPlaylists
 				t.Cleanup(func() {
 					initConfig, loadConfigOptional, configPath = oldInit, oldLoad, oldPath
 					lookPath, getNowPlaying, listAirPlayDevices, quiet = oldLook, oldNow, oldDevices, oldQuiet
+					listUserPlaylists = oldPlaylists
 				})
 				quiet = mode.quiet
+				listUserPlaylists = func(context.Context, string, int) ([]music.UserPlaylist, error) { return nil, nil }
 				initConfig = func() (string, error) { return "/test/config.json", nil }
 				configPath = initConfig
 				loadConfigOptional = func() (*native.Config, error) { return &native.Config{}, nil }
