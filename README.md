@@ -23,7 +23,11 @@ brew tap agisilaos/tap
 brew install homepodctl
 ```
 
-From source:
+The published v0.3.0 supports the commands shown by `homepodctl --help`.
+The guided `setup --choose` workflow below requires current source and is not
+available in v0.3.0.
+
+From source (run from this checkout):
 
 ```sh
 make build
@@ -57,6 +61,10 @@ On first use, macOS may prompt you to allow your terminal (or the built binary) 
 - `config.json` stores **defaults and aliases** (so `play` can use your saved rooms and playlist).
 
 ## Usage
+
+These examples describe current source. After `make build`, use `./homepodctl`
+in place of `homepodctl` throughout this section so an older installed binary
+is not selected from PATH.
 
 Discover your devices and playlists, then save your default rooms and playlist:
 

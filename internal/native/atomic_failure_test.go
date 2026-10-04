@@ -17,9 +17,20 @@ import (
 func TestFailedSavePreservesPreviousFile(t *testing.T) {
 	path := os.Getenv("AUDIT_STATE_PATH")
 	if path != "" {
-		if err := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &syscall.Rlimit{Cur: 128, Max: 128}); err != nil {
+		var original syscall.Rlimit
+		if err := syscall.Getrlimit(syscall.RLIMIT_FSIZE, &original); err != nil {
 			t.Fatal(err)
 		}
+		limited := original
+		limited.Cur = 128
+		if err := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &limited); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &original); err != nil {
+				t.Error(err)
+			}
+		}()
 		cfg := &Config{Defaults: DefaultsConfig{Backend: strings.Repeat("synthetic", 100)}}
 		err := SaveConfig(cfg)
 		if err == nil {
