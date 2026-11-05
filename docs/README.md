@@ -20,6 +20,10 @@
 
 - Automation presets: `automation/presets/`
 
+## Development
+
+- [Task sessions and landing](agents/landing.md)
+
 ## Release
 
 - Unified release workflow commands and scripts: `../README.md#release`

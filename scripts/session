@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""Start an isolated task, qualify a fast-forward to main, or end a landed task."""
+
+import argparse
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+
+
+MAIN = "refs/heads/main"
+TRACKING = "refs/remotes/origin/main"
+LANDING = "HOMEPODCTL_LANDING"
+CLEAN_REVIEW = {"status": "clean", "report": ""}
+OPERATIONS = (
+    "rebase-merge", "rebase-apply", "sequencer", "MERGE_HEAD",
+    "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_START",
+)
+HOOK = """#!/bin/sh
+root=$(git rev-parse --show-toplevel) || exit 1
+exec "$root/scripts/session" _pre-push "$@"
+"""
+
+
+class SessionError(Exception):
+    pass
+
+
+def git(*args, cwd=None):
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, stdout=subprocess.PIPE, text=True
+    ).stdout.rstrip("\n")
+
+
+def config(key, cwd=None):
+    result = subprocess.run(
+        ["git", "config", "--get", key], cwd=cwd, stdout=subprocess.PIPE, text=True
+    )
+    if result.returncode == 1:
+        return None
+    result.check_returncode()
+    return result.stdout.rstrip("\n")
+
+
+def git_path(name, cwd=None):
+    return Path(git("rev-parse", "--path-format=absolute", "--git-path", name, cwd=cwd))
+
+
+def install_gate(root, common):
+    hooks = git_path("homepodctl-session-hooks", root)
+    configured = config("core.hooksPath", root)
+    if configured is not None and configured != str(hooks):
+        raise SessionError("this worktree has a custom hooks path; integrate the session gate first")
+    default_hooks = common / "hooks"
+    if configured is None and default_hooks.is_dir() and any(
+        path.is_file() and os.access(path, os.X_OK)
+        for path in default_hooks.iterdir()
+        if not path.name.endswith(".sample")
+    ):
+        raise SessionError("this repository has active Git hooks; integrate the session gate first")
+
+    if config("extensions.worktreeConfig", root) != "true":
+        if config("core.worktree", root) is not None or config("core.bare", root) == "true":
+            raise SessionError("worktree-scoped hooks require a standard non-bare repository")
+        git("config", "--local", "extensions.worktreeConfig", "true", cwd=root)
+
+    hooks.mkdir(exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", dir=hooks, delete=False) as launcher:
+        launcher.write(HOOK)
+        temporary = Path(launcher.name)
+    try:
+        temporary.chmod(0o755)
+        temporary.replace(hooks / "pre-push")
+    finally:
+        temporary.unlink(missing_ok=True)
+    git("config", "--worktree", "core.hooksPath", str(hooks), cwd=root)
+
+
+def fetch_main(cwd=None):
+    git("fetch", "--quiet", "--no-tags", "origin", f"{MAIN}:{TRACKING}", cwd=cwd)
+    return git("rev-parse", TRACKING, cwd=cwd)
+
+
+def require_clean():
+    if any(git_path(state).exists() for state in OPERATIONS):
+        raise SessionError("finish the Git operation in progress first")
+    if git("status", "--porcelain", "--untracked-files=all"):
+        raise SessionError("the worktree has uncommitted changes")
+
+
+def session_branch(root, primary):
+    if root == primary:
+        raise SessionError("run this from a linked task worktree")
+    branch = git("branch", "--show-current")
+    if not branch or branch in {"main", "master"}:
+        raise SessionError("check out a task branch first")
+    return branch
+
+
+def start(name, common, primary):
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
+        raise SessionError("use a lowercase task name such as fix-playback-help")
+    path = primary.with_name(f"{primary.name}-{name}")
+    base = fetch_main()
+    git("worktree", "add", "--quiet", "--no-track", "-b", f"fix/{name}", str(path), base)
+    try:
+        install_gate(path, common)
+    except (SessionError, OSError, subprocess.CalledProcessError):
+        print(f"Worktree created at {path}. Hook setup failed.", file=sys.stderr)
+        raise
+    print(path)
+
+
+def land(root, common, primary, dry_run):
+    require_clean()
+    branch = session_branch(root, primary)
+    with (common / "homepodctl-landing.lock").open("a") as lock:
+        print("Waiting for the landing lock", file=sys.stderr, flush=True)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        require_clean()
+        if session_branch(root, primary) != branch:
+            raise SessionError("the task branch changed while waiting")
+        if git("remote", "get-url", "--push", "--all", "origin") != git("remote", "get-url", "origin"):
+            raise SessionError("origin must have the same single fetch and push destination")
+        base = fetch_main()
+        if git("rev-list", "--merges", f"{base}..HEAD"):
+            raise SessionError("make the task history linear before landing")
+        try:
+            git(
+                "rebase", "--quiet", "--reapply-cherry-picks", "--no-update-refs",
+                "--no-autosquash", "--no-autostash", base,
+            )
+        except subprocess.CalledProcessError as error:
+            raise SessionError("rebase stopped; resolve or abort it before retrying") from error
+        head = git("rev-parse", "HEAD")
+        if head == base:
+            print(f"Already on origin/main at {head}")
+            return
+        require_clean()
+        install_gate(root, common)
+        command = ["git", "-c", "remote.origin.mirror=false", "push", "--no-follow-tags"]
+        if dry_run:
+            command.append("--dry-run")
+        subprocess.run(
+            [*command, "origin", f"{head}:{MAIN}"],
+            env={**os.environ, LANDING: f"{base} {head}"},
+            check=True,
+        )
+        if dry_run:
+            print(f"Dry run passed for {head}")
+        else:
+            observed = fetch_main()
+            subprocess.run(["git", "merge-base", "--is-ancestor", head, observed], check=True)
+            print(f"Landed {head} on origin/main")
+
+
+def run_logged(command, path, timeout=None):
+    with path.open("w") as output:
+        try:
+            result = subprocess.run(
+                command, stdin=subprocess.DEVNULL, stdout=output,
+                stderr=subprocess.STDOUT, timeout=timeout
+            )
+        except subprocess.TimeoutExpired as error:
+            raise SessionError(f"{command[0]} timed out. Log: {path}") from error
+    if result.returncode != 0:
+        raise SessionError(f"{command[0]} exited {result.returncode}. Log: {path}")
+
+
+def review(base, head, logs):
+    schema = logs / "review-schema.json"
+    schema.write_text(json.dumps({
+        "type": "object",
+        "properties": {
+            "status": {"type": "string", "enum": ["clean", "findings", "incomplete"]},
+            "report": {"type": "string"},
+        },
+        "required": ["status", "report"],
+        "additionalProperties": False,
+    }))
+    verdict = logs / "review.json"
+    transcript = logs / "review.log"
+    prompt = (
+        f"Review the committed homepodctl change from {base} to {head}. "
+        f"Read AGENTS.md and inspect git diff {base} {head} and affected code and tests. "
+        "Review for actionable regressions and repository standards. Change no files. "
+        "Use findings with file, line and consequence for defects, or incomplete with "
+        "the reason if you cannot finish. Use clean with an empty report only after "
+        "completing the review and finding no actionable regressions."
+    )
+    run_logged([
+        os.environ.get("HOMEPODCTL_CODEX", "codex"), "exec", "--ephemeral",
+        "--sandbox", "read-only", "--output-schema", str(schema),
+        "--output-last-message", str(verdict), prompt,
+    ], transcript, timeout=900)
+    try:
+        answer = json.loads(verdict.read_text())
+    except (OSError, ValueError) as error:
+        raise SessionError(f"Codex returned no usable review. Log: {transcript}") from error
+    if answer != CLEAN_REVIEW:
+        raise SessionError(f"Codex did not return a clean review. Verdict: {verdict}")
+
+
+def pre_push(remote, destination):
+    for line in sys.stdin:
+        _, head, remote_ref, base = line.split()
+        if remote_ref != MAIN:
+            continue
+        if remote != "origin" or os.environ.get(LANDING) != f"{base} {head}":
+            raise SessionError("use scripts/session land; main may have moved since the rebase")
+        require_clean()
+        if git("rev-parse", "HEAD") != head:
+            raise SessionError("the pushed commit must be checked out")
+        subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
+
+        default_logs = Path.home() / "Library/Logs/homepodctl/threads"
+        log_root = Path(os.environ.get("HOMEPODCTL_SESSION_LOG_DIR", default_logs)).resolve()
+        if log_root.is_relative_to(Path.cwd()):
+            raise SessionError("store session evidence outside the checkout")
+        log_root = log_root / Path.cwd().name
+        log_root.mkdir(parents=True, exist_ok=True)
+        logs = Path(tempfile.mkdtemp(prefix="land-", dir=log_root))
+        print(f"Review and verification logs: {logs}", file=sys.stderr, flush=True)
+        review(base, head, logs)
+        require_clean()
+        if git("rev-parse", "HEAD") != head:
+            raise SessionError("HEAD changed during review; land again")
+        verify_remote_base(destination, base)
+        run_logged(["make", "verify"], logs / "verify.log")
+        require_clean()
+        if git("rev-parse", "HEAD") != head:
+            raise SessionError("HEAD changed during verification; land again")
+        verify_remote_base(destination, base)
+        print("Codex review and make verify passed", file=sys.stderr)
+
+
+def verify_remote_base(destination, base):
+    if git("ls-remote", "--exit-code", "--", destination, MAIN) != f"{base}\t{MAIN}":
+        raise SessionError("origin/main moved during landing; land again")
+
+
+def end(root, primary):
+    require_clean()
+    branch = session_branch(root, primary)
+    if config("core.hooksPath") != str(git_path("homepodctl-session-hooks")):
+        raise SessionError("end applies to worktrees with the session gate installed")
+    base = fetch_main()
+    result = subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", base])
+    if result.returncode == 1:
+        raise SessionError("the task commits are not on origin/main")
+    result.check_returncode()
+    git("worktree", "remove", str(root), cwd=primary)
+    # Use the fetched main as the ancestry check even when the primary checkout is stale.
+    git("-c", f"branch.{branch}.remote=.", "-c", f"branch.{branch}.merge={TRACKING}",
+        "branch", "-d", "--", branch, cwd=primary)
+    print(f"Removed {root}")
+
+
+def main():
+    if len(sys.argv) == 4 and sys.argv[1] == "_pre-push":
+        pre_push(*sys.argv[2:])
+        return
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("start", help="create a task worktree from origin/main").add_argument("name")
+    commands.add_parser("list", help="list worktrees and their branches")
+    commands.add_parser("land", help="review, verify and fast-forward origin/main").add_argument(
+        "--dry-run", action="store_true", help="rebase and run the gate without updating GitHub"
+    )
+    commands.add_parser("end", help="remove this clean, landed task worktree and branch")
+    args = parser.parse_args()
+    root = Path(git("rev-parse", "--show-toplevel")).resolve()
+    os.chdir(root)
+    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
+    if common.name != ".git":
+        raise SessionError("expected a standard non-bare checkout")
+    primary = common.parent
+    if args.command == "start":
+        start(args.name, common, primary)
+    elif args.command == "list":
+        print(git("worktree", "list"))
+    elif args.command == "land":
+        land(root, common, primary, args.dry_run)
+    else:
+        end(root, primary)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        sys.exit(f"scripts/session: Git exited {error.returncode}; see the diagnostics above")
+    except (SessionError, OSError) as error:
+        sys.exit(f"scripts/session: {error}")

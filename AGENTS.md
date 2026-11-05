@@ -2,6 +2,14 @@
 
 homepodctl is a macOS Go CLI for controlling Apple Music playback and routing audio to HomePods.
 
+## Sessions
+
+Start each new task chat with `scripts/session start <name>` and work in the
+printed checkout. Commit and land when separately authorized. Use
+`scripts/session land` to review, verify and push directly to `main`.
+Read [task sessions and landing](docs/agents/landing.md) when preparing a
+handoff, starting or landing a task, or cleaning up a landed worktree.
+
 ## Common commands
 
 - Build: `make build`

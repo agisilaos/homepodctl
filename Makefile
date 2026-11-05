@@ -28,6 +28,7 @@ docs-check:
 verify:
 	./scripts/release-check.sh
 	$(MAKE) release-fixtures
+	python3 -B ./scripts/session-test.py
 
 verify-core:
 	./scripts/verify.sh
