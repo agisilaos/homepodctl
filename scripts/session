@@ -129,7 +129,11 @@ def start(name, common, primary):
     try:
         install_gate(path, common, base, branch)
     except (SessionError, OSError, subprocess.CalledProcessError):
-        print(f"Worktree created at {path}. Hook setup failed.", file=sys.stderr)
+        try:
+            git("worktree", "remove", str(path))
+            git("update-ref", "-d", f"refs/heads/{branch}", base)
+        except subprocess.CalledProcessError:
+            print(f"Hook setup failed. Inspect {path} and {branch} before retrying.", file=sys.stderr)
         raise
     print(path)
 
@@ -158,11 +162,11 @@ def land(root, common, primary, dry_run):
         except subprocess.CalledProcessError as error:
             raise SessionError("rebase stopped; resolve or abort it before retrying") from error
         head = git("rev-parse", "HEAD")
+        require_clean()
+        install_gate(root, common, base, branch, bootstrap)
         if head == base:
             print(f"Already on origin/main at {head}")
             return
-        require_clean()
-        install_gate(root, common, base, branch, bootstrap)
         command = ["git", "-c", "remote.origin.mirror=false", "push", "--no-follow-tags"]
         if dry_run:
             command.append("--dry-run")
@@ -184,7 +188,7 @@ def land(root, common, primary, dry_run):
             print(f"Landed {head} on origin/main")
 
 
-def run_logged(command, path, timeout=None):
+def run_logged(command, path, checkout, timeout=None):
     # Git exports checkout-specific variables to hooks. Tools that start Git in
     # another directory must discover that repository independently.
     env = os.environ.copy()
@@ -194,7 +198,7 @@ def run_logged(command, path, timeout=None):
         try:
             result = subprocess.run(
                 command, stdin=subprocess.DEVNULL, stdout=output,
-                stderr=subprocess.STDOUT, timeout=timeout, env=env
+                stderr=subprocess.STDOUT, cwd=checkout, timeout=timeout, env=env
             )
         except subprocess.TimeoutExpired as error:
             raise SessionError(f"{command[0]} timed out. Log: {path}") from error
@@ -202,7 +206,7 @@ def run_logged(command, path, timeout=None):
         raise SessionError(f"{command[0]} exited {result.returncode}. Log: {path}")
 
 
-def review(base, head, logs):
+def review(base, head, logs, checkout):
     schema = logs / "review-schema.json"
     schema.write_text(json.dumps({
         "type": "object",
@@ -227,7 +231,7 @@ def review(base, head, logs):
         os.environ.get("HOMEPODCTL_CODEX", "codex"), "exec", "--ephemeral",
         "--sandbox", "read-only", "--output-schema", str(schema),
         "--output-last-message", str(verdict), prompt,
-    ], transcript, timeout=900)
+    ], transcript, checkout, timeout=900)
     try:
         answer = json.loads(verdict.read_text())
     except (OSError, ValueError) as error:
@@ -258,15 +262,19 @@ def pre_push(remote, destination):
         log_root.mkdir(parents=True, exist_ok=True)
         logs = Path(tempfile.mkdtemp(prefix="land-", dir=log_root))
         print(f"Review and verification logs: {logs}", file=sys.stderr, flush=True)
-        review(base, head, logs)
+        with tempfile.TemporaryDirectory(prefix="homepodctl-check-") as state:
+            checkout = Path(state) / "checkout"
+            git("-c", "core.hooksPath=/dev/null", "worktree", "add", "--quiet",
+                "--detach", str(checkout), head)
+            try:
+                review(base, head, logs, checkout)
+                verify_remote_base(destination, base)
+                run_logged(["make", "-f", "Makefile", "verify"], logs / "verify.log", checkout)
+            finally:
+                git("worktree", "remove", "--force", str(checkout))
         require_clean()
         if git("rev-parse", "HEAD") != head:
-            raise SessionError("HEAD changed during review; land again")
-        verify_remote_base(destination, base)
-        run_logged(["make", "verify"], logs / "verify.log")
-        require_clean()
-        if git("rev-parse", "HEAD") != head:
-            raise SessionError("HEAD changed during verification; land again")
+            raise SessionError("HEAD changed during qualification; land again")
         verify_remote_base(destination, base)
         Path(receipt).write_text(expected)
         print("Codex review and make verify passed", file=sys.stderr)
@@ -282,16 +290,19 @@ def end(root, primary):
     branch = session_branch(root, primary)
     if config(OWNER) != branch or config("core.hooksPath") != str(git_path("homepodctl-session-hooks")):
         raise SessionError("end applies to worktrees with the session gate installed")
-    ignored = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z").split("\0")
-    for path in ignored:
-        if path and path not in BUILD_OUTPUTS:
-            raise SessionError(f"move or remove ignored local files before ending, including {path!r}")
     base = fetch_main()
     head = git("rev-parse", "HEAD")
     result = subprocess.run(["git", "merge-base", "--is-ancestor", head, base])
     if result.returncode == 1:
         raise SessionError("the task commits are not on origin/main")
     result.check_returncode()
+    require_clean()
+    if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
+        raise SessionError("the task branch changed during cleanup")
+    ignored = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z").split("\0")
+    for path in ignored:
+        if path and path not in BUILD_OUTPUTS:
+            raise SessionError(f"move or remove ignored local files before ending, including {path!r}")
     git("worktree", "remove", str(root), cwd=primary)
     branch_ref = f"refs/heads/{branch}"
     worktrees = git("worktree", "list", "--porcelain", "-z", cwd=primary)

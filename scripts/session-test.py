@@ -81,7 +81,7 @@ class SessionTest(unittest.TestCase):
         (self.source / "scripts").mkdir()
         shutil.copy2(SESSION, self.source / "scripts")
         (self.source / "base.txt").write_text("original\n")
-        (self.source / ".gitignore").write_text("/homepodctl\n/dist/\n")
+        (self.source / ".gitignore").write_text("/homepodctl\n/dist/\n/GNUmakefile\n")
         (self.source / "Makefile").write_text(
             'verify:\n\t@test -z "$$GIT_DIR$$GIT_COMMON_DIR$$HOMEPODCTL_LANDING"\n'
             '\t@echo verify-ran\n\t@exit "$$SESSION_TEST_VERIFY"\n'
@@ -124,6 +124,26 @@ class SessionTest(unittest.TestCase):
         self.assertIn(message, result.stderr)
         self.assertEqual(self.ref(self.remote), before)
 
+    def install_git_shim(self, before_exec, **variables):
+        tools = self.fixture / "tools"
+        tools.mkdir()
+        shim = tools / "git"
+        shim.write_text("""#!/usr/bin/env python3
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+args = sys.argv[1:]
+git = os.environ["SESSION_TEST_REAL_GIT"]
+""" + before_exec + '\nos.execv(git, [git, *args])\n')
+        shim.chmod(0o755)
+        self.env.update({
+            "SESSION_TEST_REAL_GIT": shutil.which("git"),
+            "PATH": f"{tools}{os.pathsep}{self.env['PATH']}",
+            **variables,
+        })
+
     def test_start_isolates_hook_setup_from_caller_environment(self):
         start_path = self.run_ok(
             self.source, "env", f"GIT_DIR={self.source / '.git'}",
@@ -155,6 +175,12 @@ class SessionTest(unittest.TestCase):
         self.git(self.task, "commit", "-qm", "Install task tool")
         self.assertIn("Landed", self.run_session(self.task, "land"))
         self.assertEqual(self.ref(self.remote), self.ref(self.task))
+
+    def test_land_adopts_an_already_landed_worktree(self):
+        self.git(self.source, "worktree", "add", "-qb", "fix/task", str(self.task), "origin/main")
+        self.assertIn("Already on origin/main", self.run_session(self.task, "land"))
+        self.run_session(self.task, "end")
+        self.assertFalse(self.task.exists())
 
     def test_rebase_dry_run_land_and_end(self):
         self.start_task()
@@ -230,6 +256,22 @@ class SessionTest(unittest.TestCase):
         verify_log, = logs.glob("land-*/verify.log")
         self.assertIn("verify-ran", verify_log.read_text())
 
+    def test_verify_uses_only_committed_build_rules(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.env["SESSION_TEST_VERIFY"] = "1"
+        local_rules = "verify:\n\t@echo skipped-committed-verification\n"
+        ignored = self.task / "GNUmakefile"
+        ignored.write_text(local_rules)
+        self.assert_stopped("make exited", "./scripts/session", "land")
+        self.assertEqual(ignored.read_text(), local_rules)
+        ignored.unlink()
+
+        self.git(self.task, "update-index", "--assume-unchanged", "Makefile")
+        (self.task / "Makefile").write_text(local_rules)
+        self.assert_stopped("make exited", "./scripts/session", "land")
+        self.assertEqual((self.task / "Makefile").read_text(), local_rules)
+
     def test_task_cannot_replace_its_installed_gate(self):
         self.start_task()
         tool = (self.task / "scripts/session").read_text()
@@ -258,35 +300,29 @@ class SessionTest(unittest.TestCase):
         self.assert_stopped("move or remove ignored local files", "./scripts/session", "end")
         self.assertEqual(ignored.read_text(), "local settings")
 
+    def test_end_preserves_ignored_files_created_during_fetch(self):
+        self.start_task()
+        ignored = self.task / "dist/private.env"
+        ignored.parent.mkdir()
+        self.install_git_shim("""
+if args[:1] == ["fetch"]:
+    Path(os.environ["SESSION_TEST_IGNORED"]).write_text("local settings")
+""", SESSION_TEST_IGNORED=str(ignored))
+        self.assert_stopped("move or remove ignored local files", "./scripts/session", "end")
+        self.assertEqual(ignored.read_text(), "local settings")
+
     def test_no_op_dry_run_requires_gate_receipt(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
         self.git(self.task, "push", "-q", "origin", "HEAD:refs/heads/concurrent")
         head = self.ref(self.task)
-        tools = self.fixture / "tools"
-        tools.mkdir()
-        shim = tools / "git"
-        shim.write_text("""#!/usr/bin/env python3
-import os
-import subprocess
-import sys
-
-args = sys.argv[1:]
-git = os.environ["SESSION_TEST_REAL_GIT"]
+        self.install_git_shim("""
 if "push" in args and "--dry-run" in args:
     subprocess.run([
         git, "--git-dir", os.environ["SESSION_TEST_REMOTE"],
         "update-ref", "refs/heads/main", os.environ["SESSION_TEST_REMOTE_HEAD"],
     ], check=True)
-os.execv(git, [git, *args])
-""")
-        shim.chmod(0o755)
-        self.env.update({
-            "SESSION_TEST_REAL_GIT": shutil.which("git"),
-            "SESSION_TEST_REMOTE": str(self.remote),
-            "SESSION_TEST_REMOTE_HEAD": head,
-            "PATH": f"{tools}{os.pathsep}{self.env['PATH']}",
-        })
+""", SESSION_TEST_REMOTE=str(self.remote), SESSION_TEST_REMOTE_HEAD=head)
         result = self.execute(self.task, "./scripts/session", "land", "--dry-run")
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("no ref update was qualified", result.stderr)
@@ -331,7 +367,10 @@ os.execv(git, [git, *args])
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("active Git hooks", result.stderr)
         self.assertEqual(hook.read_text(), "#!/bin/sh\nexit 0\n")
-        self.assertNotIn("core.hookspath", self.git(self.task, "config", "--list"))
+        self.assertFalse(self.task.exists())
+        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
+        hook.unlink()
+        self.start_task()
 
 
 if __name__ == "__main__":
