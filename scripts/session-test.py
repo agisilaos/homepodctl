@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -266,6 +267,34 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.git(self.task, "rebase", "--abort")
         self.assertEqual((self.task / "base.txt").read_text(), "task\n")
 
+    def test_rebase_preserves_ignored_files(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        local = self.task / "dist/private.env"
+        local.parent.mkdir()
+        local.write_text("local settings")
+        upstream = self.source / "dist/private.env"
+        upstream.parent.mkdir()
+        upstream.write_text("tracked settings")
+        self.git(self.source, "add", "-f", "dist/private.env")
+        self.git(self.source, "commit", "-qm", "Track settings")
+        self.git(self.source, "push", "-q", "origin", "main")
+        self.assert_stopped("move ignored local files", "./scripts/session", "land", "--dry-run")
+        self.assertEqual(local.read_text(), "local settings")
+
+    def test_land_refuses_a_branch_switch_during_fetch(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.git(self.task, "switch", "-qc", "unrelated", "origin/main")
+        self.commit_file(self.task, "unrelated.txt", "unrelated\n")
+        self.git(self.task, "switch", "-q", "fix/task")
+        self.install_git_shim("""
+if args[:1] == ["fetch"]:
+    subprocess.run([git, "switch", "-q", "unrelated"], check=True)
+""")
+        self.assert_stopped("this session owns fix/task", "./scripts/session", "land")
+        self.assertEqual(self.git(self.task, "branch", "--show-current"), "unrelated")
+
     def test_inherited_make_flags_do_not_skip_verification(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -302,6 +331,16 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.env["SESSION_TEST_VERIFY"] = "1"
         self.assert_stopped("make exited", "./scripts/session", "land")
 
+    def test_verify_ignores_local_checkout_filters(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        local_rules = self.fixture / "local.mk"
+        local_rules.write_text("verify:\n\t@echo skipped-committed-verification\n")
+        (self.source / ".git/info/attributes").write_text("Makefile filter=session-test\n")
+        self.git(self.task, "config", "filter.session-test.smudge", f"cat {shlex.quote(str(local_rules))}")
+        self.env["SESSION_TEST_VERIFY"] = "1"
+        self.assert_stopped("make exited", "./scripts/session", "land")
+
     def test_task_cannot_replace_its_installed_gate(self):
         self.start_task()
         tool = (self.task / "scripts/session").read_text()
@@ -327,7 +366,7 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         ignored = self.task / "dist/private.env"
         ignored.parent.mkdir()
         ignored.write_text("local settings")
-        self.assert_stopped("move or remove ignored local files", "./scripts/session", "end")
+        self.assert_stopped("move ignored local files", "./scripts/session", "end")
         self.assertEqual(ignored.read_text(), "local settings")
 
     def test_end_preserves_ignored_files_created_during_fetch(self):
@@ -338,7 +377,7 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
 if args[:1] == ["fetch"]:
     Path(os.environ["SESSION_TEST_IGNORED"]).write_text("local settings")
 """, SESSION_TEST_IGNORED=str(ignored))
-        self.assert_stopped("move or remove ignored local files", "./scripts/session", "end")
+        self.assert_stopped("move ignored local files", "./scripts/session", "end")
         self.assertEqual(ignored.read_text(), "local settings")
 
     def test_end_preserves_edits_hidden_by_index_flags(self):
@@ -413,6 +452,17 @@ if "push" in args and "--dry-run" in args:
         self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
         hook.unlink()
         self.start_task()
+
+    def test_start_rolls_back_partial_worktree_creation(self):
+        self.install_git_shim("""
+if args[:2] == ["worktree", "add"]:
+    subprocess.run([git, *args], check=True)
+    sys.exit(19)
+""")
+        result = self.execute(self.source, "./scripts/session", "start", "task")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.task.exists())
+        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
 
 
 if __name__ == "__main__":

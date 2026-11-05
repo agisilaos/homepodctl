@@ -32,7 +32,7 @@ Use GitHub Issues for task context and outstanding work.
 Run `scripts/session land` from the clean task worktree. It takes a lock shared
 by worktrees of this clone, fetches `origin/main`, and rebases the task commits
 onto it. The pre-push gate reviews that committed range with Codex and runs
-`make verify` once in a fresh checkout of the exact commit. A passing gate lets
+`make verify` once in a fresh local clone of the exact commit. A passing gate lets
 the same command fast-forward `origin/main` directly and confirm the landed
 commit on the remote. GitHub Actions also runs on the resulting push. The
 installed hook runs a copy of
@@ -41,7 +41,8 @@ script used to invoke the landing.
 
 - `scripts/session land --dry-run` rebases and exercises the same gate without
   updating remote refs.
-- If a rebase stops, resolve it and continue, or abort it before trying again.
+- Move ignored local files and clear index flags before rebasing. If a rebase
+  stops, resolve it and continue, or abort it before trying again.
 - Findings, incomplete reviews and failed checks stop the push. The command
   prints the run directory containing the verdict and full logs. Address the
   failure and rerun. Set `HOMEPODCTL_CODEX` to a compatible Codex executable

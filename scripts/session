@@ -58,7 +58,7 @@ def has_session_script(base):
     return git("ls-tree", base, "--", "scripts/session").startswith("100755 blob ")
 
 
-def install_gate(root, common, base, branch, bootstrap=None):
+def compatible_hooks(root, common):
     hooks = git_path("homepodctl-session-hooks", root)
     configured = config("core.hooksPath", root)
     if configured is not None and configured != str(hooks):
@@ -70,7 +70,11 @@ def install_gate(root, common, base, branch, bootstrap=None):
         if not path.name.endswith(".sample")
     ):
         raise SessionError("this repository has active Git hooks; integrate the session gate first")
+    return hooks
 
+
+def install_gate(root, common, base, branch, bootstrap=None):
+    hooks = compatible_hooks(root, common)
     if config("extensions.worktreeConfig", root) != "true":
         if config("core.worktree", root) is not None or config("core.bare", root) == "true":
             raise SessionError("worktree-scoped hooks require a standard non-bare repository")
@@ -105,6 +109,19 @@ def require_clean():
         raise SessionError("the worktree has uncommitted changes")
 
 
+def protect_local_files(cwd=None):
+    for entry in git("ls-files", "-v", "-z", cwd=cwd).split("\0"):
+        if entry.startswith("S ") or entry[:1].islower():
+            raise SessionError(f"clear Git index flags first, including {entry[2:]!r}")
+    for path in git("ls-files", "--others", "--ignored", "--exclude-standard", "-z", cwd=cwd).split("\0"):
+        if path and path not in BUILD_OUTPUTS:
+            raise SessionError(f"move ignored local files first, including {path!r}")
+
+
+def local_ref_exists(ref):
+    return ref in git("for-each-ref", "--format=%(refname)", ref).splitlines()
+
+
 def session_branch(root, primary):
     if root == primary:
         raise SessionError("run this from a linked task worktree")
@@ -122,17 +139,25 @@ def start(name, common, primary):
         raise SessionError("use a lowercase task name such as fix-playback-help")
     path = primary.with_name(f"{primary.name}-{name}")
     branch = f"fix/{name}"
+    branch_ref = f"refs/heads/{branch}"
     base = fetch_main()
     if not has_session_script(base):
         raise SessionError("origin/main needs an executable scripts/session before starting tasks")
-    git("worktree", "add", "--quiet", "--no-track", "-b", branch, str(path), base, cwd=primary)
+    if path.exists() or path.is_symlink() or local_ref_exists(branch_ref):
+        raise SessionError(f"{path} or {branch} already exists")
+    compatible_hooks(primary, common)
     try:
+        git("worktree", "add", "--quiet", "--no-track", "-b", branch, str(path), base, cwd=primary)
         install_gate(path, common, base, branch)
     except (SessionError, OSError, subprocess.CalledProcessError):
         try:
-            git("worktree", "remove", str(path))
-            git("update-ref", "-d", f"refs/heads/{branch}", base)
-        except subprocess.CalledProcessError:
+            worktrees = git("worktree", "list", "--porcelain", "-z").split("\0")
+            if f"worktree {path}" in worktrees:
+                protect_local_files(path)
+                git("worktree", "remove", str(path))
+            if local_ref_exists(branch_ref):
+                git("update-ref", "-d", branch_ref, base)
+        except (SessionError, subprocess.CalledProcessError):
             print(f"Hook setup failed. Inspect {path} and {branch} before retrying.", file=sys.stderr)
         raise
     print(path)
@@ -141,6 +166,7 @@ def start(name, common, primary):
 def land(root, common, primary, dry_run):
     require_clean()
     branch = session_branch(root, primary)
+    branch_ref = f"refs/heads/{branch}"
     with (common / "homepodctl-landing.lock").open("a") as lock:
         print("Waiting for the landing lock", file=sys.stderr, flush=True)
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -149,20 +175,31 @@ def land(root, common, primary, dry_run):
             raise SessionError("the task branch changed while waiting")
         if git("remote", "get-url", "--push", "--all", "origin") != git("remote", "get-url", "origin"):
             raise SessionError("origin must have the same single fetch and push destination")
+        original = git("rev-parse", branch_ref)
         base = fetch_main()
+        require_clean()
+        if session_branch(root, primary) != branch or git("rev-parse", branch_ref) != original:
+            raise SessionError("the task branch changed during fetch")
         # The first landing has no installed version on main yet.
         bootstrap = None if has_session_script(base) else Path(__file__).read_bytes()
         if git("rev-list", "--merges", f"{base}..HEAD"):
             raise SessionError("make the task history linear before landing")
-        try:
-            git(
-                "rebase", "--quiet", "--reapply-cherry-picks", "--no-update-refs",
-                "--no-autosquash", "--no-autostash", base,
-            )
-        except subprocess.CalledProcessError as error:
-            raise SessionError("rebase stopped; resolve or abort it before retrying") from error
-        head = git("rev-parse", "HEAD")
+        needs_rebase = subprocess.run(["git", "merge-base", "--is-ancestor", base, original])
+        if needs_rebase.returncode == 1:
+            protect_local_files()
+            try:
+                git(
+                    "rebase", "--quiet", "--reapply-cherry-picks", "--no-update-refs",
+                    "--no-autosquash", "--no-autostash", base, branch,
+                )
+            except subprocess.CalledProcessError as error:
+                raise SessionError("rebase stopped; resolve or abort it before retrying") from error
+        else:
+            needs_rebase.check_returncode()
+        head = git("rev-parse", branch_ref)
         require_clean()
+        if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
+            raise SessionError("the task branch changed before qualification")
         install_gate(root, common, base, branch, bootstrap)
         if head == base:
             print(f"Already on origin/main at {head}")
@@ -194,8 +231,13 @@ def run_logged(command, path, checkout, timeout=None):
     env = os.environ.copy()
     for key in (*checkout_environment_keys(), *MAKE_ENVIRONMENT):
         env.pop(key, None)
-    env["GIT_NO_REPLACE_OBJECTS"] = "1"
-    with path.open("w") as output:
+    env.update({
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_ATTR_NOSYSTEM": "1",
+    })
+    with path.open("a") as output:
         try:
             result = subprocess.run(
                 command, stdin=subprocess.DEVNULL, stdout=output,
@@ -265,14 +307,18 @@ def pre_push(remote, destination):
         print(f"Review and verification logs: {logs}", file=sys.stderr, flush=True)
         with tempfile.TemporaryDirectory(prefix="homepodctl-check-") as state:
             checkout = Path(state) / "checkout"
-            git("-c", "core.hooksPath=/dev/null", "worktree", "add", "--quiet",
-                "--detach", str(checkout), head)
-            try:
-                review(base, head, logs, checkout)
-                verify_remote_base(destination, base)
-                run_logged(["make", "-f", "Makefile", "verify"], logs / "verify.log", checkout)
-            finally:
-                git("worktree", "remove", "--force", str(checkout))
+            common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+            setup_log = logs / "checkout.log"
+            run_logged(
+                ["git", "clone", "--quiet", "--shared", "--no-checkout", "--no-tags",
+                 "--template=", "--", common, str(checkout)],
+                setup_log, checkout.parent,
+            )
+            run_logged(["git", "update-ref", TRACKING, base], setup_log, checkout)
+            run_logged(["git", "checkout", "--quiet", "--detach", head], setup_log, checkout)
+            review(base, head, logs, checkout)
+            verify_remote_base(destination, base)
+            run_logged(["make", "-f", "Makefile", "verify"], logs / "verify.log", checkout)
         require_clean()
         if git("rev-parse", "HEAD") != head:
             raise SessionError("HEAD changed during qualification; land again")
@@ -300,13 +346,7 @@ def end(root, primary):
     require_clean()
     if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
         raise SessionError("the task branch changed during cleanup")
-    for entry in git("ls-files", "-v", "-z").split("\0"):
-        if entry.startswith("S ") or entry[:1].islower():
-            raise SessionError(f"clear Git index flags before ending, including {entry[2:]!r}")
-    ignored = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z").split("\0")
-    for path in ignored:
-        if path and path not in BUILD_OUTPUTS:
-            raise SessionError(f"move or remove ignored local files before ending, including {path!r}")
+    protect_local_files()
     git("worktree", "remove", str(root), cwd=primary)
     branch_ref = f"refs/heads/{branch}"
     worktrees = git("worktree", "list", "--porcelain", "-z", cwd=primary)
