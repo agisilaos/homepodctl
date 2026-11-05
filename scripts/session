@@ -148,6 +148,13 @@ def require_no_grafts():
         raise SessionError("remove local Git grafts first")
 
 
+def git_history(*args):
+    return git(
+        "-c", "advice.graftFileDeprecated=false", *args,
+        env={**os.environ, "GIT_GRAFT_FILE": os.devnull},
+    )
+
+
 def check_ancestry(ancestor, descendant):
     return subprocess.run(
         ["git", "-c", "advice.graftFileDeprecated=false", "merge-base",
@@ -262,7 +269,7 @@ def start(name, common, primary):
         git("worktree", "move", str(staging), str(path))
         if registered_checkout(pointer) != path:
             raise SessionError(f"{path} became occupied while starting the session")
-        git("switch", "--quiet", "--no-track", "-c", branch, base, cwd=path)
+        git("switch", "--quiet", "--no-track", "--no-overwrite-ignore", "-c", branch, base, cwd=path)
     except (SessionError, OSError, subprocess.CalledProcessError):
         try:
             owned = registered_checkout(pointer) if pointer is not None and pointer.is_file() else staging
@@ -307,10 +314,10 @@ def land(root, common, primary, dry_run, adoption_base):
         if not has_session_script(base):
             if git("rev-parse", "--is-shallow-repository") == "true":
                 raise SessionError("first landing requires complete main history")
-            if git("log", "--full-history", "-1", "--format=%H", base, "--", "scripts/session"):
+            if git_history("log", "--full-history", "-1", "--format=%H", base, "--", "scripts/session"):
                 raise SessionError("origin/main removed or disabled scripts/session")
             bootstrap = Path(__file__).read_bytes()
-        if git("rev-list", "--merges", f"{base}..{original}"):
+        if git_history("rev-list", "--merges", f"{base}..{original}"):
             raise SessionError("make the task history linear before landing")
         # Record the fetched target so a manual rebase cannot later land after
         # main is rewound past the base the user was asked to integrate.

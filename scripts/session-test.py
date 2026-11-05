@@ -233,6 +233,29 @@ if args[:1] == ["switch"] and "-c" in args:
         self.assertEqual(self.ref(self.task), base)
         self.assertFalse((self.task / "other.txt").exists())
 
+    def test_start_preserves_ignored_files_after_a_checkout_switch(self):
+        upstream = self.source / "dist/private.env"
+        upstream.parent.mkdir()
+        upstream.write_text("tracked settings")
+        self.git(self.source, "add", "-f", "dist/private.env")
+        self.git(self.source, "commit", "-qm", "Track settings")
+        self.git(self.source, "push", "-q", "origin", "main")
+        self.git(self.source, "rm", "dist/private.env")
+        self.git(self.source, "commit", "-qm", "Ignore local settings")
+        self.install_git_shim("""
+if args[:1] == ["switch"] and "-c" in args:
+    subprocess.run([
+        git, "switch", "--quiet", "--detach", os.environ["SESSION_TEST_OTHER"],
+    ], check=True)
+    path = Path("dist/private.env")
+    path.parent.mkdir(exist_ok=True)
+    path.write_text("late local settings")
+""", SESSION_TEST_OTHER=self.ref(self.source))
+        result = self.execute(self.source, "./scripts/session", "start", "task")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.task / "dist/private.env").read_text(), "late local settings")
+        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
+
     def test_first_landing_bootstraps_gate(self):
         self.git(self.source, "rm", "scripts/session")
         tree = self.git(self.source, "write-tree")
@@ -585,6 +608,23 @@ if "push" in args:
         grafts.parent.mkdir(exist_ok=True)
         grafts.write_text(f"{unrelated} {base}\n")
         self.assert_stopped("remove local Git grafts", "./scripts/session", "land")
+
+    def test_late_graft_cannot_hide_a_merge_commit(self):
+        self.start_task()
+        base = self.ref(self.remote)
+        self.commit_file(self.task, "task.txt", "task\n")
+        head = self.ref(self.task)
+        tree = self.git(self.task, "rev-parse", "HEAD^{tree}")
+        other = self.git(self.task, "commit-tree", tree, "-p", base, "-m", "Independent work")
+        merge = self.git(self.task, "commit-tree", tree, "-p", head, "-p", other, "-m", "Merge work")
+        self.git(self.task, "update-ref", "refs/heads/fix/task", merge)
+        self.install_git_shim("""
+if "fetch" in args:
+    path = Path(os.environ["SESSION_TEST_GRAFTS"])
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(os.environ["SESSION_TEST_GRAFT_CONTENT"])
+""", SESSION_TEST_GRAFTS=str(self.source / ".git/info/grafts"), SESSION_TEST_GRAFT_CONTENT=f"{merge} {head}\n")
+        self.assert_stopped("make the task history linear", "./scripts/session", "land")
 
     def test_end_preserves_an_unlanded_task_with_grafts(self):
         self.start_task()
