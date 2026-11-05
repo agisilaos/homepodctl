@@ -49,7 +49,8 @@ first landing bootstraps that copy from the invoked script.
   failure and rerun. Set `HOMEPODCTL_CODEX` to a compatible Codex executable
   path if the client fails.
 - If `main` moves during landing, rerun to qualify the new base. Each attempt
-  reviews its own base and head.
+  reviews its own base and head. If `main` was rewound past the recorded
+  session base, carry the task commits into a fresh session.
 - Landing also installs the gate in an existing linked task worktree. A custom
   hooks path or active default hooks require integration before the gate can
   be installed. The guard applies to worktrees with the gate installed.

@@ -355,6 +355,15 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.assert_stopped("move ignored local files", "./scripts/session", "land", "--dry-run")
         self.assertEqual(local.read_text(), "local settings")
 
+    def test_land_refuses_main_rewound_past_the_session_base(self):
+        original = self.ref(self.remote)
+        self.commit_file(self.source, "upstream.txt", "upstream\n")
+        self.git(self.source, "push", "-q", "origin", "main")
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.git(self.remote, "update-ref", "refs/heads/main", original)
+        self.assert_stopped("no longer contains the recorded session base", "./scripts/session", "land")
+
     def test_land_refuses_a_branch_switch_during_fetch(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -623,6 +632,20 @@ if args[:2] == ["worktree", "move"] and Path(args[2]) == task:
         self.run_session(self.task, "end")
         self.assertFalse(self.task.exists())
         self.assertEqual(self.git(self.source, "config", key), "origin")
+
+    def test_end_leaves_a_branch_checked_out_during_deletion(self):
+        self.start_task()
+        head = self.ref(self.task)
+        other = self.fixture / "other-worktree"
+        self.install_git_shim("""
+if args[:2] == ["branch", "-d"] or args[:3] == ["update-ref", "-d", "refs/heads/fix/task"]:
+    subprocess.run([
+        git, "worktree", "add", "-q", os.environ["SESSION_TEST_OTHER"], "fix/task",
+    ], check=True)
+""", SESSION_TEST_OTHER=str(other))
+        self.assert_stopped("used by worktree", "./scripts/session", "end")
+        self.assertEqual(self.git(other, "branch", "--show-current"), "fix/task")
+        self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), head)
 
     def test_end_waits_for_landing_confirmation(self):
         self.start_task()
