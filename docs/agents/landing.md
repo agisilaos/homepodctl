@@ -33,8 +33,10 @@ Run `scripts/session land` from the clean task worktree. It takes a lock shared
 by worktrees of this clone, fetches `origin/main`, and rebases the task commits
 onto it. The command reviews that range with Codex and runs `make verify` once
 in a fresh local clone before attempting a push. The pre-push hook matches
-the outgoing update to the qualified range. The command then confirms the
-landed commit on the remote. GitHub Actions also runs on the resulting push.
+the outgoing update to the qualified range. An ancestry check and an
+exact-base lease restrict the push to a fast-forward from that base. The
+command then confirms the landed commit on the remote. GitHub Actions also
+runs on the resulting push.
 Qualification and the hook use a copy of the tool from fetched `main`. The
 first landing bootstraps that copy from the invoked script.
 

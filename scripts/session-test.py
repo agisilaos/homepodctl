@@ -24,10 +24,15 @@ base = subprocess.check_output(["git", "rev-parse", "origin/main"], text=True).s
 head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 assert f"git diff {base} {head}" in args[-1], args[-1]
 reviewer_repo = Path(os.environ["SESSION_TEST_REVIEWER_REPO"])
-subprocess.run(["git", "init", "-q", "--bare", str(reviewer_repo)], check=True)
+subprocess.run(["git", "init", "-q", "--template=", "--bare", str(reviewer_repo)], check=True)
 assert (reviewer_repo / "HEAD").is_file(), "reviewer Git escaped its repository"
 output = Path(args[args.index("--output-last-message") + 1])
 mode = os.environ["SESSION_TEST_REVIEW"]
+if mode == "change-push-url":
+    subprocess.run([
+        "git", "-C", os.environ["SESSION_TEST_TASK"],
+        "config", "remote.origin.pushurl", os.environ["SESSION_TEST_MIRROR"],
+    ], check=True)
 if mode == "advance":
     subprocess.run([
         "git", "--git-dir", os.environ["SESSION_TEST_REMOTE"],
@@ -77,8 +82,8 @@ class SessionTest(unittest.TestCase):
             "SESSION_TEST_REVIEWER_REPO": str(self.fixture / "reviewer.git"),
             "SESSION_TEST_VERIFY": "0",
         })
-        self.run_ok(self.fixture, "git", "init", "-q", "--bare", "-b", "main", str(self.remote))
-        self.run_ok(self.fixture, "git", "init", "-q", "-b", "main", str(self.source))
+        self.run_ok(self.fixture, "git", "init", "-q", "--template=", "--bare", "-b", "main", str(self.remote))
+        self.run_ok(self.fixture, "git", "init", "-q", "--template=", "-b", "main", str(self.source))
         (self.source / "scripts").mkdir()
         shutil.copy2(SESSION, self.source / "scripts")
         (self.source / "base.txt").write_text("original\n")
@@ -188,8 +193,12 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
 
     def test_first_landing_bootstraps_gate(self):
         self.git(self.source, "rm", "scripts/session")
-        self.git(self.source, "commit", "-qm", "Remove task tool")
-        self.git(self.source, "push", "-q", "origin", "main")
+        tree = self.git(self.source, "write-tree")
+        legacy = self.git(self.source, "commit-tree", tree, "-m", "Legacy main")
+        self.git(self.source, "update-ref", "refs/heads/main", legacy)
+        self.git(self.source, "push", "-q", "origin", "HEAD:refs/heads/legacy")
+        self.git(self.remote, "update-ref", "refs/heads/main", legacy)
+        self.git(self.source, "update-ref", "refs/remotes/origin/main", legacy)
         self.git(self.source, "worktree", "add", "-qb", "fix/task", str(self.task), "origin/main")
         (self.task / "scripts").mkdir()
         shutil.copy2(SESSION, self.task / "scripts")
@@ -197,6 +206,14 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.git(self.task, "commit", "-qm", "Install task tool")
         self.assertIn("Landed", self.run_session(self.task, "land"))
         self.assertEqual(self.ref(self.remote), self.ref(self.task))
+
+    def test_land_refuses_bootstrap_if_main_removed_the_workflow(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.git(self.source, "rm", "scripts/session")
+        self.git(self.source, "commit", "-qm", "Remove task tool")
+        self.git(self.source, "push", "-q", "origin", "main")
+        self.assert_stopped("removed or disabled scripts/session", "./scripts/session", "land")
 
     def test_land_adopts_an_already_landed_worktree(self):
         self.git(self.source, "worktree", "add", "-qb", "fix/task", str(self.task), "origin/main")
@@ -327,6 +344,43 @@ if "push" in args:
         self.env["SESSION_TEST_REVIEW"] = "findings"
         self.assert_stopped("did not return a clean review", "./scripts/session", "land")
 
+    def test_land_pins_the_qualified_push_destination(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        base = self.ref(self.remote)
+        mirror = self.fixture / "mirror.git"
+        self.git(self.source, "clone", "--quiet", "--template=", "--bare", str(self.remote), str(mirror))
+        self.env.update({
+            "SESSION_TEST_REVIEW": "change-push-url",
+            "SESSION_TEST_TASK": str(self.task),
+            "SESSION_TEST_MIRROR": str(mirror),
+        })
+        self.assertIn("Landed", self.run_session(self.task, "land"))
+        self.assertEqual(self.ref(self.remote), self.ref(self.task))
+        self.assertEqual(self.ref(mirror), base)
+
+    def test_land_refuses_a_new_base_even_if_git_skips_the_hook(self):
+        self.start_task()
+        self.commit_file(self.task, "first.txt", "first\n")
+        intermediate = self.ref(self.task)
+        self.git(self.task, "push", "-q", "origin", "HEAD:refs/heads/concurrent")
+        self.commit_file(self.task, "second.txt", "second\n")
+        self.install_git_shim("""
+if "push" in args:
+    args = [
+        "core.hooksPath=/dev/null" if arg.startswith("core.hooksPath=") else arg
+        for arg in ["-c", "core.hooksPath=/dev/null", *args]
+    ]
+    subprocess.run([
+        git, "--git-dir", os.environ["SESSION_TEST_REMOTE"],
+        "update-ref", "refs/heads/main", os.environ["SESSION_TEST_REMOTE_HEAD"],
+    ], check=True)
+""", SESSION_TEST_REMOTE=str(self.remote), SESSION_TEST_REMOTE_HEAD=intermediate)
+        result = self.execute(self.task, "./scripts/session", "land")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("stale info", result.stderr)
+        self.assertEqual(self.ref(self.remote), intermediate)
+
     def test_verify_uses_only_committed_build_rules(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -359,7 +413,9 @@ if "push" in args:
         self.commit_file(self.task, "task.txt", "task\n")
         local_rules = self.fixture / "local.mk"
         local_rules.write_text("verify:\n\t@echo skipped-committed-verification\n")
-        (self.source / ".git/info/attributes").write_text("Makefile filter=session-test\n")
+        attributes = self.source / ".git/info/attributes"
+        attributes.parent.mkdir(exist_ok=True)
+        attributes.write_text("Makefile filter=session-test\n")
         self.git(self.task, "config", "filter.session-test.smudge", f"cat {shlex.quote(str(local_rules))}")
         self.env["SESSION_TEST_VERIFY"] = "1"
         self.assert_stopped("make exited", "./scripts/session", "land")
@@ -479,6 +535,7 @@ if "push" in args and "--dry-run" in args:
 
     def test_existing_hook_is_preserved(self):
         hook = self.source / ".git" / "hooks" / "pre-push"
+        hook.parent.mkdir(exist_ok=True)
         hook.write_text("#!/bin/sh\nexit 0\n")
         hook.chmod(0o755)
         result = self.execute(self.source, "./scripts/session", "start", "task")

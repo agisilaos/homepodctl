@@ -28,7 +28,6 @@ docs-check:
 verify:
 	./scripts/release-check.sh
 	$(MAKE) release-fixtures
-	python3 -B ./scripts/session-test.py
 
 verify-core:
 	./scripts/verify.sh
@@ -37,6 +36,7 @@ release-fixtures:
 	./scripts/release-check-test.sh
 	python3 ./scripts/release-publication-test.py
 	python3 ./scripts/release-publisher-contract-test.py
+	python3 -B ./scripts/session-test.py
 
 changelog-context:
 	@if [ -z "$(VERSION)" ]; then echo "VERSION is required (e.g. make changelog-context VERSION=v0.1.0)"; exit 2; fi

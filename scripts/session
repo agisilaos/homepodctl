@@ -16,6 +16,7 @@ MAIN = "refs/heads/main"
 TRACKING = "refs/remotes/origin/main"
 LANDING = "HOMEPODCTL_LANDING"
 RECEIPT = "HOMEPODCTL_LANDING_RECEIPT"
+DESTINATION = "HOMEPODCTL_LANDING_DESTINATION"
 OWNER = "homepodctl.sessionBranch"
 CLEAN_REVIEW = {"status": "clean", "report": ""}
 MAKE_ENVIRONMENT = ("MAKEFLAGS", "GNUMAKEFLAGS", "MFLAGS", "MAKEFILES", "MAKEOVERRIDES", "MAKELEVEL")
@@ -51,7 +52,7 @@ def git_path(name, cwd=None):
 
 
 def checkout_environment_keys():
-    return [*git("rev-parse", "--local-env-vars").splitlines(), LANDING, RECEIPT]
+    return [*git("rev-parse", "--local-env-vars").splitlines(), LANDING, RECEIPT, DESTINATION]
 
 
 def has_session_script(base):
@@ -97,8 +98,8 @@ def install_gate(root, common, base, branch, bootstrap=None):
     git("config", "--worktree", "core.hooksPath", str(hooks), cwd=root)
 
 
-def fetch_main(cwd=None):
-    git("fetch", "--quiet", "--no-tags", "origin", f"{MAIN}:{TRACKING}", cwd=cwd)
+def fetch_main(cwd=None, destination="origin"):
+    git("fetch", "--quiet", "--no-tags", "--", destination, f"{MAIN}:{TRACKING}", cwd=cwd)
     return git("rev-parse", TRACKING, cwd=cwd)
 
 
@@ -192,15 +193,20 @@ def land(root, common, primary, dry_run):
         if session_branch(root, primary) != branch:
             raise SessionError("the task branch changed while waiting")
         hooks = compatible_hooks(root, common)
-        if git("remote", "get-url", "--push", "--all", "origin") != git("remote", "get-url", "origin"):
+        destination = git("remote", "get-url", "origin")
+        if git("remote", "get-url", "--push", "--all", "origin") != destination:
             raise SessionError("origin must have the same single fetch and push destination")
         original = git("rev-parse", branch_ref)
-        base = fetch_main()
+        base = fetch_main(destination=destination)
         require_clean()
         if session_branch(root, primary) != branch or git("rev-parse", branch_ref) != original:
             raise SessionError("the task branch changed during fetch")
         # The first landing has no installed version on main yet.
-        bootstrap = None if has_session_script(base) else Path(__file__).read_bytes()
+        bootstrap = None
+        if not has_session_script(base):
+            if git("log", "-1", "--format=%H", base, "--", "scripts/session"):
+                raise SessionError("origin/main removed or disabled scripts/session")
+            bootstrap = Path(__file__).read_bytes()
         if git("rev-list", "--merges", f"{base}..HEAD"):
             raise SessionError("make the task history linear before landing")
         needs_rebase = subprocess.run(["git", "merge-base", "--is-ancestor", base, original])
@@ -223,31 +229,37 @@ def land(root, common, primary, dry_run):
         if head == base:
             print(f"Already on origin/main at {head}")
             return
+        # The lease checks the old ref atomically. This ancestry check limits
+        # the update to a fast-forward even when the hook is unavailable.
+        subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
         command = [
-            "git", "-c", "remote.origin.mirror=false", "-c", "hook.pre-push.enabled=true",
-            "push", "--no-follow-tags",
+            "git", "-c", f"core.hooksPath={hooks}", "-c", "hook.pre-push.enabled=true",
+            "push", "--no-follow-tags", f"--force-with-lease={MAIN}:{base}",
         ]
         if dry_run:
             command.append("--dry-run")
         with tempfile.TemporaryDirectory(prefix="homepodctl-land-", dir=git_path("HEAD").parent) as state:
             receipt = Path(state) / "checked"
             expected = f"{base} {head}"
-            subprocess.run([str(hooks / "pre-push"), "--qualify", base, head, str(receipt)], check=True)
+            subprocess.run(
+                [str(hooks / "pre-push"), "--qualify", base, head, str(receipt)],
+                env={**os.environ, DESTINATION: destination}, check=True,
+            )
             if not receipt.is_file() or receipt.read_text() != expected:
                 raise SessionError("the gate did not qualify these commits")
             require_clean()
             if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
                 raise SessionError("the task branch changed after qualification")
             subprocess.run(
-                [*command, "origin", f"{head}:{MAIN}"],
-                env={**os.environ, LANDING: expected, RECEIPT: str(receipt)},
+                [*command, "--", destination, f"{head}:{MAIN}"],
+                env={**os.environ, LANDING: expected, RECEIPT: str(receipt), DESTINATION: destination},
                 check=True,
             )
         if dry_run:
-            verify_remote_base("origin", base)
+            verify_remote_base(destination, base)
             print(f"Dry run passed for {head}")
         else:
-            observed = fetch_main()
+            observed = fetch_main(destination=destination)
             subprocess.run(["git", "merge-base", "--is-ancestor", head, observed], check=True)
             print(f"Landed {head} on origin/main")
 
@@ -313,20 +325,22 @@ def review(base, head, logs, checkout):
         raise SessionError(f"Codex did not return a clean review. Verdict: {verdict}")
 
 
-def pre_push(remote):
+def pre_push(destination):
     for line in sys.stdin:
         _, head, remote_ref, base = line.split()
         if remote_ref != MAIN:
             continue
         expected = f"{base} {head}"
         receipt = os.environ.get(RECEIPT)
-        if remote != "origin" or os.environ.get(LANDING) != expected or not receipt:
+        if (destination != os.environ.get(DESTINATION)
+                or os.environ.get(LANDING) != expected or not receipt):
             raise SessionError("use scripts/session land; main may have moved since the rebase")
         if Path(receipt).read_text() != expected:
             raise SessionError("the outgoing update does not match the qualified commits")
 
 
 def qualify(base, head, receipt):
+    destination = os.environ[DESTINATION]
     subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
     default_logs = Path.home() / "Library/Logs/homepodctl/threads"
     log_root = (Path(os.environ.get("HOMEPODCTL_SESSION_LOG_DIR", default_logs))
@@ -352,9 +366,9 @@ def qualify(base, head, receipt):
         ):
             run_logged(["git", *args], setup_log, checkout)
         review(base, head, logs, checkout)
-        verify_remote_base("origin", base)
+        verify_remote_base(destination, base)
         run_logged(["make", "-f", "Makefile", "verify"], logs / "verify.log", checkout)
-    verify_remote_base("origin", base)
+    verify_remote_base(destination, base)
     Path(receipt).write_text(f"{base} {head}")
     print("Codex review and make verify passed", file=sys.stderr)
 
@@ -398,7 +412,7 @@ def main():
         if len(sys.argv) == 5 and sys.argv[1] == "--qualify":
             qualify(*sys.argv[2:])
         elif len(sys.argv) == 3:
-            pre_push(sys.argv[1])
+            pre_push(sys.argv[2])
         else:
             raise SessionError("the pre-push gate must be invoked by Git")
         return
