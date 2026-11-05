@@ -15,16 +15,15 @@ import tempfile
 MAIN = "refs/heads/main"
 TRACKING = "refs/remotes/origin/main"
 LANDING = "HOMEPODCTL_LANDING"
+RECEIPT = "HOMEPODCTL_LANDING_RECEIPT"
+OWNER = "homepodctl.sessionBranch"
 CLEAN_REVIEW = {"status": "clean", "report": ""}
 MAKE_ENVIRONMENT = ("MAKEFLAGS", "GNUMAKEFLAGS", "MFLAGS", "MAKEFILES", "MAKEOVERRIDES", "MAKELEVEL")
+BUILD_OUTPUTS = {"homepodctl", "dist/verify/homepodctl"}
 OPERATIONS = (
     "rebase-merge", "rebase-apply", "sequencer", "MERGE_HEAD",
     "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_START",
 )
-HOOK = """#!/bin/sh
-root=$(git rev-parse --show-toplevel) || exit 1
-exec "$root/scripts/session" _pre-push "$@"
-"""
 
 
 class SessionError(Exception):
@@ -52,10 +51,14 @@ def git_path(name, cwd=None):
 
 
 def checkout_environment_keys():
-    return [*git("rev-parse", "--local-env-vars").splitlines(), LANDING]
+    return [*git("rev-parse", "--local-env-vars").splitlines(), LANDING, RECEIPT]
 
 
-def install_gate(root, common):
+def has_session_script(base):
+    return git("ls-tree", base, "--", "scripts/session").startswith("100755 blob ")
+
+
+def install_gate(root, common, base, branch, bootstrap=None):
     hooks = git_path("homepodctl-session-hooks", root)
     configured = config("core.hooksPath", root)
     if configured is not None and configured != str(hooks):
@@ -73,15 +76,20 @@ def install_gate(root, common):
             raise SessionError("worktree-scoped hooks require a standard non-bare repository")
         git("config", "--local", "extensions.worktreeConfig", "true", cwd=root)
 
+    # Copy from main so rebasing or editing the task cannot replace its push gate.
+    source = bootstrap if bootstrap is not None else subprocess.check_output(
+        ["git", "show", f"{base}:scripts/session"]
+    )
     hooks.mkdir(exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode="w", dir=hooks, delete=False) as launcher:
-        launcher.write(HOOK)
+    with tempfile.NamedTemporaryFile(dir=hooks, delete=False) as launcher:
+        launcher.write(source)
         temporary = Path(launcher.name)
     try:
         temporary.chmod(0o755)
         temporary.replace(hooks / "pre-push")
     finally:
         temporary.unlink(missing_ok=True)
+    git("config", "--worktree", OWNER, branch, cwd=root)
     git("config", "--worktree", "core.hooksPath", str(hooks), cwd=root)
 
 
@@ -103,6 +111,9 @@ def session_branch(root, primary):
     branch = git("branch", "--show-current")
     if not branch or branch in {"main", "master"}:
         raise SessionError("check out a task branch first")
+    owner = config(OWNER)
+    if owner is not None and owner != branch:
+        raise SessionError(f"this session owns {owner}; check it out first")
     return branch
 
 
@@ -110,12 +121,13 @@ def start(name, common, primary):
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
         raise SessionError("use a lowercase task name such as fix-playback-help")
     path = primary.with_name(f"{primary.name}-{name}")
+    branch = f"fix/{name}"
     base = fetch_main()
-    if not git("ls-tree", base, "--", "scripts/session").startswith("100755 blob "):
+    if not has_session_script(base):
         raise SessionError("origin/main needs an executable scripts/session before starting tasks")
-    git("worktree", "add", "--quiet", "--no-track", "-b", f"fix/{name}", str(path), base)
+    git("worktree", "add", "--quiet", "--no-track", "-b", branch, str(path), base)
     try:
-        install_gate(path, common)
+        install_gate(path, common, base, branch)
     except (SessionError, OSError, subprocess.CalledProcessError):
         print(f"Worktree created at {path}. Hook setup failed.", file=sys.stderr)
         raise
@@ -134,6 +146,8 @@ def land(root, common, primary, dry_run):
         if git("remote", "get-url", "--push", "--all", "origin") != git("remote", "get-url", "origin"):
             raise SessionError("origin must have the same single fetch and push destination")
         base = fetch_main()
+        # The first landing has no installed version on main yet.
+        bootstrap = None if has_session_script(base) else Path(__file__).read_bytes()
         if git("rev-list", "--merges", f"{base}..HEAD"):
             raise SessionError("make the task history linear before landing")
         try:
@@ -148,15 +162,20 @@ def land(root, common, primary, dry_run):
             print(f"Already on origin/main at {head}")
             return
         require_clean()
-        install_gate(root, common)
+        install_gate(root, common, base, branch, bootstrap)
         command = ["git", "-c", "remote.origin.mirror=false", "push", "--no-follow-tags"]
         if dry_run:
             command.append("--dry-run")
-        subprocess.run(
-            [*command, "origin", f"{head}:{MAIN}"],
-            env={**os.environ, LANDING: f"{base} {head}"},
-            check=True,
-        )
+        with tempfile.TemporaryDirectory(prefix="homepodctl-land-", dir=git_path("HEAD").parent) as state:
+            receipt = Path(state) / "checked"
+            expected = f"{base} {head}"
+            subprocess.run(
+                [*command, "origin", f"{head}:{MAIN}"],
+                env={**os.environ, LANDING: expected, RECEIPT: str(receipt)},
+                check=True,
+            )
+            if not receipt.is_file() or receipt.read_text() != expected:
+                raise SessionError("no ref update was qualified; check origin/main before retrying")
         if dry_run:
             print(f"Dry run passed for {head}")
         else:
@@ -222,7 +241,9 @@ def pre_push(remote, destination):
         _, head, remote_ref, base = line.split()
         if remote_ref != MAIN:
             continue
-        if remote != "origin" or os.environ.get(LANDING) != f"{base} {head}":
+        expected = f"{base} {head}"
+        receipt = os.environ.get(RECEIPT)
+        if remote != "origin" or os.environ.get(LANDING) != expected or not receipt:
             raise SessionError("use scripts/session land; main may have moved since the rebase")
         require_clean()
         if git("rev-parse", "HEAD") != head:
@@ -247,6 +268,7 @@ def pre_push(remote, destination):
         if git("rev-parse", "HEAD") != head:
             raise SessionError("HEAD changed during verification; land again")
         verify_remote_base(destination, base)
+        Path(receipt).write_text(expected)
         print("Codex review and make verify passed", file=sys.stderr)
 
 
@@ -258,8 +280,12 @@ def verify_remote_base(destination, base):
 def end(root, primary):
     require_clean()
     branch = session_branch(root, primary)
-    if config("core.hooksPath") != str(git_path("homepodctl-session-hooks")):
+    if config(OWNER) != branch or config("core.hooksPath") != str(git_path("homepodctl-session-hooks")):
         raise SessionError("end applies to worktrees with the session gate installed")
+    ignored = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z").split("\0")
+    for path in ignored:
+        if path and path not in BUILD_OUTPUTS:
+            raise SessionError(f"move or remove ignored local files before ending, including {path!r}")
     base = fetch_main()
     head = git("rev-parse", "HEAD")
     result = subprocess.run(["git", "merge-base", "--is-ancestor", head, base])
@@ -280,8 +306,10 @@ def end(root, primary):
 
 
 def main():
-    if len(sys.argv) == 4 and sys.argv[1] == "_pre-push":
-        pre_push(*sys.argv[2:])
+    if Path(sys.argv[0]).name == "pre-push":
+        if len(sys.argv) != 3:
+            raise SessionError("the pre-push gate must be invoked by Git")
+        pre_push(*sys.argv[1:])
         return
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)

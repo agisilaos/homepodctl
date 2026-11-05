@@ -81,6 +81,7 @@ class SessionTest(unittest.TestCase):
         (self.source / "scripts").mkdir()
         shutil.copy2(SESSION, self.source / "scripts")
         (self.source / "base.txt").write_text("original\n")
+        (self.source / ".gitignore").write_text("/homepodctl\n/dist/\n")
         (self.source / "Makefile").write_text(
             'verify:\n\t@test -z "$$GIT_DIR$$GIT_COMMON_DIR$$HOMEPODCTL_LANDING"\n'
             '\t@echo verify-ran\n\t@exit "$$SESSION_TEST_VERIFY"\n'
@@ -143,6 +144,18 @@ class SessionTest(unittest.TestCase):
         self.assertFalse(self.task.exists())
         self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
 
+    def test_first_landing_bootstraps_gate(self):
+        self.git(self.source, "rm", "scripts/session")
+        self.git(self.source, "commit", "-qm", "Remove task tool")
+        self.git(self.source, "push", "-q", "origin", "main")
+        self.git(self.source, "worktree", "add", "-qb", "fix/task", str(self.task), "origin/main")
+        (self.task / "scripts").mkdir()
+        shutil.copy2(SESSION, self.task / "scripts")
+        self.git(self.task, "add", "scripts/session")
+        self.git(self.task, "commit", "-qm", "Install task tool")
+        self.assertIn("Landed", self.run_session(self.task, "land"))
+        self.assertEqual(self.ref(self.remote), self.ref(self.task))
+
     def test_rebase_dry_run_land_and_end(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -167,6 +180,8 @@ class SessionTest(unittest.TestCase):
         logs = self.fixture / "logs" / self.task.name
         self.assertEqual(len(list(logs.glob("land-*/verify.log"))), 2)
         self.git(self.task, "branch", "--set-upstream-to=origin/main")
+        (self.task / "dist/verify").mkdir(parents=True)
+        (self.task / "dist/verify/homepodctl").write_text("build output")
         self.run_session(self.task, "end")
         self.assertFalse(self.task.exists())
         self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
@@ -214,6 +229,69 @@ class SessionTest(unittest.TestCase):
         logs = self.fixture / "logs" / self.task.name
         verify_log, = logs.glob("land-*/verify.log")
         self.assertIn("verify-ran", verify_log.read_text())
+
+    def test_task_cannot_replace_its_installed_gate(self):
+        self.start_task()
+        tool = (self.task / "scripts/session").read_text()
+        bypass = (
+            '    if "_pre-push" in sys.argv or Path(sys.argv[0]).name == "pre-push":\n'
+            '        return\n'
+        )
+        self.commit_file(
+            self.task, "scripts/session", tool.replace("def main():\n", "def main():\n" + bypass)
+        )
+        self.env["SESSION_TEST_REVIEW"] = "findings"
+        self.assert_stopped("did not return a clean review", "./scripts/session", "land")
+
+    def test_end_refuses_a_different_branch(self):
+        self.start_task()
+        self.git(self.task, "switch", "-qc", "release-local")
+        self.assert_stopped("this session owns fix/task", "./scripts/session", "end")
+        self.assertTrue(self.task.is_dir())
+        self.assertEqual(self.git(self.task, "branch", "--show-current"), "release-local")
+
+    def test_end_preserves_ignored_local_files(self):
+        self.start_task()
+        ignored = self.task / "dist/private.env"
+        ignored.parent.mkdir()
+        ignored.write_text("local settings")
+        self.assert_stopped("move or remove ignored local files", "./scripts/session", "end")
+        self.assertEqual(ignored.read_text(), "local settings")
+
+    def test_no_op_dry_run_requires_gate_receipt(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.git(self.task, "push", "-q", "origin", "HEAD:refs/heads/concurrent")
+        head = self.ref(self.task)
+        tools = self.fixture / "tools"
+        tools.mkdir()
+        shim = tools / "git"
+        shim.write_text("""#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+
+args = sys.argv[1:]
+git = os.environ["SESSION_TEST_REAL_GIT"]
+if "push" in args and "--dry-run" in args:
+    subprocess.run([
+        git, "--git-dir", os.environ["SESSION_TEST_REMOTE"],
+        "update-ref", "refs/heads/main", os.environ["SESSION_TEST_REMOTE_HEAD"],
+    ], check=True)
+os.execv(git, [git, *args])
+""")
+        shim.chmod(0o755)
+        self.env.update({
+            "SESSION_TEST_REAL_GIT": shutil.which("git"),
+            "SESSION_TEST_REMOTE": str(self.remote),
+            "SESSION_TEST_REMOTE_HEAD": head,
+            "PATH": f"{tools}{os.pathsep}{self.env['PATH']}",
+        })
+        result = self.execute(self.task, "./scripts/session", "land", "--dry-run")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("no ref update was qualified", result.stderr)
+        self.assertEqual(self.ref(self.remote), head)
+        self.assertFalse((self.fixture / "logs").exists())
 
     def test_evidence_path_cannot_enter_a_checkout(self):
         self.start_task()

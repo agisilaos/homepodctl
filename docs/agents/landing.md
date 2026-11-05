@@ -34,7 +34,9 @@ by worktrees of this clone, fetches `origin/main`, and rebases the task commits
 onto it. The pre-push gate reviews that committed range with Codex and runs
 `make verify` once. A passing gate lets the same command fast-forward
 `origin/main` directly and confirm the landed commit on the remote. GitHub
-Actions also runs on the resulting push.
+Actions also runs on the resulting push. The installed hook runs a copy of
+the tool from fetched `main`. The first landing bootstraps that copy from the
+script used to invoke the landing.
 
 - `scripts/session land --dry-run` rebases and exercises the same gate without
   updating remote refs.
@@ -50,6 +52,8 @@ Actions also runs on the resulting push.
   be installed. The guard applies to worktrees with the gate installed.
 
 When cleanup is requested, run `scripts/session end` from the task worktree. It
-removes the worktree and branch after checking that the checkout is clean and
-its commits are on `origin/main`. Keep durable findings on the issue and retain
-evidence outside the worktree.
+removes the worktree and its original branch after checking that the checkout
+is clean and its commits are on `origin/main`. Move any ignored local files
+you want to keep before cleanup. The command recognizes the normal build and
+verification binaries as disposable. Keep durable findings on the issue and
+retain evidence outside the worktree.
