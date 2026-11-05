@@ -54,7 +54,7 @@ script used to invoke the landing.
 
 When cleanup is requested, run `scripts/session end` from the task worktree. It
 removes the worktree and its original branch after checking that the checkout
-is clean and its commits are on `origin/main`. Move any ignored local files
-you want to keep before cleanup. The command recognizes the normal build and
-verification binaries as disposable. Keep durable findings on the issue and
-retain evidence outside the worktree.
+is clean and its commits are on `origin/main`. Clear index flags that hide
+tracked edits and move ignored local files before cleanup. The command
+recognizes the normal build and verification binaries as disposable. Keep
+durable findings on the issue and retain evidence outside the worktree.

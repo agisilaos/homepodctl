@@ -125,7 +125,7 @@ def start(name, common, primary):
     base = fetch_main()
     if not has_session_script(base):
         raise SessionError("origin/main needs an executable scripts/session before starting tasks")
-    git("worktree", "add", "--quiet", "--no-track", "-b", branch, str(path), base)
+    git("worktree", "add", "--quiet", "--no-track", "-b", branch, str(path), base, cwd=primary)
     try:
         install_gate(path, common, base, branch)
     except (SessionError, OSError, subprocess.CalledProcessError):
@@ -194,6 +194,7 @@ def run_logged(command, path, checkout, timeout=None):
     env = os.environ.copy()
     for key in (*checkout_environment_keys(), *MAKE_ENVIRONMENT):
         env.pop(key, None)
+    env["GIT_NO_REPLACE_OBJECTS"] = "1"
     with path.open("w") as output:
         try:
             result = subprocess.run(
@@ -299,6 +300,9 @@ def end(root, primary):
     require_clean()
     if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
         raise SessionError("the task branch changed during cleanup")
+    for entry in git("ls-files", "-v", "-z").split("\0"):
+        if entry.startswith("S ") or entry[:1].islower():
+            raise SessionError(f"clear Git index flags before ending, including {entry[2:]!r}")
     ignored = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z").split("\0")
     for path in ignored:
         if path and path not in BUILD_OUTPUTS:
@@ -320,6 +324,7 @@ def main():
     if Path(sys.argv[0]).name == "pre-push":
         if len(sys.argv) != 3:
             raise SessionError("the pre-push gate must be invoked by Git")
+        os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
         pre_push(*sys.argv[1:])
         return
     parser = argparse.ArgumentParser(description=__doc__)
@@ -333,6 +338,7 @@ def main():
     args = parser.parse_args()
     for key in checkout_environment_keys():
         os.environ.pop(key, None)
+    os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
     root = Path(git("rev-parse", "--show-toplevel")).resolve()
     os.chdir(root)
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()

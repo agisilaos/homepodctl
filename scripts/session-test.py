@@ -154,6 +154,25 @@ git = os.environ["SESSION_TEST_REAL_GIT"]
         hook_path = Path(self.git(self.task, "config", "--worktree", "--get", "core.hooksPath"))
         self.assertTrue((hook_path / "pre-push").is_file())
 
+    def test_start_from_task_does_not_copy_its_gate(self):
+        self.start_task()
+        self.install_git_shim("""
+if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TEST_TASK"]):
+    hooks = subprocess.check_output([git, "config", "--worktree", "core.hooksPath"], text=True).strip()
+    subprocess.run([git, *args], check=True)
+    subprocess.run([
+        git, "-C", args[-2], "config", "--worktree", "core.hooksPath", hooks,
+    ], check=True)
+    sys.exit(0)
+""", SESSION_TEST_TASK=str(self.task))
+        sibling = Path(self.run_session(self.task, "start", "next"))
+        self.assertEqual(sibling, self.fixture / "source-next")
+        self.assertEqual(self.git(sibling, "config", "--worktree", "homepodctl.sessionBranch"), "fix/next")
+        self.assertNotEqual(
+            self.git(self.task, "config", "--worktree", "core.hooksPath"),
+            self.git(sibling, "config", "--worktree", "core.hooksPath"),
+        )
+
     def test_start_requires_workflow_on_main(self):
         self.git(self.source, "rm", "scripts/session")
         self.git(self.source, "commit", "-qm", "Remove task tool")
@@ -272,6 +291,17 @@ git = os.environ["SESSION_TEST_REAL_GIT"]
         self.assert_stopped("make exited", "./scripts/session", "land")
         self.assertEqual((self.task / "Makefile").read_text(), local_rules)
 
+    def test_verify_ignores_git_replacement_objects(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        local_rules = self.fixture / "local.mk"
+        local_rules.write_text("verify:\n\t@echo skipped-committed-verification\n")
+        original = self.git(self.task, "rev-parse", "HEAD:Makefile")
+        replacement = self.git(self.task, "hash-object", "-w", str(local_rules))
+        self.git(self.task, "replace", original, replacement)
+        self.env["SESSION_TEST_VERIFY"] = "1"
+        self.assert_stopped("make exited", "./scripts/session", "land")
+
     def test_task_cannot_replace_its_installed_gate(self):
         self.start_task()
         tool = (self.task / "scripts/session").read_text()
@@ -310,6 +340,18 @@ if args[:1] == ["fetch"]:
 """, SESSION_TEST_IGNORED=str(ignored))
         self.assert_stopped("move or remove ignored local files", "./scripts/session", "end")
         self.assertEqual(ignored.read_text(), "local settings")
+
+    def test_end_preserves_edits_hidden_by_index_flags(self):
+        self.start_task()
+        tracked = self.task / "base.txt"
+        for flag in ("assume-unchanged", "skip-worktree"):
+            with self.subTest(flag=flag):
+                self.git(self.task, "update-index", f"--{flag}", tracked.name)
+                tracked.write_text("local changes\n")
+                self.assert_stopped("clear Git index flags", "./scripts/session", "end")
+                self.assertEqual(tracked.read_text(), "local changes\n")
+                tracked.write_text("original\n")
+                self.git(self.task, "update-index", f"--no-{flag}", tracked.name)
 
     def test_no_op_dry_run_requires_gate_receipt(self):
         self.start_task()
