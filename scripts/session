@@ -21,6 +21,7 @@ DESTINATION = "HOMEPODCTL_LANDING_DESTINATION"
 OWNER = "homepodctl.sessionBranch"
 CLEAN_REVIEW = {"status": "clean", "report": ""}
 MAKE_ENVIRONMENT = ("MAKEFLAGS", "GNUMAKEFLAGS", "MFLAGS", "MAKEFILES", "MAKEOVERRIDES", "MAKELEVEL")
+TOOL_OVERRIDES = ("BASH_ENV", "ENV", "BASHOPTS", "SHELLOPTS", "GIT_EXTERNAL_DIFF", "GIT_DIFF_OPTS", "GOFLAGS")
 BUILD_OUTPUTS = {"homepodctl", "dist/verify/homepodctl"}
 OPERATIONS = (
     "rebase-merge", "rebase-apply", "sequencer", "MERGE_HEAD",
@@ -32,9 +33,9 @@ class SessionError(Exception):
     pass
 
 
-def git(*args, cwd=None):
+def git(*args, cwd=None, env=None):
     return subprocess.run(
-        ["git", *args], cwd=cwd, check=True, stdout=subprocess.PIPE, text=True
+        ["git", *args], cwd=cwd, env=env, check=True, stdout=subprocess.PIPE, text=True
     ).stdout.rstrip("\n")
 
 
@@ -103,15 +104,20 @@ def pinned_remote(destination):
     # Git expands a URL alias once. Mapping a fresh alias to the already
     # resolved URL avoids applying the user's rewrite rules a second time.
     alias = f"homepodctl:{secrets.token_hex(16)}"
-    return [
-        "-c", f"url.{destination}.insteadOf={alias}",
-        "-c", f"url.{destination}.pushInsteadOf={alias}",
-    ], alias
+    env = {
+        **os.environ,
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_KEY_0": f"url.{destination}.insteadOf",
+        "GIT_CONFIG_VALUE_0": alias,
+        "GIT_CONFIG_KEY_1": f"url.{destination}.pushInsteadOf",
+        "GIT_CONFIG_VALUE_1": alias,
+    }
+    return env, alias
 
 
 def fetch_main(cwd=None, destination=None):
-    options, address = pinned_remote(destination) if destination else ([], "origin")
-    git(*options, "fetch", "--quiet", "--no-tags", "--", address, f"{MAIN}:{TRACKING}", cwd=cwd)
+    env, address = pinned_remote(destination) if destination else (None, "origin")
+    git("fetch", "--quiet", "--no-tags", "--", address, f"{MAIN}:{TRACKING}", cwd=cwd, env=env)
     return git("rev-parse", TRACKING, cwd=cwd)
 
 
@@ -257,9 +263,9 @@ def land(root, common, primary, dry_run):
             return
         # Qualification establishes ancestry in the isolated clone. The
         # lease then checks the old ref atomically, even if Git skips its hook.
-        remote_options, address = pinned_remote(destination)
+        transport_env, address = pinned_remote(destination)
         command = [
-            "git", *remote_options, "-c", f"core.hooksPath={hooks}", "-c", "hook.pre-push.enabled=true",
+            "git", "-c", f"core.hooksPath={hooks}", "-c", "hook.pre-push.enabled=true",
             "push", "--no-follow-tags", f"--force-with-lease={MAIN}:{base}",
         ]
         if dry_run:
@@ -278,7 +284,7 @@ def land(root, common, primary, dry_run):
                 raise SessionError("the task branch changed after qualification")
             subprocess.run(
                 [*command, "--", address, f"{head}:{MAIN}"],
-                env={**os.environ, LANDING: expected, RECEIPT: str(receipt), DESTINATION: destination},
+                env={**transport_env, LANDING: expected, RECEIPT: str(receipt), DESTINATION: destination},
                 check=True,
             )
         if dry_run:
@@ -294,9 +300,8 @@ def run_logged(command, path, checkout, timeout=None):
     # Git exports checkout-specific variables to hooks. Tools that start Git in
     # another directory must discover that repository independently.
     env = os.environ.copy()
-    for key in (*checkout_environment_keys(), *MAKE_ENVIRONMENT):
+    for key in (*checkout_environment_keys(), *MAKE_ENVIRONMENT, *TOOL_OVERRIDES):
         env.pop(key, None)
-    env.pop("GOFLAGS", None)
     env.update({
         "GOENV": "off",
         "GOWORK": "off",
@@ -332,7 +337,8 @@ def review(base, head, logs, checkout):
     transcript = logs / "review.log"
     prompt = (
         f"Review the committed homepodctl change from {base} to {head}. "
-        f"Read AGENTS.md and inspect git diff {base} {head} and affected code and tests. "
+        f"Read AGENTS.md and inspect git diff --no-ext-diff --no-textconv {base} {head} "
+        "and affected code and tests. "
         "Review for actionable regressions and repository standards. Change no files. "
         "Use findings with file, line and consequence for defects, or incomplete with "
         "the reason if you cannot finish. Use clean with an empty report only after "
@@ -400,8 +406,8 @@ def qualify(base, head, receipt):
 
 
 def verify_remote_base(destination, base):
-    options, address = pinned_remote(destination)
-    if git(*options, "ls-remote", "--exit-code", "--", address, MAIN) != f"{base}\t{MAIN}":
+    env, address = pinned_remote(destination)
+    if git("ls-remote", "--exit-code", "--", address, MAIN, env=env) != f"{base}\t{MAIN}":
         raise SessionError("origin/main moved during landing; land again")
 
 

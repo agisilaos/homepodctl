@@ -22,12 +22,19 @@ args = sys.argv[1:]
 assert args[:4] == ["exec", "--ephemeral", "--sandbox", "read-only"], args
 base = subprocess.check_output(["git", "rev-parse", "origin/main"], text=True).strip()
 head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-assert f"git diff {base} {head}" in args[-1], args[-1]
+assert "git diff" in args[-1] and f"{base} {head}" in args[-1], args[-1]
 reviewer_repo = Path(os.environ["SESSION_TEST_REVIEWER_REPO"])
 subprocess.run(["git", "init", "-q", "--template=", "--bare", str(reviewer_repo)], check=True)
 assert (reviewer_repo / "HEAD").is_file(), "reviewer Git escaped its repository"
 output = Path(args[args.index("--output-last-message") + 1])
 mode = os.environ["SESSION_TEST_REVIEW"]
+if mode == "check-diff":
+    assert "GIT_EXTERNAL_DIFF" not in os.environ
+    assert "--no-ext-diff --no-textconv" in args[-1]
+    patch = subprocess.check_output(
+        ["git", "diff", "--no-ext-diff", "--no-textconv", base, head], text=True
+    )
+    assert "+task" in patch
 if mode == "change-push-url":
     subprocess.run([
         "git", "-C", os.environ["SESSION_TEST_TASK"],
@@ -97,6 +104,7 @@ class SessionTest(unittest.TestCase):
             'verify:\n\t@test -z "$$GIT_DIR$$GIT_COMMON_DIR$$HOMEPODCTL_LANDING"\n'
             '\t@if [ "$$SESSION_TEST_GO_ENV" = 1 ]; then test -z "$$GOFLAGS" && '
             'test "$$GOENV" = off && test "$$GOWORK" = off; fi\n'
+            '\t@if [ "$$SESSION_TEST_BASH_ENV" = 1 ]; then bash -c "echo shell-ran"; fi\n'
             '\t@echo verify-ran\n\t@exit "$$SESSION_TEST_VERIFY"\n'
         )
         self.git(self.source, "add", ".")
@@ -339,6 +347,22 @@ if "fetch" in args:
         })
         self.assertIn("Landed", self.run_session(self.task, "land"))
 
+    def test_qualification_ignores_shell_and_diff_overrides(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        shell_startup = self.fixture / "bash-env"
+        shell_startup.write_text("exit 0\n")
+        self.env.update({
+            "BASH_ENV": str(shell_startup),
+            "GIT_EXTERNAL_DIFF": "/usr/bin/true",
+            "SESSION_TEST_BASH_ENV": "1",
+            "SESSION_TEST_REVIEW": "check-diff",
+        })
+        self.assertIn("Landed", self.run_session(self.task, "land"))
+        logs = self.fixture / "logs" / self.task.name
+        verify_log, = logs.glob("land-*/verify.log")
+        self.assertIn("shell-ran", verify_log.read_text())
+
     def test_review_findings_stop_landing_before_git_push(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -381,6 +405,15 @@ if "push" in args:
         self.assertIn("Landed", self.run_session(self.task, "land"))
         self.assertEqual(self.ref(self.remote), self.ref(self.task))
         self.assertEqual(self.ref(mirror), base)
+
+    def test_land_accepts_equals_in_the_remote_path(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        destination = self.fixture / "remote=destination.git"
+        self.remote.rename(destination)
+        self.git(self.task, "config", "remote.origin.url", str(destination))
+        self.assertIn("Landed", self.run_session(self.task, "land"))
+        self.assertEqual(self.ref(destination), self.ref(self.task))
 
     def test_land_refuses_grafted_ancestry(self):
         self.start_task()
