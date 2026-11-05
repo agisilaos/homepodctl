@@ -55,8 +55,10 @@ first landing bootstraps that copy from the invoked script.
   be installed. The guard applies to worktrees with the gate installed.
 
 When cleanup is requested, run `scripts/session end` from the task worktree. It
-removes the worktree and its original branch after checking that the checkout
-is clean and its commits are on `origin/main`. Clear index flags that hide
-tracked edits and move ignored local files before cleanup. The command
-recognizes the normal build and verification binaries as disposable. Keep
-durable findings on the issue and retain evidence outside the worktree.
+moves the checkout to Trash and removes its Git registration and original
+branch after checking that it is clean and its commits are on `origin/main`.
+Clear index flags that hide tracked edits and move ignored local files before
+cleanup. The command recognizes the normal build and verification binaries as
+disposable. For checkouts on another volume, set `HOMEPODCTL_SESSION_TRASH_DIR`
+to a directory outside Git checkouts on that volume. Keep durable findings on
+the issue and retain evidence outside the worktree.

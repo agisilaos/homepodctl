@@ -91,6 +91,7 @@ class SessionTest(unittest.TestCase):
             "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
             "HOMEPODCTL_CODEX": str(reviewer),
             "HOMEPODCTL_SESSION_LOG_DIR": str(self.fixture / "logs"),
+            "HOMEPODCTL_SESSION_TRASH_DIR": str(self.fixture / "trash"),
             "SESSION_TEST_REVIEW": "clean",
             "SESSION_TEST_REVIEWER_REPO": str(self.fixture / "reviewer.git"),
             "SESSION_TEST_VERIFY": "0",
@@ -618,6 +619,21 @@ if args[:1] == ["fetch"]:
 """, SESSION_TEST_IGNORED=str(ignored))
         self.assert_stopped("move ignored local files", "./scripts/session", "end")
         self.assertEqual(ignored.read_text(), "local settings")
+
+    def test_end_preserves_ignored_files_written_after_the_last_scan(self):
+        self.start_task()
+        self.install_git_shim("""
+task = Path(os.environ["SESSION_TEST_TASK"])
+if args[:2] in (["worktree", "move"], ["worktree", "remove"]) and Path(args[2]) == task:
+    ignored = task / "dist/private.env"
+    ignored.parent.mkdir()
+    ignored.write_text("late local settings")
+""", SESSION_TEST_TASK=str(self.task))
+        self.run_session(self.task, "end")
+        self.assertFalse(self.task.exists())
+        retained, = (self.fixture / "trash").glob("*/files/dist/private.env")
+        self.assertEqual(retained.read_text(), "late local settings")
+        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
 
     def test_end_preserves_edits_hidden_by_index_flags(self):
         self.start_task()

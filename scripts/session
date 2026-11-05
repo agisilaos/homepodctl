@@ -435,6 +435,39 @@ def verify_remote_base(destination, base):
         raise SessionError("origin/main moved during landing; land again")
 
 
+def retire_checkout(root, primary):
+    trash = Path(os.environ.get("HOMEPODCTL_SESSION_TRASH_DIR", Path.home() / ".Trash")).resolve()
+    if any((directory / ".git").exists() for directory in (trash, *trash.parents)):
+        raise SessionError("use a Trash directory outside Git checkouts")
+    trash.mkdir(parents=True, exist_ok=True)
+    slot = Path(tempfile.mkdtemp(prefix=f"{root.name}-", dir=trash))
+    registered = slot / "registered"
+    archived = slot / "files"
+    try:
+        git("worktree", "move", str(root), str(registered), cwd=primary)
+    except subprocess.CalledProcessError:
+        if not any(slot.iterdir()):
+            slot.rmdir()
+        raise
+
+    # Unregister a missing path so Git never recursively deletes the files.
+    try:
+        registered.rename(archived)
+        git("worktree", "remove", str(registered), cwd=primary)
+    except (OSError, subprocess.CalledProcessError):
+        try:
+            if archived.exists():
+                archived.rename(registered)
+            if not root.exists() and not root.is_symlink():
+                git("worktree", "move", str(registered), str(root), cwd=primary)
+                slot.rmdir()
+        finally:
+            if slot.exists():
+                print(f"Worktree files are retained at {slot}", file=sys.stderr)
+        raise
+    return archived
+
+
 def end(root, primary):
     require_clean()
     branch = session_branch(root, primary)
@@ -451,7 +484,8 @@ def end(root, primary):
     if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
         raise SessionError("the task branch changed during cleanup")
     protect_local_files()
-    git("worktree", "remove", str(root), cwd=primary)
+    archived = retire_checkout(root, primary)
+    print(f"Worktree files moved to {archived}")
     branch_ref = f"refs/heads/{branch}"
     worktrees = git("worktree", "list", "--porcelain", "-z", cwd=primary)
     if f"branch {branch_ref}" in worktrees.split("\0"):
