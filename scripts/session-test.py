@@ -243,11 +243,34 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.git(self.source, "push", "-q", "origin", "main")
         self.assert_stopped("removed or disabled scripts/session", "./scripts/session", "land")
 
+    def test_land_refuses_bootstrap_from_shallow_history(self):
+        self.git(self.source, "rm", "scripts/session")
+        self.git(self.source, "commit", "-qm", "Remove task tool")
+        self.git(self.source, "push", "-q", "origin", "main")
+        shallow = self.fixture / "shallow"
+        self.git(self.source, "clone", "-q", "--template=", "--depth=1", self.remote.as_uri(), str(shallow))
+        self.git(shallow, "worktree", "add", "-qb", "fix/task", str(self.task), "main")
+        (self.task / "scripts").mkdir()
+        shutil.copy2(SESSION, self.task / "scripts")
+        self.git(self.task, "add", "scripts/session")
+        self.git(self.task, "commit", "-qm", "Reintroduce task tool")
+        self.assert_stopped("first landing requires complete main history", "./scripts/session", "land")
+
     def test_land_adopts_an_already_landed_worktree(self):
         self.git(self.source, "worktree", "add", "-qb", "fix/task", str(self.task), "origin/main")
         self.assertIn("Already on origin/main", self.run_session(self.task, "land"))
         self.run_session(self.task, "end")
         self.assertFalse(self.task.exists())
+
+    def test_retry_refreshes_tracking_when_main_already_has_the_commit(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        head = self.ref(self.task)
+        self.git(self.task, "push", "-q", "origin", "HEAD:refs/heads/concurrent")
+        self.git(self.remote, "update-ref", "refs/heads/main", head)
+        self.assertNotEqual(self.git(self.task, "rev-parse", "origin/main"), head)
+        self.assertIn("Already on origin/main", self.run_session(self.task, "land"))
+        self.assertEqual(self.git(self.task, "rev-parse", "origin/main"), head)
 
     def test_rebase_dry_run_land_and_end(self):
         self.start_task()
@@ -506,7 +529,7 @@ if "push" in args:
 """, SESSION_TEST_REMOTE=str(self.remote), SESSION_TEST_REMOTE_HEAD=intermediate)
         result = self.execute(self.task, "./scripts/session", "land")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("stale info", result.stderr)
+        self.assertIn("stale info", result.stdout)
         self.assertEqual(self.ref(self.remote), intermediate)
 
     def test_verify_uses_only_committed_build_rules(self):
@@ -581,6 +604,17 @@ if "push" in args:
         self.assert_stopped("this session owns fix/task", "./scripts/session", "end")
         self.assertTrue(self.task.is_dir())
         self.assertEqual(self.git(self.task, "branch", "--show-current"), "release-local")
+
+    def test_end_restores_a_branch_switched_during_move(self):
+        self.start_task()
+        self.install_git_shim("""
+task = Path(os.environ["SESSION_TEST_TASK"])
+if args[:2] == ["worktree", "move"] and Path(args[2]) == task:
+    subprocess.run([git, "-C", str(task), "switch", "-qc", "release-local"], check=True)
+""", SESSION_TEST_TASK=str(self.task))
+        self.assert_stopped("the task branch changed during cleanup", "./scripts/session", "end")
+        self.assertEqual(self.git(self.task, "branch", "--show-current"), "release-local")
+        self.assertIn("fix/task", self.git(self.source, "branch", "--list"))
 
     def test_end_preserves_branch_settings_with_a_shared_prefix(self):
         self.start_task()
@@ -674,6 +708,23 @@ if "push" in args and "--dry-run" in args:
         self.assertEqual(self.ref(self.remote), head)
         self.assertTrue(list((self.fixture / "logs").glob("**/verify.log")))
 
+    def test_live_push_reports_when_main_already_reached_the_head(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.git(self.task, "push", "-q", "origin", "HEAD:refs/heads/concurrent")
+        head = self.ref(self.task)
+        self.install_git_shim("""
+if "push" in args:
+    subprocess.run([
+        git, "--git-dir", os.environ["SESSION_TEST_REMOTE"],
+        "update-ref", "refs/heads/main", os.environ["SESSION_TEST_REMOTE_HEAD"],
+    ], check=True)
+""", SESSION_TEST_REMOTE=str(self.remote), SESSION_TEST_REMOTE_HEAD=head)
+        result = self.run_session(self.task, "land")
+        self.assertIn(f"Already on origin/main at {head}", result)
+        self.assertNotIn("Landed", result)
+        self.assertEqual(self.ref(self.remote), head)
+
     def test_evidence_path_cannot_enter_a_checkout(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -729,11 +780,30 @@ if args[:2] == ["worktree", "add"]:
         self.assertFalse(self.task.exists())
         self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
 
+    def test_start_rollback_retains_files_written_after_the_last_scan(self):
+        self.install_git_shim("""
+if args[:2] == ["worktree", "add"]:
+    subprocess.run([git, *args], check=True)
+    sys.exit(19)
+if args[:2] in (["worktree", "move"], ["worktree", "remove"]):
+    candidate = Path(args[2])
+    if candidate.parent.name.startswith(".homepodctl-start-"):
+        ignored = candidate / "dist/private.env"
+        ignored.parent.mkdir()
+        ignored.write_text("late local settings")
+""")
+        result = self.execute(self.source, "./scripts/session", "start", "task")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.task.exists())
+        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
+        retained, = (self.fixture / "trash").glob("*/files/dist/private.env")
+        self.assertEqual(retained.read_text(), "late local settings")
+
     def test_start_does_not_remove_a_competing_worktree(self):
         self.install_git_shim("""
-if args[:2] == ["worktree", "move"]:
+if args[:2] == ["worktree", "move"] and args[-1] == os.environ["SESSION_TEST_TASK"]:
     subprocess.run([git, "worktree", "add", "-qb", "unrelated", args[-1], "main"], check=True)
-""")
+""", SESSION_TEST_TASK=str(self.task))
         result = self.execute(self.source, "./scripts/session", "start", "task")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.git(self.task, "branch", "--show-current"), "unrelated")
