@@ -263,11 +263,29 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.assertFalse(self.task.exists())
 
     def test_land_adopts_a_branch_created_from_local_work(self):
+        base = self.ref(self.remote)
         self.git(self.source, "switch", "-qc", "local-work")
         self.commit_file(self.source, "task.txt", "local task\n")
         self.git(self.source, "worktree", "add", "-qb", "fix/task", str(self.task), "HEAD")
-        self.assertIn("Landed", self.run_session(self.task, "land"))
+        self.assert_stopped("pass --base with its known main commit", "./scripts/session", "land")
+        self.assertIn("Landed", self.run_session(self.task, "land", "--base", base))
         self.assertEqual(self.ref(self.remote), self.ref(self.task))
+
+    def test_land_refuses_to_infer_an_adoption_base_after_a_rewind(self):
+        original = self.ref(self.remote)
+        self.commit_file(self.source, "upstream.txt", "upstream\n")
+        self.git(self.source, "push", "-q", "origin", "main")
+        old_base = self.ref(self.remote)
+        self.git(self.source, "switch", "-qc", "local-work")
+        self.commit_file(self.source, "task.txt", "local task\n")
+        self.git(self.source, "worktree", "add", "-qb", "fix/task", str(self.task), "HEAD")
+        self.git(self.remote, "update-ref", "refs/heads/main", original)
+        self.git(self.source, "update-ref", "refs/remotes/origin/main", original)
+        self.git(self.source, "reflog", "expire", "--expire=all", "refs/remotes/origin/main")
+        self.assert_stopped("pass --base with its known main commit", "./scripts/session", "land")
+        self.assert_stopped(
+            "no longer contains the recorded session base", "./scripts/session", "land", "--base", old_base
+        )
 
     def test_retry_refreshes_tracking_when_main_already_has_the_commit(self):
         self.start_task()
@@ -289,6 +307,8 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         base = self.ref(self.remote)
 
         self.assert_stopped("not on origin/main", "./scripts/session", "end")
+        self.assert_stopped("the task is behind origin/main", "./scripts/session", "land", "--dry-run")
+        self.git(self.task, "rebase", base)
         git_dir = self.git(self.task, "rev-parse", "--absolute-git-dir")
         dry_run = self.run_ok(
             self.task, "env", f"GIT_DIR={git_dir}", f"GIT_WORK_TREE={self.task}",
@@ -342,7 +362,9 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.commit_file(self.task, "base.txt", "task\n")
         self.commit_file(self.source, "base.txt", "upstream\n")
         self.git(self.source, "push", "-q", "origin", "main")
-        self.assert_stopped("rebase stopped", "./scripts/session", "land")
+        self.assert_stopped("the task is behind origin/main", "./scripts/session", "land")
+        conflict = self.execute(self.task, "git", "rebase", self.ref(self.remote))
+        self.assertNotEqual(conflict.returncode, 0)
         self.assert_stopped("Git operation in progress", "./scripts/session", "end")
         self.git(self.task, "rebase", "--abort")
         self.assertEqual((self.task / "base.txt").read_text(), "task\n")
@@ -359,8 +381,27 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.git(self.source, "add", "-f", "dist/private.env")
         self.git(self.source, "commit", "-qm", "Track settings")
         self.git(self.source, "push", "-q", "origin", "main")
-        self.assert_stopped("move ignored local files", "./scripts/session", "land", "--dry-run")
+        self.assert_stopped("the task is behind origin/main", "./scripts/session", "land", "--dry-run")
         self.assertEqual(local.read_text(), "local settings")
+
+    def test_stale_landing_preserves_ignored_files_written_during_setup(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        upstream = self.source / "dist/private.env"
+        upstream.parent.mkdir()
+        upstream.write_text("tracked settings")
+        self.git(self.source, "add", "-f", "dist/private.env")
+        self.git(self.source, "commit", "-qm", "Track settings")
+        self.git(self.source, "push", "-q", "origin", "main")
+        local = self.task / "dist/private.env"
+        self.install_git_shim("""
+if args[:3] == ["config", "--worktree", "homepodctl.sessionBase"]:
+    path = Path(os.environ["SESSION_TEST_IGNORED"])
+    path.parent.mkdir(exist_ok=True)
+    path.write_text("late local settings")
+""", SESSION_TEST_IGNORED=str(local))
+        self.assert_stopped("the task is behind origin/main", "./scripts/session", "land", "--dry-run")
+        self.assertEqual(local.read_text(), "late local settings")
 
     def test_land_refuses_main_rewound_past_the_session_base(self):
         original = self.ref(self.remote)
@@ -377,7 +418,9 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.commit_file(self.task, "base.txt", "task\n")
         self.commit_file(self.source, "base.txt", "upstream\n")
         self.git(self.source, "push", "-q", "origin", "main")
-        self.assert_stopped("rebase stopped", "./scripts/session", "land")
+        self.assert_stopped("the task is behind origin/main", "./scripts/session", "land")
+        conflict = self.execute(self.task, "git", "rebase", self.ref(self.remote))
+        self.assertNotEqual(conflict.returncode, 0)
         (self.task / "base.txt").write_text("resolved\n")
         self.git(self.task, "add", "base.txt")
         self.env["GIT_EDITOR"] = "true"

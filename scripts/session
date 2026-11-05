@@ -201,22 +201,27 @@ def session_lock(common, name):
         yield
 
 
-def require_retained_base(branch_ref, base):
+def require_retained_base(branch_ref, base, adoption_base):
     previous = config(SESSION_BASE)
-    if previous is None:
+    if adoption_base is not None:
+        if previous is not None:
+            raise SessionError("this worktree already has a recorded session base")
+        previous = git("rev-parse", "--verify", "--end-of-options", f"{adoption_base}^{{commit}}")
+        tip = git("rev-parse", "--verify", branch_ref)
+        original = check_ancestry(previous, tip)
+        if original.returncode == 1:
+            raise SessionError("the supplied starting base is outside the task branch history")
+        original.check_returncode()
+    elif previous is None:
         history = git("reflog", "show", "--format=%H", branch_ref).splitlines()
         if not history:
             raise SessionError("could not establish the task's starting base")
         initial = history[-1]
-        if local_ref_exists(TRACKING):
-            fork = subprocess.run(
-                ["git", "merge-base", "--fork-point", TRACKING, initial],
-                stdout=subprocess.PIPE, text=True,
-            )
-            if fork.returncode != 1:
-                fork.check_returncode()
-            previous = fork.stdout.strip()
-        previous = previous or git("merge-base", initial, base)
+        initial_is_on_main = check_ancestry(initial, base)
+        if initial_is_on_main.returncode == 1:
+            raise SessionError("could not verify the task's starting base; pass --base with its known main commit")
+        initial_is_on_main.check_returncode()
+        previous = initial
     retained = check_ancestry(previous, base)
     if retained.returncode == 1:
         raise SessionError("origin/main no longer contains the recorded session base")
@@ -277,7 +282,7 @@ def start(name, common, primary):
     print(path)
 
 
-def land(root, common, primary, dry_run):
+def land(root, common, primary, dry_run, adoption_base):
     require_clean()
     branch = session_branch(root, primary)
     branch_ref = f"refs/heads/{branch}"
@@ -296,7 +301,7 @@ def land(root, common, primary, dry_run):
         require_clean()
         if session_branch(root, primary) != branch or git("rev-parse", branch_ref) != original:
             raise SessionError("the task branch changed during fetch")
-        require_retained_base(branch_ref, base)
+        require_retained_base(branch_ref, base, adoption_base)
         # The first landing has no installed version on main yet.
         bootstrap = None
         if not has_session_script(base):
@@ -307,21 +312,13 @@ def land(root, common, primary, dry_run):
             bootstrap = Path(__file__).read_bytes()
         if git("rev-list", "--merges", f"{base}..HEAD"):
             raise SessionError("make the task history linear before landing")
-        needs_rebase = check_ancestry(base, original)
-        if needs_rebase.returncode == 1:
-            protect_local_files()
-        else:
-            needs_rebase.check_returncode()
-        # Record the target before a conflict can hand the rebase back to Git.
+        # Record the fetched target so a manual rebase cannot later land after
+        # main is rewound past the base the user was asked to integrate.
         install_gate(root, common, base, branch, bootstrap)
-        if needs_rebase.returncode == 1:
-            try:
-                git(
-                    "rebase", "--quiet", "--reapply-cherry-picks", "--no-update-refs",
-                    "--no-autosquash", "--no-autostash", base, branch,
-                )
-            except subprocess.CalledProcessError as error:
-                raise SessionError("rebase stopped; resolve or abort it before retrying") from error
+        based_on_main = check_ancestry(base, original)
+        if based_on_main.returncode == 1:
+            raise SessionError(f"the task is behind origin/main; rebase onto {base} before landing")
+        based_on_main.check_returncode()
         head = git("rev-parse", branch_ref)
         require_clean()
         if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
@@ -570,9 +567,11 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("start", help="create a task worktree from origin/main").add_argument("name")
     commands.add_parser("list", help="list worktrees and their branches")
-    commands.add_parser("land", help="review, verify and fast-forward origin/main").add_argument(
-        "--dry-run", action="store_true", help="rebase and run the gate without updating GitHub"
+    landing = commands.add_parser("land", help="review, verify and fast-forward origin/main")
+    landing.add_argument(
+        "--dry-run", action="store_true", help="run the gate without updating GitHub"
     )
+    landing.add_argument("--base", help="known main commit for adopting an unrecorded worktree")
     commands.add_parser("end", help="move this clean, landed task worktree to Trash")
     args = parser.parse_args()
     for key in checkout_environment_keys():
@@ -587,7 +586,7 @@ def main():
     if args.command == "list":
         print(git("worktree", "list"))
     elif args.command == "land":
-        land(root, common, primary, args.dry_run)
+        land(root, common, primary, args.dry_run, args.base)
     elif args.command == "start":
         with session_lock(common, "worktrees"):
             start(args.name, common, primary)
