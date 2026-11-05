@@ -461,6 +461,22 @@ if "push" in args:
         self.assertEqual(self.ref(self.task), head)
         self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), head)
 
+    def test_end_uses_its_own_fetch_instead_of_the_shared_tracking_ref(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        head = self.ref(self.task)
+        self.install_git_shim("""
+if "fetch" in args:
+    subprocess.run([git, *args], check=True)
+    subprocess.run([
+        git, "update-ref", "refs/remotes/origin/main", os.environ["SESSION_TEST_OTHER_TIP"],
+    ], check=True)
+    sys.exit(0)
+""", SESSION_TEST_OTHER_TIP=head)
+        self.assert_stopped("the task commits are not on origin/main", "./scripts/session", "end")
+        self.assertEqual(self.ref(self.task), head)
+        self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), head)
+
     def test_land_refuses_a_new_base_even_if_git_skips_the_hook(self):
         self.start_task()
         self.commit_file(self.task, "first.txt", "first\n")

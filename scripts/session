@@ -116,10 +116,17 @@ def pinned_remote(destination):
     return env, alias
 
 
-def fetch_main(cwd=None, destination=None):
+def fetch_main(destination=None):
     env, address = pinned_remote(destination) if destination else (None, "origin")
-    git("fetch", "--quiet", "--no-tags", "--", address, f"{MAIN}:{TRACKING}", cwd=cwd, env=env)
-    return git("rev-parse", TRACKING, cwd=cwd)
+    snapshot = f"refs/worktree/homepodctl/main-{secrets.token_hex(16)}"
+    try:
+        git(
+            "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--refmap=",
+            "--", address, f"{MAIN}:{snapshot}", env=env,
+        )
+        return git("rev-parse", "--verify", f"{snapshot}^{{commit}}")
+    finally:
+        git("update-ref", "-d", snapshot)
 
 
 def require_clean():
