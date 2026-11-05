@@ -2,6 +2,7 @@
 """Start an isolated task, qualify a fast-forward to main, or end a landed task."""
 
 import argparse
+from contextlib import contextmanager
 import fcntl
 import json
 import os
@@ -20,8 +21,8 @@ RECEIPT = "HOMEPODCTL_LANDING_RECEIPT"
 DESTINATION = "HOMEPODCTL_LANDING_DESTINATION"
 OWNER = "homepodctl.sessionBranch"
 CLEAN_REVIEW = {"status": "clean", "report": ""}
-MAKE_ENVIRONMENT = ("MAKE", "MAKEFLAGS", "GNUMAKEFLAGS", "MFLAGS", "MAKEFILES", "MAKEOVERRIDES", "MAKELEVEL")
-TOOL_OVERRIDES = ("BASH_ENV", "ENV", "BASHOPTS", "SHELLOPTS", "GIT_EXTERNAL_DIFF", "GIT_DIFF_OPTS", "GOFLAGS")
+TOOL_OVERRIDES = ("BASH_ENV", "ENV", "BASHOPTS", "SHELLOPTS", "GIT_EXTERNAL_DIFF",
+                  "GIT_DIFF_OPTS", "GOFLAGS", "MFLAGS")
 BUILD_OUTPUTS = {"homepodctl", "dist/verify/homepodctl"}
 OPERATIONS = (
     "rebase-merge", "rebase-apply", "sequencer", "MERGE_HEAD",
@@ -158,6 +159,13 @@ def registered_checkout(pointer):
     return (pointer.parent / pointer.read_text().rstrip("\n")).resolve().parent
 
 
+@contextmanager
+def session_lock(common, name):
+    with (common / f"homepodctl-{name}.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
 def has_branch_settings(section, cwd):
     settings = git("config", "--local", "--name-only", "--list", cwd=cwd)
     return any(key.rpartition(".")[0] == section for key in settings.splitlines())
@@ -222,9 +230,8 @@ def land(root, common, primary, dry_run):
     require_clean()
     branch = session_branch(root, primary)
     branch_ref = f"refs/heads/{branch}"
-    with (common / "homepodctl-landing.lock").open("a") as lock:
-        print("Waiting for the landing lock", file=sys.stderr, flush=True)
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    print("Waiting for the landing lock", file=sys.stderr, flush=True)
+    with session_lock(common, "landing"):
         require_clean()
         if session_branch(root, primary) != branch:
             raise SessionError("the task branch changed while waiting")
@@ -306,8 +313,11 @@ def land(root, common, primary, dry_run):
 def run_logged(command, path, checkout, timeout=None):
     # Git exports checkout-specific variables to hooks. Tools that start Git in
     # another directory must discover that repository independently.
-    env = {key: value for key, value in os.environ.items() if not key.startswith("BASH_FUNC_")}
-    for key in (*checkout_environment_keys(), *MAKE_ENVIRONMENT, *TOOL_OVERRIDES):
+    env = {
+        key: value for key, value in os.environ.items()
+        if not key.startswith(("BASH_FUNC_", "MAKE", "GNUMAKE"))
+    }
+    for key in (*checkout_environment_keys(), *TOOL_OVERRIDES):
         env.pop(key, None)
     env.update({
         "GOENV": "off",
@@ -484,13 +494,12 @@ def main():
         print(git("worktree", "list"))
     elif args.command == "land":
         land(root, common, primary, args.dry_run)
+    elif args.command == "start":
+        with session_lock(common, "worktrees"):
+            start(args.name, common, primary)
     else:
-        with (common / "homepodctl-worktrees.lock").open("a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            if args.command == "start":
-                start(args.name, common, primary)
-            else:
-                end(root, primary)
+        with session_lock(common, "landing"), session_lock(common, "worktrees"):
+            end(root, primary)
 
 
 if __name__ == "__main__":

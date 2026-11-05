@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise task sessions using a bare local remote and a controlled reviewer."""
 
+import fcntl
 import os
 from pathlib import Path
 import shlex
@@ -375,6 +376,7 @@ if "fetch" in args:
         self.commit_file(self.task, "task.txt", "task\n")
         self.env.update({
             "MAKE": ":",
+            "MAKE_COMMAND": ":",
             "BASH_FUNC_make%%": "() { :; }",
             "SESSION_TEST_NESTED_MAKE": "1",
         })
@@ -561,6 +563,26 @@ if "push" in args:
         self.run_session(self.task, "end")
         self.assertFalse(self.task.exists())
         self.assertEqual(self.git(self.source, "config", key), "origin")
+
+    def test_end_waits_for_landing_confirmation(self):
+        self.start_task()
+        landing_lock = self.source / ".git/homepodctl-landing.lock"
+        with landing_lock.open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            with subprocess.Popen(
+                ["./scripts/session", "end"], cwd=self.task, env=self.env,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ) as cleanup:
+                try:
+                    with self.assertRaises(subprocess.TimeoutExpired):
+                        cleanup.wait(timeout=4)
+                    self.assertTrue(self.task.exists())
+                finally:
+                    fcntl.flock(lock, fcntl.LOCK_UN)
+                stdout, stderr = cleanup.communicate(timeout=30)
+        self.assertEqual(cleanup.returncode, 0, stderr)
+        self.assertIn("Removed", stdout)
+        self.assertFalse(self.task.exists())
 
     def test_end_preserves_ignored_local_files(self):
         self.start_task()
