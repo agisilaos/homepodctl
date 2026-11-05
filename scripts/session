@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -98,8 +99,19 @@ def install_gate(root, common, base, branch, bootstrap=None):
     git("config", "--worktree", "core.hooksPath", str(hooks), cwd=root)
 
 
-def fetch_main(cwd=None, destination="origin"):
-    git("fetch", "--quiet", "--no-tags", "--", destination, f"{MAIN}:{TRACKING}", cwd=cwd)
+def pinned_remote(destination):
+    # Git expands a URL alias once. Mapping a fresh alias to the already
+    # resolved URL avoids applying the user's rewrite rules a second time.
+    alias = f"homepodctl:{secrets.token_hex(16)}"
+    return [
+        "-c", f"url.{destination}.insteadOf={alias}",
+        "-c", f"url.{destination}.pushInsteadOf={alias}",
+    ], alias
+
+
+def fetch_main(cwd=None, destination=None):
+    options, address = pinned_remote(destination) if destination else ([], "origin")
+    git(*options, "fetch", "--quiet", "--no-tags", "--", address, f"{MAIN}:{TRACKING}", cwd=cwd)
     return git("rev-parse", TRACKING, cwd=cwd)
 
 
@@ -192,6 +204,8 @@ def land(root, common, primary, dry_run):
         require_clean()
         if session_branch(root, primary) != branch:
             raise SessionError("the task branch changed while waiting")
+        if git_path("info/grafts").exists():
+            raise SessionError("remove local Git grafts before landing")
         hooks = compatible_hooks(root, common)
         destination = git("remote", "get-url", "origin")
         if git("remote", "get-url", "--push", "--all", "origin") != destination:
@@ -229,11 +243,11 @@ def land(root, common, primary, dry_run):
         if head == base:
             print(f"Already on origin/main at {head}")
             return
-        # The lease checks the old ref atomically. This ancestry check limits
-        # the update to a fast-forward even when the hook is unavailable.
-        subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
+        # Qualification establishes ancestry in the isolated clone. The
+        # lease then checks the old ref atomically, even if Git skips its hook.
+        remote_options, address = pinned_remote(destination)
         command = [
-            "git", "-c", f"core.hooksPath={hooks}", "-c", "hook.pre-push.enabled=true",
+            "git", *remote_options, "-c", f"core.hooksPath={hooks}", "-c", "hook.pre-push.enabled=true",
             "push", "--no-follow-tags", f"--force-with-lease={MAIN}:{base}",
         ]
         if dry_run:
@@ -251,7 +265,7 @@ def land(root, common, primary, dry_run):
             if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
                 raise SessionError("the task branch changed after qualification")
             subprocess.run(
-                [*command, "--", destination, f"{head}:{MAIN}"],
+                [*command, "--", address, f"{head}:{MAIN}"],
                 env={**os.environ, LANDING: expected, RECEIPT: str(receipt), DESTINATION: destination},
                 check=True,
             )
@@ -341,7 +355,6 @@ def pre_push(destination):
 
 def qualify(base, head, receipt):
     destination = os.environ[DESTINATION]
-    subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
     default_logs = Path.home() / "Library/Logs/homepodctl/threads"
     log_root = (Path(os.environ.get("HOMEPODCTL_SESSION_LOG_DIR", default_logs))
                 / Path.cwd().name).resolve()
@@ -363,6 +376,7 @@ def qualify(base, head, receipt):
             ["config", "--local", "core.attributesFile", os.devnull],
             ["update-ref", TRACKING, base],
             ["checkout", "--quiet", "--detach", head],
+            ["merge-base", "--is-ancestor", base, head],
         ):
             run_logged(["git", *args], setup_log, checkout)
         review(base, head, logs, checkout)
@@ -374,7 +388,8 @@ def qualify(base, head, receipt):
 
 
 def verify_remote_base(destination, base):
-    if git("ls-remote", "--exit-code", "--", destination, MAIN) != f"{base}\t{MAIN}":
+    options, address = pinned_remote(destination)
+    if git(*options, "ls-remote", "--exit-code", "--", address, MAIN) != f"{base}\t{MAIN}":
         raise SessionError("origin/main moved during landing; land again")
 
 

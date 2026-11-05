@@ -33,6 +33,11 @@ if mode == "change-push-url":
         "git", "-C", os.environ["SESSION_TEST_TASK"],
         "config", "remote.origin.pushurl", os.environ["SESSION_TEST_MIRROR"],
     ], check=True)
+if mode == "rewrite-push-url":
+    subprocess.run([
+        "git", "-C", os.environ["SESSION_TEST_TASK"], "config",
+        f'url.{os.environ["SESSION_TEST_MIRROR"]}.insteadOf', os.environ["SESSION_TEST_REMOTE"],
+    ], check=True)
 if mode == "advance":
     subprocess.run([
         "git", "--git-dir", os.environ["SESSION_TEST_REMOTE"],
@@ -308,7 +313,7 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.commit_file(self.task, "unrelated.txt", "unrelated\n")
         self.git(self.task, "switch", "-q", "fix/task")
         self.install_git_shim("""
-if args[:1] == ["fetch"]:
+if "fetch" in args:
     subprocess.run([git, "switch", "-q", "unrelated"], check=True)
 """)
         self.assert_stopped("this session owns fix/task", "./scripts/session", "land")
@@ -334,15 +339,17 @@ if args[:1] == ["fetch"]:
         })
         self.assertIn("Landed", self.run_session(self.task, "land"))
 
-    def test_landing_runs_review_even_if_git_disables_the_hook(self):
+    def test_review_findings_stop_landing_before_git_push(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
+        push_attempt = self.fixture / "push-attempt"
         self.install_git_shim("""
 if "push" in args:
-    args = ["-c", "core.hooksPath=/dev/null", *args]
-""")
+    Path(os.environ["SESSION_TEST_PUSH_ATTEMPT"]).touch()
+""", SESSION_TEST_PUSH_ATTEMPT=str(push_attempt))
         self.env["SESSION_TEST_REVIEW"] = "findings"
         self.assert_stopped("did not return a clean review", "./scripts/session", "land")
+        self.assertFalse(push_attempt.exists())
 
     def test_land_pins_the_qualified_push_destination(self):
         self.start_task()
@@ -358,6 +365,33 @@ if "push" in args:
         self.assertIn("Landed", self.run_session(self.task, "land"))
         self.assertEqual(self.ref(self.remote), self.ref(self.task))
         self.assertEqual(self.ref(mirror), base)
+
+    def test_land_does_not_rewrite_the_pinned_url_again(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        base = self.ref(self.remote)
+        mirror = self.fixture / "mirror.git"
+        self.git(self.source, "clone", "--quiet", "--template=", "--bare", str(self.remote), str(mirror))
+        self.env.update({
+            "SESSION_TEST_REVIEW": "rewrite-push-url",
+            "SESSION_TEST_TASK": str(self.task),
+            "SESSION_TEST_MIRROR": str(mirror),
+            "SESSION_TEST_REMOTE": str(self.remote),
+        })
+        self.assertIn("Landed", self.run_session(self.task, "land"))
+        self.assertEqual(self.ref(self.remote), self.ref(self.task))
+        self.assertEqual(self.ref(mirror), base)
+
+    def test_land_refuses_grafted_ancestry(self):
+        self.start_task()
+        base = self.ref(self.remote)
+        tree = self.git(self.task, "rev-parse", "HEAD^{tree}")
+        unrelated = self.git(self.task, "commit-tree", tree, "-m", "Unrelated history")
+        self.git(self.task, "update-ref", "refs/heads/fix/task", unrelated)
+        grafts = self.source / ".git/info/grafts"
+        grafts.parent.mkdir(exist_ok=True)
+        grafts.write_text(f"{unrelated} {base}\n")
+        self.assert_stopped("remove local Git grafts", "./scripts/session", "land")
 
     def test_land_refuses_a_new_base_even_if_git_skips_the_hook(self):
         self.start_task()
