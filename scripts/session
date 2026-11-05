@@ -16,6 +16,7 @@ MAIN = "refs/heads/main"
 TRACKING = "refs/remotes/origin/main"
 LANDING = "HOMEPODCTL_LANDING"
 CLEAN_REVIEW = {"status": "clean", "report": ""}
+MAKE_ENVIRONMENT = ("MAKEFLAGS", "GNUMAKEFLAGS", "MFLAGS", "MAKEFILES", "MAKEOVERRIDES", "MAKELEVEL")
 OPERATIONS = (
     "rebase-merge", "rebase-apply", "sequencer", "MERGE_HEAD",
     "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_START",
@@ -110,6 +111,8 @@ def start(name, common, primary):
         raise SessionError("use a lowercase task name such as fix-playback-help")
     path = primary.with_name(f"{primary.name}-{name}")
     base = fetch_main()
+    if not git("ls-tree", base, "--", "scripts/session").startswith("100755 blob "):
+        raise SessionError("origin/main needs an executable scripts/session before starting tasks")
     git("worktree", "add", "--quiet", "--no-track", "-b", f"fix/{name}", str(path), base)
     try:
         install_gate(path, common)
@@ -166,7 +169,7 @@ def run_logged(command, path, timeout=None):
     # Git exports checkout-specific variables to hooks. Tools that start Git in
     # another directory must discover that repository independently.
     env = os.environ.copy()
-    for key in checkout_environment_keys():
+    for key in (*checkout_environment_keys(), *MAKE_ENVIRONMENT):
         env.pop(key, None)
     with path.open("w") as output:
         try:
@@ -227,10 +230,10 @@ def pre_push(remote, destination):
         subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
 
         default_logs = Path.home() / "Library/Logs/homepodctl/threads"
-        log_root = Path(os.environ.get("HOMEPODCTL_SESSION_LOG_DIR", default_logs)).resolve()
-        if log_root.is_relative_to(Path.cwd()):
-            raise SessionError("store session evidence outside the checkout")
-        log_root = log_root / Path.cwd().name
+        log_root = (Path(os.environ.get("HOMEPODCTL_SESSION_LOG_DIR", default_logs))
+                    / Path.cwd().name).resolve()
+        if any((directory / ".git").exists() for directory in (log_root, *log_root.parents)):
+            raise SessionError("store session evidence outside Git checkouts")
         log_root.mkdir(parents=True, exist_ok=True)
         logs = Path(tempfile.mkdtemp(prefix="land-", dir=log_root))
         print(f"Review and verification logs: {logs}", file=sys.stderr, flush=True)
@@ -270,6 +273,9 @@ def end(root, primary):
         raise SessionError(f"{branch} is checked out in another worktree")
     # Delete only the exact branch tip whose ancestry was checked.
     git("update-ref", "-d", branch_ref, head, cwd=primary)
+    settings = git("config", "--local", "--name-only", "--list", cwd=primary)
+    if any(key.startswith(f"branch.{branch}.") for key in settings.splitlines()):
+        git("config", "--local", "--remove-section", f"branch.{branch}", cwd=primary)
     print(f"Removed {root}")
 
 
@@ -294,14 +300,17 @@ def main():
     if common.name != ".git":
         raise SessionError("expected a standard non-bare checkout")
     primary = common.parent
-    if args.command == "start":
-        start(args.name, common, primary)
-    elif args.command == "list":
+    if args.command == "list":
         print(git("worktree", "list"))
     elif args.command == "land":
         land(root, common, primary, args.dry_run)
     else:
-        end(root, primary)
+        with (common / "homepodctl-worktrees.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if args.command == "start":
+                start(args.name, common, primary)
+            else:
+                end(root, primary)
 
 
 if __name__ == "__main__":

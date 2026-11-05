@@ -13,7 +13,8 @@ At the start of the chat, run `scripts/session start <name>` and work from the
 absolute path it prints. This fetches `origin/main`, creates a sibling worktree
 on `fix/<name>`, and installs the local pre-push gate for that worktree. Use a
 short lowercase name such as `issue-21-playback-feedback`. The primary checkout
-can have its own work in progress.
+can have its own work in progress. The workflow must be on `origin/main` before
+it can start new tasks.
 
 ## Work and review
 

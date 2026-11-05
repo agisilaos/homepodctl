@@ -133,6 +133,16 @@ class SessionTest(unittest.TestCase):
         hook_path = Path(self.git(self.task, "config", "--worktree", "--get", "core.hooksPath"))
         self.assertTrue((hook_path / "pre-push").is_file())
 
+    def test_start_requires_workflow_on_main(self):
+        self.git(self.source, "rm", "scripts/session")
+        self.git(self.source, "commit", "-qm", "Remove task tool")
+        self.git(self.source, "push", "-q", "origin", "main")
+        result = self.execute(self.source, str(SESSION), "start", "task")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("origin/main needs an executable scripts/session", result.stderr)
+        self.assertFalse(self.task.exists())
+        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
+
     def test_rebase_dry_run_land_and_end(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -160,6 +170,7 @@ class SessionTest(unittest.TestCase):
         self.run_session(self.task, "end")
         self.assertFalse(self.task.exists())
         self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
+        self.assertNotIn("branch.fix/task.", self.git(self.source, "config", "--list"))
         self.assertEqual((self.source / "unrelated.txt").read_text(), "preserve")
         self.assertEqual(self.ref(self.source), base)
 
@@ -194,6 +205,29 @@ class SessionTest(unittest.TestCase):
         self.assert_stopped("Git operation in progress", "./scripts/session", "end")
         self.git(self.task, "rebase", "--abort")
         self.assertEqual((self.task / "base.txt").read_text(), "task\n")
+
+    def test_inherited_make_flags_do_not_skip_verification(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.env.update({"MAKEFLAGS": "n", "GNUMAKEFLAGS": "n", "SESSION_TEST_VERIFY": "1"})
+        self.assert_stopped("make exited", "./scripts/session", "land")
+        logs = self.fixture / "logs" / self.task.name
+        verify_log, = logs.glob("land-*/verify.log")
+        self.assertIn("verify-ran", verify_log.read_text())
+
+    def test_evidence_path_cannot_enter_a_checkout(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        inside = self.source / "evidence"
+        self.env["HOMEPODCTL_SESSION_LOG_DIR"] = str(inside)
+        self.assert_stopped("outside Git checkouts", "./scripts/session", "land")
+        self.assertFalse(inside.exists())
+        logs = self.fixture / "logs"
+        logs.mkdir()
+        (logs / self.task.name).symlink_to(inside, target_is_directory=True)
+        self.env["HOMEPODCTL_SESSION_LOG_DIR"] = str(logs)
+        self.assert_stopped("outside Git checkouts", "./scripts/session", "land")
+        self.assertFalse(inside.exists())
 
     def test_remote_movement_stops_landing(self):
         self.start_task()
