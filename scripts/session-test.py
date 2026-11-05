@@ -182,6 +182,14 @@ git = os.environ["SESSION_TEST_REAL_GIT"]
         hook_path = Path(self.git(self.task, "config", "--worktree", "--get", "core.hooksPath"))
         self.assertTrue((hook_path / "pre-push").is_file())
 
+    def test_start_enables_the_gate_in_its_own_worktree(self):
+        self.git(self.source, "config", "hook.pre-push.enabled", "false")
+        self.start_task()
+        self.assertEqual(self.git(self.task, "config", "--worktree", "hook.pre-push.enabled"), "true")
+        self.assertEqual(self.git(self.source, "config", "hook.pre-push.enabled"), "false")
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.assert_stopped("use scripts/session land", "git", "push", "origin", "HEAD:main")
+
     def test_start_from_task_does_not_copy_its_gate(self):
         self.start_task()
         self.install_git_shim("""
@@ -262,6 +270,7 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.assertEqual(self.git(self.task, "rev-parse", "--is-bare-repository"), "false")
         self.assertIn("Landed", self.run_session(self.task, "land"))
         self.assertEqual(self.ref(self.remote), self.ref(self.task))
+        self.assertEqual(self.git(self.task, "rev-parse", "origin/main"), self.ref(self.task))
         logs = self.fixture / "logs" / self.task.name
         self.assertEqual(len(list(logs.glob("land-*/verify.log"))), 2)
         self.git(self.task, "branch", "--set-upstream-to=origin/main")

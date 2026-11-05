@@ -98,6 +98,7 @@ def install_gate(root, common, base, branch, bootstrap=None):
     finally:
         temporary.unlink(missing_ok=True)
     git("config", "--worktree", OWNER, branch, cwd=root)
+    git("config", "--worktree", "hook.pre-push.enabled", "true", cwd=root)
     git("config", "--worktree", "core.hooksPath", str(hooks), cwd=root)
 
 
@@ -147,6 +148,27 @@ def check_ancestry(ancestor, descendant):
          "--is-ancestor", ancestor, descendant],
         env={**os.environ, "GIT_GRAFT_FILE": os.devnull},
     )
+
+
+def refresh_tracking_ref(destination, observed):
+    if git("remote", "get-url", "origin") != destination:
+        return
+    found = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", TRACKING],
+        stdout=subprocess.PIPE, text=True,
+    )
+    if found.returncode != 1:
+        found.check_returncode()
+    current = found.stdout.strip()
+    if current == observed:
+        return
+    if current:
+        ancestor = check_ancestry(current, observed)
+        if ancestor.returncode == 1:
+            return
+        ancestor.check_returncode()
+    # A concurrent fetch may have refreshed the shared ref already.
+    subprocess.run(["git", "update-ref", TRACKING, observed, current], check=False)
 
 
 def protect_local_files(cwd=None):
@@ -313,7 +335,8 @@ def land(root, common, primary, dry_run):
             print(f"Dry run passed for {head}")
         else:
             observed = fetch_main(destination=destination)
-            subprocess.run(["git", "merge-base", "--is-ancestor", head, observed], check=True)
+            check_ancestry(head, observed).check_returncode()
+            refresh_tracking_ref(destination, observed)
             print(f"Landed {head} on origin/main")
 
 
