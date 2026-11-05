@@ -393,6 +393,18 @@ if "push" in args:
         grafts.write_text(f"{unrelated} {base}\n")
         self.assert_stopped("remove local Git grafts", "./scripts/session", "land")
 
+    def test_end_preserves_an_unlanded_task_with_grafts(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        head = self.ref(self.task)
+        base = self.ref(self.remote)
+        grafts = self.source / ".git/info/grafts"
+        grafts.parent.mkdir(exist_ok=True)
+        grafts.write_text(f"{base} {head}\n{head}\n")
+        self.assert_stopped("remove local Git grafts", "./scripts/session", "end")
+        self.assertEqual(self.ref(self.task), head)
+        self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), head)
+
     def test_land_refuses_a_new_base_even_if_git_skips_the_hook(self):
         self.start_task()
         self.commit_file(self.task, "first.txt", "first\n")

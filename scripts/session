@@ -122,6 +122,19 @@ def require_clean():
         raise SessionError("the worktree has uncommitted changes")
 
 
+def require_no_grafts():
+    if git_path("info/grafts").exists():
+        raise SessionError("remove local Git grafts first")
+
+
+def check_ancestry(ancestor, descendant):
+    return subprocess.run(
+        ["git", "-c", "advice.graftFileDeprecated=false", "merge-base",
+         "--is-ancestor", ancestor, descendant],
+        env={**os.environ, "GIT_GRAFT_FILE": os.devnull},
+    )
+
+
 def protect_local_files(cwd=None):
     for entry in git("ls-files", "-v", "-z", cwd=cwd).split("\0"):
         if entry.startswith("S ") or entry[:1].islower():
@@ -204,8 +217,7 @@ def land(root, common, primary, dry_run):
         require_clean()
         if session_branch(root, primary) != branch:
             raise SessionError("the task branch changed while waiting")
-        if git_path("info/grafts").exists():
-            raise SessionError("remove local Git grafts before landing")
+        require_no_grafts()
         hooks = compatible_hooks(root, common)
         destination = git("remote", "get-url", "origin")
         if git("remote", "get-url", "--push", "--all", "origin") != destination:
@@ -223,7 +235,7 @@ def land(root, common, primary, dry_run):
             bootstrap = Path(__file__).read_bytes()
         if git("rev-list", "--merges", f"{base}..HEAD"):
             raise SessionError("make the task history linear before landing")
-        needs_rebase = subprocess.run(["git", "merge-base", "--is-ancestor", base, original])
+        needs_rebase = check_ancestry(base, original)
         if needs_rebase.returncode == 1:
             protect_local_files()
             try:
@@ -399,8 +411,9 @@ def end(root, primary):
     if config(OWNER) != branch or config("core.hooksPath") != str(git_path("homepodctl-session-hooks")):
         raise SessionError("end applies to worktrees with the session gate installed")
     base = fetch_main()
+    require_no_grafts()
     head = git("rev-parse", "HEAD")
-    result = subprocess.run(["git", "merge-base", "--is-ancestor", head, base])
+    result = check_ancestry(head, base)
     if result.returncode == 1:
         raise SessionError("the task commits are not on origin/main")
     result.check_returncode()
