@@ -50,6 +50,10 @@ def git_path(name, cwd=None):
     return Path(git("rev-parse", "--path-format=absolute", "--git-path", name, cwd=cwd))
 
 
+def checkout_environment_keys():
+    return [*git("rev-parse", "--local-env-vars").splitlines(), LANDING]
+
+
 def install_gate(root, common):
     hooks = git_path("homepodctl-session-hooks", root)
     configured = config("core.hooksPath", root)
@@ -162,9 +166,8 @@ def run_logged(command, path, timeout=None):
     # Git exports checkout-specific variables to hooks. Tools that start Git in
     # another directory must discover that repository independently.
     env = os.environ.copy()
-    for key in git("rev-parse", "--local-env-vars").splitlines():
+    for key in checkout_environment_keys():
         env.pop(key, None)
-    env.pop(LANDING, None)
     with path.open("w") as output:
         try:
             result = subprocess.run(
@@ -255,14 +258,18 @@ def end(root, primary):
     if config("core.hooksPath") != str(git_path("homepodctl-session-hooks")):
         raise SessionError("end applies to worktrees with the session gate installed")
     base = fetch_main()
-    result = subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", base])
+    head = git("rev-parse", "HEAD")
+    result = subprocess.run(["git", "merge-base", "--is-ancestor", head, base])
     if result.returncode == 1:
         raise SessionError("the task commits are not on origin/main")
     result.check_returncode()
     git("worktree", "remove", str(root), cwd=primary)
-    # Use the fetched main as the ancestry check even when the primary checkout is stale.
-    git("-c", f"branch.{branch}.remote=.", "-c", f"branch.{branch}.merge={TRACKING}",
-        "branch", "-d", "--", branch, cwd=primary)
+    branch_ref = f"refs/heads/{branch}"
+    worktrees = git("worktree", "list", "--porcelain", "-z", cwd=primary)
+    if f"branch {branch_ref}" in worktrees.split("\0"):
+        raise SessionError(f"{branch} is checked out in another worktree")
+    # Delete only the exact branch tip whose ancestry was checked.
+    git("update-ref", "-d", branch_ref, head, cwd=primary)
     print(f"Removed {root}")
 
 
@@ -279,6 +286,8 @@ def main():
     )
     commands.add_parser("end", help="remove this clean, landed task worktree and branch")
     args = parser.parse_args()
+    for key in checkout_environment_keys():
+        os.environ.pop(key, None)
     root = Path(git("rev-parse", "--show-toplevel")).resolve()
     os.chdir(root)
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()

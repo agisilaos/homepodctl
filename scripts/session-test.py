@@ -123,6 +123,16 @@ class SessionTest(unittest.TestCase):
         self.assertIn(message, result.stderr)
         self.assertEqual(self.ref(self.remote), before)
 
+    def test_start_isolates_hook_setup_from_caller_environment(self):
+        start_path = self.run_ok(
+            self.source, "env", f"GIT_DIR={self.source / '.git'}",
+            f"GIT_WORK_TREE={self.source}", "./scripts/session", "start", "task",
+        )
+        self.assertEqual(start_path, str(self.task))
+        self.assertNotIn("core.hookspath", self.git(self.source, "config", "--list"))
+        hook_path = Path(self.git(self.task, "config", "--worktree", "--get", "core.hooksPath"))
+        self.assertTrue((hook_path / "pre-push").is_file())
+
     def test_rebase_dry_run_land_and_end(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -146,6 +156,7 @@ class SessionTest(unittest.TestCase):
         self.assertEqual(self.ref(self.remote), self.ref(self.task))
         logs = self.fixture / "logs" / self.task.name
         self.assertEqual(len(list(logs.glob("land-*/verify.log"))), 2)
+        self.git(self.task, "branch", "--set-upstream-to=origin/main")
         self.run_session(self.task, "end")
         self.assertFalse(self.task.exists())
         self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
