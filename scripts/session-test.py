@@ -441,6 +441,23 @@ if "fetch" in args:
         self.assert_stopped("this session owns fix/task", "./scripts/session", "land")
         self.assertEqual(self.git(self.task, "branch", "--show-current"), "unrelated")
 
+    def test_land_keeps_the_tip_checked_for_linear_history(self):
+        self.start_task()
+        base = self.ref(self.remote)
+        self.commit_file(self.task, "task.txt", "task\n")
+        head = self.ref(self.task)
+        tree = self.git(self.task, "rev-parse", "HEAD^{tree}")
+        other = self.git(self.task, "commit-tree", tree, "-p", base, "-m", "Independent work")
+        merge = self.git(self.task, "commit-tree", tree, "-p", head, "-p", other, "-m", "Merge work")
+        self.install_git_shim("""
+if args[:3] == ["config", "--worktree", "homepodctl.sessionBase"]:
+    subprocess.run([
+        git, "update-ref", "refs/heads/fix/task", os.environ["SESSION_TEST_MERGE"],
+    ], check=True)
+""", SESSION_TEST_MERGE=merge)
+        self.assert_stopped("the task branch changed before qualification", "./scripts/session", "land")
+        self.assertEqual(self.ref(self.task), merge)
+
     def test_inherited_make_flags_do_not_skip_verification(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")

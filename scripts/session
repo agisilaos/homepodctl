@@ -310,7 +310,7 @@ def land(root, common, primary, dry_run, adoption_base):
             if git("log", "--full-history", "-1", "--format=%H", base, "--", "scripts/session"):
                 raise SessionError("origin/main removed or disabled scripts/session")
             bootstrap = Path(__file__).read_bytes()
-        if git("rev-list", "--merges", f"{base}..HEAD"):
+        if git("rev-list", "--merges", f"{base}..{original}"):
             raise SessionError("make the task history linear before landing")
         # Record the fetched target so a manual rebase cannot later land after
         # main is rewound past the base the user was asked to integrate.
@@ -319,9 +319,10 @@ def land(root, common, primary, dry_run, adoption_base):
         if based_on_main.returncode == 1:
             raise SessionError(f"the task is behind origin/main; rebase onto {base} before landing")
         based_on_main.check_returncode()
-        head = git("rev-parse", branch_ref)
+        head = original
         require_clean()
-        if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
+        if (session_branch(root, primary) != branch or git("rev-parse", branch_ref) != head
+                or git("rev-parse", "HEAD") != head):
             raise SessionError("the task branch changed before qualification")
         if head == base:
             if not dry_run:
