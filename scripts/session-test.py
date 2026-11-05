@@ -105,7 +105,11 @@ class SessionTest(unittest.TestCase):
             '\t@if [ "$$SESSION_TEST_GO_ENV" = 1 ]; then test -z "$$GOFLAGS" && '
             'test "$$GOENV" = off && test "$$GOWORK" = off; fi\n'
             '\t@if [ "$$SESSION_TEST_BASH_ENV" = 1 ]; then bash -c "echo shell-ran"; fi\n'
+            '\t@if [ "$$SESSION_TEST_NESTED_MAKE" = 1 ]; then $(MAKE) nested; '
+            'bash -c "make shell-nested"; fi\n'
             '\t@echo verify-ran\n\t@exit "$$SESSION_TEST_VERIFY"\n'
+            'nested:\n\t@echo nested-make-ran\n'
+            'shell-nested:\n\t@echo shell-make-ran\n'
         )
         self.git(self.source, "add", ".")
         self.git(self.source, "commit", "-qm", "Fixture base")
@@ -144,6 +148,7 @@ class SessionTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn(message, result.stderr)
         self.assertEqual(self.ref(self.remote), before)
+        return result
 
     def install_git_shim(self, before_exec, **variables):
         tools = self.fixture / "tools"
@@ -278,7 +283,9 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         }.items():
             with self.subTest(review=mode):
                 self.env["SESSION_TEST_REVIEW"] = mode
-                self.assert_stopped(message, "./scripts/session", "land")
+                result = self.assert_stopped(message, "./scripts/session", "land")
+                self.assertIn("qualification exited 1", result.stderr)
+                self.assertNotIn("Git exited", result.stderr)
         logs = self.fixture / "logs" / self.task.name
         self.assertEqual(list(logs.glob("land-*/verify.log")), [])
         self.env["SESSION_TEST_REVIEW"] = "clean"
@@ -362,6 +369,20 @@ if "fetch" in args:
         logs = self.fixture / "logs" / self.task.name
         verify_log, = logs.glob("land-*/verify.log")
         self.assertIn("shell-ran", verify_log.read_text())
+
+    def test_verification_runs_both_nested_make_commands(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.env.update({
+            "MAKE": ":",
+            "BASH_FUNC_make%%": "() { :; }",
+            "SESSION_TEST_NESTED_MAKE": "1",
+        })
+        self.assertIn("Landed", self.run_session(self.task, "land"))
+        logs = self.fixture / "logs" / self.task.name
+        verify_log, = logs.glob("land-*/verify.log")
+        self.assertIn("nested-make-ran", verify_log.read_text())
+        self.assertIn("shell-make-ran", verify_log.read_text())
 
     def test_review_findings_stop_landing_before_git_push(self):
         self.start_task()
@@ -532,6 +553,14 @@ if "push" in args:
         self.assert_stopped("this session owns fix/task", "./scripts/session", "end")
         self.assertTrue(self.task.is_dir())
         self.assertEqual(self.git(self.task, "branch", "--show-current"), "release-local")
+
+    def test_end_preserves_branch_settings_with_a_shared_prefix(self):
+        self.start_task()
+        key = "branch.fix/task.other.remote"
+        self.git(self.source, "config", key, "origin")
+        self.run_session(self.task, "end")
+        self.assertFalse(self.task.exists())
+        self.assertEqual(self.git(self.source, "config", key), "origin")
 
     def test_end_preserves_ignored_local_files(self):
         self.start_task()
