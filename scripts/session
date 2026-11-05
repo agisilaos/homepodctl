@@ -201,43 +201,22 @@ def session_lock(common, name):
         yield
 
 
-def delete_landed_branch(branch, head, base, primary):
-    branch_ref = f"refs/heads/{branch}"
-    if git("rev-parse", "--verify", branch_ref, cwd=primary) != head:
-        raise SessionError("the task branch moved during cleanup")
-
-    # Give Git's branch deletion check the confirmed main tip as its upstream.
-    # An existing branch.merge can be multi-valued, so map its first entry.
-    section = f"branch.{branch}"
-    merges = subprocess.run(
-        ["git", "config", "--get-all", f"{section}.merge"], cwd=primary,
-        stdout=subprocess.PIPE, text=True,
-    )
-    if merges.returncode != 1:
-        merges.check_returncode()
-    upstream = merges.stdout.splitlines()[0] if merges.stdout else MAIN
-    remote = f"homepodctl-cleanup-{secrets.token_hex(16)}"
-    snapshot = f"refs/worktree/homepodctl/{remote}"
-    env = git_config_environment([
-        (f"{section}.remote", remote),
-        (f"{section}.merge", upstream),
-        (f"remote.{remote}.url", "."),
-        (f"remote.{remote}.fetch", f"{upstream}:{snapshot}"),
-    ])
-    git("update-ref", snapshot, base, "", cwd=primary)
-    try:
-        git("branch", "-d", "--", branch, cwd=primary, env=env)
-    finally:
-        git("update-ref", "-d", snapshot, cwd=primary)
-
-
 def require_retained_base(branch_ref, base):
     previous = config(SESSION_BASE)
     if previous is None:
         history = git("reflog", "show", "--format=%H", branch_ref).splitlines()
         if not history:
             raise SessionError("could not establish the task's starting base")
-        previous = history[-1]
+        initial = history[-1]
+        if local_ref_exists(TRACKING):
+            fork = subprocess.run(
+                ["git", "merge-base", "--fork-point", TRACKING, initial],
+                stdout=subprocess.PIPE, text=True,
+            )
+            if fork.returncode != 1:
+                fork.check_returncode()
+            previous = fork.stdout.strip()
+        previous = previous or git("merge-base", initial, base)
     retained = check_ancestry(previous, base)
     if retained.returncode == 1:
         raise SessionError("origin/main no longer contains the recorded session base")
@@ -272,23 +251,21 @@ def start(name, common, primary):
     staging = scratch / path.name
     pointer = None
     try:
-        git("worktree", "add", "--quiet", "--no-track", "-b", branch, str(staging), base, cwd=primary)
+        git("worktree", "add", "--quiet", "--detach", str(staging), base, cwd=primary)
         pointer = git_path("gitdir", staging)
         install_gate(staging, common, base, branch)
         git("worktree", "move", str(staging), str(path))
         if registered_checkout(pointer) != path:
             raise SessionError(f"{path} became occupied while starting the session")
+        git("switch", "--quiet", "--no-track", "-c", branch, cwd=path)
     except (SessionError, OSError, subprocess.CalledProcessError):
         try:
             owned = registered_checkout(pointer) if pointer is not None and pointer.is_file() else staging
             worktrees = git("worktree", "list", "--porcelain", "-z").split("\0")
             if f"worktree {owned}" in worktrees:
-                if git("symbolic-ref", "--quiet", "HEAD", cwd=owned) != branch_ref:
-                    raise SessionError("the staged worktree changed branches")
                 protect_local_files(owned)
-                archived = retire_checkout(owned, primary, branch, base)
+                archived = retire_checkout(owned, primary, "", base)
                 print(f"Staged worktree files moved to {archived}", file=sys.stderr)
-                delete_landed_branch(branch, base, base, primary)
             elif staging.exists() or local_ref_exists(branch_ref):
                 print(f"Session setup failed. Inspect {staging} and {branch} before retrying.", file=sys.stderr)
         except (SessionError, OSError, subprocess.CalledProcessError):
@@ -333,6 +310,11 @@ def land(root, common, primary, dry_run):
         needs_rebase = check_ancestry(base, original)
         if needs_rebase.returncode == 1:
             protect_local_files()
+        else:
+            needs_rebase.check_returncode()
+        # Record the target before a conflict can hand the rebase back to Git.
+        install_gate(root, common, base, branch, bootstrap)
+        if needs_rebase.returncode == 1:
             try:
                 git(
                     "rebase", "--quiet", "--reapply-cherry-picks", "--no-update-refs",
@@ -340,13 +322,10 @@ def land(root, common, primary, dry_run):
                 )
             except subprocess.CalledProcessError as error:
                 raise SessionError("rebase stopped; resolve or abort it before retrying") from error
-        else:
-            needs_rebase.check_returncode()
         head = git("rev-parse", branch_ref)
         require_clean()
         if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
             raise SessionError("the task branch changed before qualification")
-        install_gate(root, common, base, branch, bootstrap)
         if head == base:
             if not dry_run:
                 refresh_tracking_ref(destination, base)
@@ -574,7 +553,6 @@ def end(root, primary):
     protect_local_files()
     archived = retire_checkout(root, primary, branch, head)
     print(f"Worktree files moved to {archived}")
-    delete_landed_branch(branch, head, base, primary)
     print(f"Removed {root}")
 
 
@@ -595,7 +573,7 @@ def main():
     commands.add_parser("land", help="review, verify and fast-forward origin/main").add_argument(
         "--dry-run", action="store_true", help="rebase and run the gate without updating GitHub"
     )
-    commands.add_parser("end", help="remove this clean, landed task worktree and branch")
+    commands.add_parser("end", help="move this clean, landed task worktree to Trash")
     args = parser.parse_args()
     for key in checkout_environment_keys():
         os.environ.pop(key, None)

@@ -57,7 +57,8 @@ first landing bootstraps that copy from the invoked script.
 
 When cleanup is requested, run `scripts/session end` from the task worktree. It
 moves the checkout to Trash and removes its Git registration and original
-branch after checking that it is clean and its commits are on `origin/main`.
+checkout path after checking that it is clean and its commits are on
+`origin/main`. The local task branch is retained for recovery.
 Clear index flags that hide tracked edits and move ignored local files before
 cleanup. The command recognizes the normal build and verification binaries as
 disposable. For checkouts on another volume, set `HOMEPODCTL_SESSION_TRASH_DIR`

@@ -262,6 +262,13 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.run_session(self.task, "end")
         self.assertFalse(self.task.exists())
 
+    def test_land_adopts_a_branch_created_from_local_work(self):
+        self.git(self.source, "switch", "-qc", "local-work")
+        self.commit_file(self.source, "task.txt", "local task\n")
+        self.git(self.source, "worktree", "add", "-qb", "fix/task", str(self.task), "HEAD")
+        self.assertIn("Landed", self.run_session(self.task, "land"))
+        self.assertEqual(self.ref(self.remote), self.ref(self.task))
+
     def test_retry_refreshes_tracking_when_main_already_has_the_commit(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -301,8 +308,8 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         (self.task / "dist/verify/homepodctl").write_text("build output")
         self.run_session(self.task, "end")
         self.assertFalse(self.task.exists())
-        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
-        self.assertNotIn("branch.fix/task.", self.git(self.source, "config", "--list"))
+        self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), self.ref(self.remote))
+        self.assertEqual(self.git(self.source, "config", "branch.fix/task.merge"), "refs/heads/main")
         self.assertEqual((self.source / "unrelated.txt").read_text(), "preserve")
         self.assertEqual(self.ref(self.source), base)
 
@@ -361,6 +368,20 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.git(self.source, "push", "-q", "origin", "main")
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
+        self.git(self.remote, "update-ref", "refs/heads/main", original)
+        self.assert_stopped("no longer contains the recorded session base", "./scripts/session", "land")
+
+    def test_conflicted_rebase_records_its_target_before_continuing(self):
+        original = self.ref(self.remote)
+        self.start_task()
+        self.commit_file(self.task, "base.txt", "task\n")
+        self.commit_file(self.source, "base.txt", "upstream\n")
+        self.git(self.source, "push", "-q", "origin", "main")
+        self.assert_stopped("rebase stopped", "./scripts/session", "land")
+        (self.task / "base.txt").write_text("resolved\n")
+        self.git(self.task, "add", "base.txt")
+        self.env["GIT_EDITOR"] = "true"
+        self.git(self.task, "rebase", "--continue")
         self.git(self.remote, "update-ref", "refs/heads/main", original)
         self.assert_stopped("no longer contains the recorded session base", "./scripts/session", "land")
 
@@ -625,28 +646,6 @@ if args[:2] == ["worktree", "move"] and Path(args[2]) == task:
         self.assertEqual(self.git(self.task, "branch", "--show-current"), "release-local")
         self.assertIn("fix/task", self.git(self.source, "branch", "--list"))
 
-    def test_end_preserves_branch_settings_with_a_shared_prefix(self):
-        self.start_task()
-        key = "branch.fix/task.other.remote"
-        self.git(self.source, "config", key, "origin")
-        self.run_session(self.task, "end")
-        self.assertFalse(self.task.exists())
-        self.assertEqual(self.git(self.source, "config", key), "origin")
-
-    def test_end_leaves_a_branch_checked_out_during_deletion(self):
-        self.start_task()
-        head = self.ref(self.task)
-        other = self.fixture / "other-worktree"
-        self.install_git_shim("""
-if args[:2] == ["branch", "-d"] or args[:3] == ["update-ref", "-d", "refs/heads/fix/task"]:
-    subprocess.run([
-        git, "worktree", "add", "-q", os.environ["SESSION_TEST_OTHER"], "fix/task",
-    ], check=True)
-""", SESSION_TEST_OTHER=str(other))
-        self.assert_stopped("used by worktree", "./scripts/session", "end")
-        self.assertEqual(self.git(other, "branch", "--show-current"), "fix/task")
-        self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), head)
-
     def test_end_waits_for_landing_confirmation(self):
         self.start_task()
         landing_lock = self.source / ".git/homepodctl-landing.lock"
@@ -699,7 +698,7 @@ if args[:2] in (["worktree", "move"], ["worktree", "remove"]) and Path(args[2]) 
         self.assertFalse(self.task.exists())
         retained, = (self.fixture / "trash").glob("*/files/dist/private.env")
         self.assertEqual(retained.read_text(), "late local settings")
-        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
+        self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), self.ref(self.remote))
 
     def test_end_preserves_edits_hidden_by_index_flags(self):
         self.start_task()
