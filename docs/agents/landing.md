@@ -31,13 +31,12 @@ Use GitHub Issues for task context and outstanding work.
 
 Run `scripts/session land` from the clean task worktree. It takes a lock shared
 by worktrees of this clone, fetches `origin/main`, and rebases the task commits
-onto it. The pre-push gate reviews that committed range with Codex and runs
-`make verify` once in a fresh local clone of the exact commit. A passing gate lets
-the same command fast-forward `origin/main` directly and confirm the landed
-commit on the remote. GitHub Actions also runs on the resulting push. The
-installed hook runs a copy of
-the tool from fetched `main`. The first landing bootstraps that copy from the
-script used to invoke the landing.
+onto it. The command reviews that range with Codex and runs `make verify` once
+in a fresh local clone before attempting a push. The pre-push hook matches
+the outgoing update to the qualified range. The command then confirms the
+landed commit on the remote. GitHub Actions also runs on the resulting push.
+Qualification and the hook use a copy of the tool from fetched `main`. The
+first landing bootstraps that copy from the invoked script.
 
 - `scripts/session land --dry-run` rebases and exercises the same gate without
   updating remote refs.

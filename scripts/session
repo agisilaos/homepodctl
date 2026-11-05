@@ -122,6 +122,10 @@ def local_ref_exists(ref):
     return ref in git("for-each-ref", "--format=%(refname)", ref).splitlines()
 
 
+def registered_checkout(pointer):
+    return (pointer.parent / pointer.read_text().rstrip("\n")).resolve().parent
+
+
 def session_branch(root, primary):
     if root == primary:
         raise SessionError("run this from a linked task worktree")
@@ -146,20 +150,34 @@ def start(name, common, primary):
     if path.exists() or path.is_symlink() or local_ref_exists(branch_ref):
         raise SessionError(f"{path} or {branch} already exists")
     compatible_hooks(primary, common)
+    scratch = Path(tempfile.mkdtemp(prefix=".homepodctl-start-", dir=primary.parent))
+    staging = scratch / path.name
+    pointer = None
     try:
-        git("worktree", "add", "--quiet", "--no-track", "-b", branch, str(path), base, cwd=primary)
-        install_gate(path, common, base, branch)
+        git("worktree", "add", "--quiet", "--no-track", "-b", branch, str(staging), base, cwd=primary)
+        pointer = git_path("gitdir", staging)
+        install_gate(staging, common, base, branch)
+        git("worktree", "move", str(staging), str(path))
+        if registered_checkout(pointer) != path:
+            raise SessionError(f"{path} became occupied while starting the session")
     except (SessionError, OSError, subprocess.CalledProcessError):
         try:
+            owned = registered_checkout(pointer) if pointer is not None and pointer.is_file() else staging
             worktrees = git("worktree", "list", "--porcelain", "-z").split("\0")
-            if f"worktree {path}" in worktrees:
-                protect_local_files(path)
-                git("worktree", "remove", str(path))
-            if local_ref_exists(branch_ref):
+            if f"worktree {owned}" in worktrees:
+                if git("symbolic-ref", "--quiet", "HEAD", cwd=owned) != branch_ref:
+                    raise SessionError("the staged worktree changed branches")
+                protect_local_files(owned)
+                git("worktree", "remove", str(owned))
                 git("update-ref", "-d", branch_ref, base)
-        except (SessionError, subprocess.CalledProcessError):
-            print(f"Hook setup failed. Inspect {path} and {branch} before retrying.", file=sys.stderr)
+            elif staging.exists() or local_ref_exists(branch_ref):
+                print(f"Session setup failed. Inspect {staging} and {branch} before retrying.", file=sys.stderr)
+        except (SessionError, OSError, subprocess.CalledProcessError):
+            print(f"Session setup failed. Inspect {path}, {staging} and {branch} before retrying.", file=sys.stderr)
         raise
+    finally:
+        if not any(scratch.iterdir()):
+            scratch.rmdir()
     print(path)
 
 
@@ -173,6 +191,7 @@ def land(root, common, primary, dry_run):
         require_clean()
         if session_branch(root, primary) != branch:
             raise SessionError("the task branch changed while waiting")
+        hooks = compatible_hooks(root, common)
         if git("remote", "get-url", "--push", "--all", "origin") != git("remote", "get-url", "origin"):
             raise SessionError("origin must have the same single fetch and push destination")
         original = git("rev-parse", branch_ref)
@@ -204,20 +223,28 @@ def land(root, common, primary, dry_run):
         if head == base:
             print(f"Already on origin/main at {head}")
             return
-        command = ["git", "-c", "remote.origin.mirror=false", "push", "--no-follow-tags"]
+        command = [
+            "git", "-c", "remote.origin.mirror=false", "-c", "hook.pre-push.enabled=true",
+            "push", "--no-follow-tags",
+        ]
         if dry_run:
             command.append("--dry-run")
         with tempfile.TemporaryDirectory(prefix="homepodctl-land-", dir=git_path("HEAD").parent) as state:
             receipt = Path(state) / "checked"
             expected = f"{base} {head}"
+            subprocess.run([str(hooks / "pre-push"), "--qualify", base, head, str(receipt)], check=True)
+            if not receipt.is_file() or receipt.read_text() != expected:
+                raise SessionError("the gate did not qualify these commits")
+            require_clean()
+            if session_branch(root, primary) != branch or git("rev-parse", "HEAD") != head:
+                raise SessionError("the task branch changed after qualification")
             subprocess.run(
                 [*command, "origin", f"{head}:{MAIN}"],
                 env={**os.environ, LANDING: expected, RECEIPT: str(receipt)},
                 check=True,
             )
-            if not receipt.is_file() or receipt.read_text() != expected:
-                raise SessionError("no ref update was qualified; check origin/main before retrying")
         if dry_run:
+            verify_remote_base("origin", base)
             print(f"Dry run passed for {head}")
         else:
             observed = fetch_main()
@@ -231,7 +258,10 @@ def run_logged(command, path, checkout, timeout=None):
     env = os.environ.copy()
     for key in (*checkout_environment_keys(), *MAKE_ENVIRONMENT):
         env.pop(key, None)
+    env.pop("GOFLAGS", None)
     env.update({
+        "GOENV": "off",
+        "GOWORK": "off",
         "GIT_NO_REPLACE_OBJECTS": "1",
         "GIT_CONFIG_GLOBAL": os.devnull,
         "GIT_CONFIG_SYSTEM": os.devnull,
@@ -283,7 +313,7 @@ def review(base, head, logs, checkout):
         raise SessionError(f"Codex did not return a clean review. Verdict: {verdict}")
 
 
-def pre_push(remote, destination):
+def pre_push(remote):
     for line in sys.stdin:
         _, head, remote_ref, base = line.split()
         if remote_ref != MAIN:
@@ -292,39 +322,41 @@ def pre_push(remote, destination):
         receipt = os.environ.get(RECEIPT)
         if remote != "origin" or os.environ.get(LANDING) != expected or not receipt:
             raise SessionError("use scripts/session land; main may have moved since the rebase")
-        require_clean()
-        if git("rev-parse", "HEAD") != head:
-            raise SessionError("the pushed commit must be checked out")
-        subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
+        if Path(receipt).read_text() != expected:
+            raise SessionError("the outgoing update does not match the qualified commits")
 
-        default_logs = Path.home() / "Library/Logs/homepodctl/threads"
-        log_root = (Path(os.environ.get("HOMEPODCTL_SESSION_LOG_DIR", default_logs))
-                    / Path.cwd().name).resolve()
-        if any((directory / ".git").exists() for directory in (log_root, *log_root.parents)):
-            raise SessionError("store session evidence outside Git checkouts")
-        log_root.mkdir(parents=True, exist_ok=True)
-        logs = Path(tempfile.mkdtemp(prefix="land-", dir=log_root))
-        print(f"Review and verification logs: {logs}", file=sys.stderr, flush=True)
-        with tempfile.TemporaryDirectory(prefix="homepodctl-check-") as state:
-            checkout = Path(state) / "checkout"
-            common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
-            setup_log = logs / "checkout.log"
-            run_logged(
-                ["git", "clone", "--quiet", "--shared", "--no-checkout", "--no-tags",
-                 "--template=", "--", common, str(checkout)],
-                setup_log, checkout.parent,
-            )
-            run_logged(["git", "update-ref", TRACKING, base], setup_log, checkout)
-            run_logged(["git", "checkout", "--quiet", "--detach", head], setup_log, checkout)
-            review(base, head, logs, checkout)
-            verify_remote_base(destination, base)
-            run_logged(["make", "-f", "Makefile", "verify"], logs / "verify.log", checkout)
-        require_clean()
-        if git("rev-parse", "HEAD") != head:
-            raise SessionError("HEAD changed during qualification; land again")
-        verify_remote_base(destination, base)
-        Path(receipt).write_text(expected)
-        print("Codex review and make verify passed", file=sys.stderr)
+
+def qualify(base, head, receipt):
+    subprocess.run(["git", "merge-base", "--is-ancestor", base, head], check=True)
+    default_logs = Path.home() / "Library/Logs/homepodctl/threads"
+    log_root = (Path(os.environ.get("HOMEPODCTL_SESSION_LOG_DIR", default_logs))
+                / Path.cwd().name).resolve()
+    if any((directory / ".git").exists() for directory in (log_root, *log_root.parents)):
+        raise SessionError("store session evidence outside Git checkouts")
+    log_root.mkdir(parents=True, exist_ok=True)
+    logs = Path(tempfile.mkdtemp(prefix="land-", dir=log_root))
+    print(f"Review and verification logs: {logs}", file=sys.stderr, flush=True)
+    with tempfile.TemporaryDirectory(prefix="homepodctl-check-") as state:
+        checkout = Path(state) / "checkout"
+        common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+        setup_log = logs / "checkout.log"
+        run_logged(
+            ["git", "clone", "--quiet", "--shared", "--no-checkout", "--no-tags",
+             "--template=", "--", common, str(checkout)],
+            setup_log, checkout.parent,
+        )
+        for args in (
+            ["config", "--local", "core.attributesFile", os.devnull],
+            ["update-ref", TRACKING, base],
+            ["checkout", "--quiet", "--detach", head],
+        ):
+            run_logged(["git", *args], setup_log, checkout)
+        review(base, head, logs, checkout)
+        verify_remote_base("origin", base)
+        run_logged(["make", "-f", "Makefile", "verify"], logs / "verify.log", checkout)
+    verify_remote_base("origin", base)
+    Path(receipt).write_text(f"{base} {head}")
+    print("Codex review and make verify passed", file=sys.stderr)
 
 
 def verify_remote_base(destination, base):
@@ -362,10 +394,13 @@ def end(root, primary):
 
 def main():
     if Path(sys.argv[0]).name == "pre-push":
-        if len(sys.argv) != 3:
-            raise SessionError("the pre-push gate must be invoked by Git")
         os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
-        pre_push(*sys.argv[1:])
+        if len(sys.argv) == 5 and sys.argv[1] == "--qualify":
+            qualify(*sys.argv[2:])
+        elif len(sys.argv) == 3:
+            pre_push(sys.argv[1])
+        else:
+            raise SessionError("the pre-push gate must be invoked by Git")
         return
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)

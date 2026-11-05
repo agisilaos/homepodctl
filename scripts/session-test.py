@@ -85,6 +85,8 @@ class SessionTest(unittest.TestCase):
         (self.source / ".gitignore").write_text("/homepodctl\n/dist/\n/GNUmakefile\n")
         (self.source / "Makefile").write_text(
             'verify:\n\t@test -z "$$GIT_DIR$$GIT_COMMON_DIR$$HOMEPODCTL_LANDING"\n'
+            '\t@if [ "$$SESSION_TEST_GO_ENV" = 1 ]; then test -z "$$GOFLAGS" && '
+            'test "$$GOENV" = off && test "$$GOWORK" = off; fi\n'
             '\t@echo verify-ran\n\t@exit "$$SESSION_TEST_VERIFY"\n'
         )
         self.git(self.source, "add", ".")
@@ -304,6 +306,27 @@ if args[:1] == ["fetch"]:
         verify_log, = logs.glob("land-*/verify.log")
         self.assertIn("verify-ran", verify_log.read_text())
 
+    def test_verification_ignores_inherited_go_options(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.env.update({
+            "GOFLAGS": "-run=^$",
+            "GOENV": str(self.fixture / "go-env"),
+            "GOWORK": str(self.fixture / "go.work"),
+            "SESSION_TEST_GO_ENV": "1",
+        })
+        self.assertIn("Landed", self.run_session(self.task, "land"))
+
+    def test_landing_runs_review_even_if_git_disables_the_hook(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        self.install_git_shim("""
+if "push" in args:
+    args = ["-c", "core.hooksPath=/dev/null", *args]
+""")
+        self.env["SESSION_TEST_REVIEW"] = "findings"
+        self.assert_stopped("did not return a clean review", "./scripts/session", "land")
+
     def test_verify_uses_only_committed_build_rules(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -340,6 +363,20 @@ if args[:1] == ["fetch"]:
         self.git(self.task, "config", "filter.session-test.smudge", f"cat {shlex.quote(str(local_rules))}")
         self.env["SESSION_TEST_VERIFY"] = "1"
         self.assert_stopped("make exited", "./scripts/session", "land")
+
+    def test_verify_ignores_user_attributes(self):
+        self.start_task()
+        script = self.task / "verify.sh"
+        script.write_text("#!/bin/sh\nexit 0\n")
+        script.chmod(0o755)
+        self.git(self.task, "add", "verify.sh")
+        self.git(self.task, "commit", "-qm", "Add fixture verifier")
+        self.commit_file(self.task, "Makefile", "verify:\n\t./verify.sh\n")
+        config = self.fixture / "xdg"
+        (config / "git").mkdir(parents=True)
+        (config / "git/attributes").write_text("*.sh text eol=crlf\n")
+        self.env["XDG_CONFIG_HOME"] = str(config)
+        self.assertIn("Landed", self.run_session(self.task, "land"))
 
     def test_task_cannot_replace_its_installed_gate(self):
         self.start_task()
@@ -406,9 +443,9 @@ if "push" in args and "--dry-run" in args:
 """, SESSION_TEST_REMOTE=str(self.remote), SESSION_TEST_REMOTE_HEAD=head)
         result = self.execute(self.task, "./scripts/session", "land", "--dry-run")
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("no ref update was qualified", result.stderr)
+        self.assertIn("main moved during landing", result.stderr)
         self.assertEqual(self.ref(self.remote), head)
-        self.assertFalse((self.fixture / "logs").exists())
+        self.assertTrue(list((self.fixture / "logs").glob("**/verify.log")))
 
     def test_evidence_path_cannot_enter_a_checkout(self):
         self.start_task()
@@ -463,6 +500,26 @@ if args[:2] == ["worktree", "add"]:
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.task.exists())
         self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
+
+    def test_start_does_not_remove_a_competing_worktree(self):
+        self.install_git_shim("""
+if args[:2] == ["worktree", "move"]:
+    subprocess.run([git, "worktree", "add", "-qb", "unrelated", args[-1], "main"], check=True)
+""")
+        result = self.execute(self.source, "./scripts/session", "start", "task")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.git(self.task, "branch", "--show-current"), "unrelated")
+        self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
+
+    def test_land_checks_hook_compatibility_before_rebasing(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        original = self.ref(self.task)
+        self.commit_file(self.source, "upstream.txt", "upstream\n")
+        self.git(self.source, "push", "-q", "origin", "main")
+        self.git(self.task, "config", "--worktree", "core.hooksPath", str(self.fixture / "custom"))
+        self.assert_stopped("custom hooks path", "./scripts/session", "land")
+        self.assertEqual(self.ref(self.task), original)
 
 
 if __name__ == "__main__":
