@@ -22,6 +22,9 @@ assert args[:4] == ["exec", "--ephemeral", "--sandbox", "read-only"], args
 base = subprocess.check_output(["git", "rev-parse", "origin/main"], text=True).strip()
 head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 assert f"git diff {base} {head}" in args[-1], args[-1]
+reviewer_repo = Path(os.environ["SESSION_TEST_REVIEWER_REPO"])
+subprocess.run(["git", "init", "-q", "--bare", str(reviewer_repo)], check=True)
+assert (reviewer_repo / "HEAD").is_file(), "reviewer Git escaped its repository"
 output = Path(args[args.index("--output-last-message") + 1])
 mode = os.environ["SESSION_TEST_REVIEW"]
 if mode == "advance":
@@ -70,6 +73,7 @@ class SessionTest(unittest.TestCase):
             "HOMEPODCTL_CODEX": str(reviewer),
             "HOMEPODCTL_SESSION_LOG_DIR": str(self.fixture / "logs"),
             "SESSION_TEST_REVIEW": "clean",
+            "SESSION_TEST_REVIEWER_REPO": str(self.fixture / "reviewer.git"),
             "SESSION_TEST_VERIFY": "0",
         })
         self.run_ok(self.fixture, "git", "init", "-q", "--bare", "-b", "main", str(self.remote))
@@ -78,7 +82,8 @@ class SessionTest(unittest.TestCase):
         shutil.copy2(SESSION, self.source / "scripts")
         (self.source / "base.txt").write_text("original\n")
         (self.source / "Makefile").write_text(
-            'verify:\n\t@echo verify-ran\n\t@exit "$$SESSION_TEST_VERIFY"\n'
+            'verify:\n\t@test -z "$$GIT_DIR$$GIT_COMMON_DIR$$HOMEPODCTL_LANDING"\n'
+            '\t@echo verify-ran\n\t@exit "$$SESSION_TEST_VERIFY"\n'
         )
         self.git(self.source, "add", ".")
         self.git(self.source, "commit", "-qm", "Fixture base")
@@ -128,9 +133,15 @@ class SessionTest(unittest.TestCase):
         base = self.ref(self.remote)
 
         self.assert_stopped("not on origin/main", "./scripts/session", "end")
-        self.assertIn("Dry run passed", self.run_session(self.task, "land", "--dry-run"))
+        git_dir = self.git(self.task, "rev-parse", "--absolute-git-dir")
+        dry_run = self.run_ok(
+            self.task, "env", f"GIT_DIR={git_dir}", f"GIT_WORK_TREE={self.task}",
+            "./scripts/session", "land", "--dry-run",
+        )
+        self.assertIn("Dry run passed", dry_run)
         self.assertEqual(self.ref(self.remote), base)
         self.assertEqual(self.git(self.task, "rev-parse", "HEAD^"), base)
+        self.assertEqual(self.git(self.task, "rev-parse", "--is-bare-repository"), "false")
         self.assertIn("Landed", self.run_session(self.task, "land"))
         self.assertEqual(self.ref(self.remote), self.ref(self.task))
         logs = self.fixture / "logs" / self.task.name

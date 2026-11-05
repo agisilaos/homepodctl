@@ -159,11 +159,17 @@ def land(root, common, primary, dry_run):
 
 
 def run_logged(command, path, timeout=None):
+    # Git exports checkout-specific variables to hooks. Tools that start Git in
+    # another directory must discover that repository independently.
+    env = os.environ.copy()
+    for key in git("rev-parse", "--local-env-vars").splitlines():
+        env.pop(key, None)
+    env.pop(LANDING, None)
     with path.open("w") as output:
         try:
             result = subprocess.run(
                 command, stdin=subprocess.DEVNULL, stdout=output,
-                stderr=subprocess.STDOUT, timeout=timeout
+                stderr=subprocess.STDOUT, timeout=timeout, env=env
             )
         except subprocess.TimeoutExpired as error:
             raise SessionError(f"{command[0]} timed out. Log: {path}") from error
