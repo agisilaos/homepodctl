@@ -4,6 +4,7 @@
 import fcntl
 import os
 from pathlib import Path
+import select
 import shlex
 import shutil
 import subprocess
@@ -131,6 +132,14 @@ class SessionTest(unittest.TestCase):
 
     def run_session(self, cwd, *args):
         return self.run_ok(cwd, "./scripts/session", *args)
+
+    def finish_process(self, process):
+        try:
+            return process.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+            self.fail("session subprocess did not finish")
 
     def ref(self, cwd):
         return self.git(cwd, "rev-parse", "HEAD")
@@ -334,6 +343,18 @@ if args[:1] == ["switch"] and "-c" in args:
         self.assertIn("Already on origin/main", self.run_session(self.task, "land"))
         self.assertEqual(self.git(self.task, "rev-parse", "origin/main"), head)
 
+    def test_retry_recognizes_a_landed_tip_after_main_advances(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        head = self.ref(self.task)
+        tree = self.git(self.task, "rev-parse", "HEAD^{tree}")
+        advanced = self.git(self.task, "commit-tree", tree, "-p", head, "-m", "Later landing")
+        self.git(self.task, "push", "-q", "origin", f"{advanced}:refs/heads/concurrent")
+        self.git(self.remote, "update-ref", "refs/heads/main", advanced)
+        self.assertIn(f"Already on origin/main at {head}", self.run_session(self.task, "land"))
+        self.assertEqual(self.git(self.task, "rev-parse", "origin/main"), advanced)
+        self.assertFalse((self.fixture / "logs").exists())
+
     def test_rebase_dry_run_land_and_end(self):
         self.start_task()
         self.commit_file(self.task, "task.txt", "task\n")
@@ -477,6 +498,34 @@ if "fetch" in args:
 """)
         self.assert_stopped("this session owns fix/task", "./scripts/session", "land")
         self.assertEqual(self.git(self.task, "branch", "--show-current"), "unrelated")
+
+    def test_landing_refuses_a_commit_added_while_waiting_for_its_lock(self):
+        self.start_task()
+        self.commit_file(self.task, "task.txt", "task\n")
+        base = self.ref(self.remote)
+        landing_lock = self.source / ".git/homepodctl-landing.lock"
+        with landing_lock.open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            with subprocess.Popen(
+                ["./scripts/session", "land"], cwd=self.task, env=self.env,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ) as landing:
+                try:
+                    try:
+                        ready, _, _ = select.select([landing.stderr], [], [], 10)
+                        self.assertTrue(ready, "landing did not reach the lock")
+                        self.assertIn("Waiting for the landing lock", landing.stderr.readline())
+                        self.commit_file(self.task, "later.txt", "later task\n")
+                    finally:
+                        fcntl.flock(lock, fcntl.LOCK_UN)
+                    _, stderr = self.finish_process(landing)
+                finally:
+                    if landing.poll() is None:
+                        landing.kill()
+                        landing.wait(timeout=10)
+        self.assertNotEqual(landing.returncode, 0)
+        self.assertIn("the task branch changed while waiting", stderr)
+        self.assertEqual(self.ref(self.remote), base)
 
     def test_land_keeps_the_tip_checked_for_linear_history(self):
         self.start_task()
@@ -775,7 +824,7 @@ if args[:2] == ["worktree", "move"] and Path(args[2]) == task:
                     self.assertTrue(self.task.exists())
                 finally:
                     fcntl.flock(lock, fcntl.LOCK_UN)
-                stdout, stderr = cleanup.communicate(timeout=30)
+                stdout, stderr = self.finish_process(cleanup)
         self.assertEqual(cleanup.returncode, 0, stderr)
         self.assertIn("Removed", stdout)
         self.assertFalse(self.task.exists())

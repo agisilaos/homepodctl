@@ -293,17 +293,17 @@ def land(root, common, primary, dry_run, adoption_base):
     require_clean()
     branch = session_branch(root, primary)
     branch_ref = f"refs/heads/{branch}"
+    original = git("rev-parse", branch_ref)
     print("Waiting for the landing lock", file=sys.stderr, flush=True)
     with session_lock(common, "landing"):
         require_clean()
-        if session_branch(root, primary) != branch:
+        if session_branch(root, primary) != branch or git("rev-parse", branch_ref) != original:
             raise SessionError("the task branch changed while waiting")
         require_no_grafts()
         hooks = compatible_hooks(root, common)
         destination = git("remote", "get-url", "origin")
         if git("remote", "get-url", "--push", "--all", "origin") != destination:
             raise SessionError("origin must have the same single fetch and push destination")
-        original = git("rev-parse", branch_ref)
         base = fetch_main(destination=destination)
         require_clean()
         if session_branch(root, primary) != branch or git("rev-parse", branch_ref) != original:
@@ -322,20 +322,23 @@ def land(root, common, primary, dry_run, adoption_base):
         # Record the fetched target so a manual rebase cannot later land after
         # main is rewound past the base the user was asked to integrate.
         install_gate(root, common, base, branch, bootstrap)
-        based_on_main = check_ancestry(base, original)
-        if based_on_main.returncode == 1:
-            raise SessionError(f"the task is behind origin/main; rebase onto {base} before landing")
-        based_on_main.check_returncode()
         head = original
         require_clean()
         if (session_branch(root, primary) != branch or git("rev-parse", branch_ref) != head
                 or git("rev-parse", "HEAD") != head):
             raise SessionError("the task branch changed before qualification")
-        if head == base:
+        already_landed = check_ancestry(head, base)
+        if already_landed.returncode == 0:
             if not dry_run:
                 refresh_tracking_ref(destination, base)
             print(f"Already on origin/main at {head}")
             return
+        if already_landed.returncode != 1:
+            already_landed.check_returncode()
+        based_on_main = check_ancestry(base, head)
+        if based_on_main.returncode == 1:
+            raise SessionError(f"the task is behind origin/main; rebase onto {base} before landing")
+        based_on_main.check_returncode()
         # Qualification establishes ancestry in the isolated clone. The
         # lease then checks the old ref atomically, even if Git skips its hook.
         transport_env, address = pinned_remote(destination)
