@@ -262,7 +262,7 @@ def start(name, common, primary):
         git("worktree", "move", str(staging), str(path))
         if registered_checkout(pointer) != path:
             raise SessionError(f"{path} became occupied while starting the session")
-        git("switch", "--quiet", "--no-track", "-c", branch, cwd=path)
+        git("switch", "--quiet", "--no-track", "-c", branch, base, cwd=path)
     except (SessionError, OSError, subprocess.CalledProcessError):
         try:
             owned = registered_checkout(pointer) if pointer is not None and pointer.is_file() else staging
@@ -508,7 +508,9 @@ def retire_checkout(root, primary, branch, head):
     try:
         git("worktree", "move", str(root), str(registered), cwd=primary)
     except subprocess.CalledProcessError:
-        if not any(slot.iterdir()):
+        if registered.exists():
+            print(f"Worktree files are retained at {registered}", file=sys.stderr)
+        elif not any(slot.iterdir()):
             slot.rmdir()
         raise
 

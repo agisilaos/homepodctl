@@ -219,6 +219,20 @@ if args[:2] == ["worktree", "add"] and Path.cwd() == Path(os.environ["SESSION_TE
         self.assertFalse(self.task.exists())
         self.assertNotIn("fix/task", self.git(self.source, "branch", "--list"))
 
+    def test_start_uses_the_fetched_base_after_a_checkout_switch(self):
+        base = self.ref(self.remote)
+        self.commit_file(self.source, "other.txt", "other task\n")
+        other = self.ref(self.source)
+        self.install_git_shim("""
+if args[:1] == ["switch"] and "-c" in args:
+    subprocess.run([
+        git, "switch", "--quiet", "--detach", os.environ["SESSION_TEST_OTHER"],
+    ], check=True)
+""", SESSION_TEST_OTHER=other)
+        self.assertEqual(self.run_session(self.source, "start", "task"), str(self.task))
+        self.assertEqual(self.ref(self.task), base)
+        self.assertFalse((self.task / "other.txt").exists())
+
     def test_first_landing_bootstraps_gate(self):
         self.git(self.source, "rm", "scripts/session")
         tree = self.git(self.source, "write-tree")
@@ -758,6 +772,20 @@ if args[:2] in (["worktree", "move"], ["worktree", "remove"]) and Path(args[2]) 
         self.assertFalse(self.task.exists())
         retained, = (self.fixture / "trash").glob("*/files/dist/private.env")
         self.assertEqual(retained.read_text(), "late local settings")
+        self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), self.ref(self.remote))
+
+    def test_end_reports_the_files_after_a_partial_worktree_move(self):
+        self.start_task()
+        self.install_git_shim("""
+if args[:2] == ["worktree", "move"]:
+    Path(args[2]).rename(args[3])
+    sys.exit(23)
+""")
+        result = self.execute(self.task, "./scripts/session", "end")
+        self.assertNotEqual(result.returncode, 0)
+        retained, = (self.fixture / "trash").glob("*/registered")
+        self.assertIn(f"Worktree files are retained at {retained}", result.stderr)
+        self.assertEqual((retained / "base.txt").read_text(), "original\n")
         self.assertEqual(self.git(self.source, "rev-parse", "refs/heads/fix/task"), self.ref(self.remote))
 
     def test_end_preserves_edits_hidden_by_index_flags(self):
